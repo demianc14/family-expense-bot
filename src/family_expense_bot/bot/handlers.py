@@ -21,6 +21,7 @@ from telegram.ext import (
 
 from family_expense_bot.bot import mensajes
 from family_expense_bot.extraction.categorias import Taxonomia
+from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.extraction.parser import ClienteLLM, extraer
 from family_expense_bot.extraction.schema import GastoExtraido
 from family_expense_bot.storage.repository import RepositorioGastos
@@ -28,8 +29,9 @@ from family_expense_bot.storage.repository import RepositorioGastos
 log = logging.getLogger(__name__)
 
 TIMEOUT_EXTRACCION_S = 45.0
-"""Medido contra Gemini: 14 s un mensaje simple, 84 s uno ambiguo. El corte lo
-impone el bot porque el timeout del SDK no cortó esa llamada de 84 s."""
+"""Con el modelo actual una extracción toma ~3 s. El margen es para el día malo:
+el corte lo impone el bot porque el timeout del SDK cuenta por intento, y con
+reintentos una llamada puede pasar del minuto."""
 
 GUARDAR = "guardar"
 DESCARTAR = "descartar"
@@ -93,6 +95,10 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except TimeoutError:
         log.warning("La extracción superó %s s", servicios.timeout_s)
         await espera.edit_text(mensajes.demoro_demasiado())
+        return
+    except CuotaAgotada:
+        log.warning("Cuota del LLM agotada")
+        await espera.edit_text(mensajes.cuota_agotada())
         return
     except Exception:  # el bot nunca debe morir por una respuesta rara del LLM
         log.exception("Falló la extracción")

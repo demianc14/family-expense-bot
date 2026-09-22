@@ -19,6 +19,7 @@ from family_expense_bot.bot.handlers import (
     start,
 )
 from family_expense_bot.extraction.categorias import cargar_taxonomia
+from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.storage.repository import RepositorioGastos, crear_engine
 
 AUTORIZADO = 111
@@ -52,6 +53,11 @@ class ClienteLento:
 
         time.sleep(5)
         return RESPUESTA_OK
+
+
+class ClienteSinCuota:
+    def completar_json(self, prompt: str, schema: dict[str, object]) -> str:
+        raise CuotaAgotada("429")
 
 
 class ClienteQueExplota:
@@ -203,6 +209,21 @@ async def test_si_el_llm_falla_el_bot_sigue_vivo(repo: RepositorioGastos) -> Non
     await registrar_gasto(update, _contexto(servicios))
 
     update.espera.edit_text.assert_awaited_once_with(mensajes.error_de_extraccion())
+    assert repo.listar() == []
+
+
+async def test_si_se_agota_la_cuota_lo_dice_claro(repo: RepositorioGastos) -> None:
+    """No es lo mismo "no te entendí" que "hoy ya no puedo": la persona actúa distinto."""
+    servicios = Servicios(
+        repositorio=repo,
+        cliente=ClienteSinCuota(),
+        taxonomia=cargar_taxonomia(),
+        ids_autorizados=frozenset({AUTORIZADO}),
+    )
+    update = _update("15 de taxi ayer")
+    await registrar_gasto(update, _contexto(servicios))
+
+    update.espera.edit_text.assert_awaited_once_with(mensajes.cuota_agotada())
     assert repo.listar() == []
 
 

@@ -60,6 +60,14 @@ def error_de_extraccion() -> str:
     return "No pude entender ese mensaje. ¿Me lo escribes de otra forma?"
 
 
+def cuota_agotada() -> str:
+    """El plan gratuito de Gemini permite pocas extracciones por día."""
+    return (
+        "Por hoy ya no puedo leer más mensajes automáticamente "
+        "(se acabó la cuota gratuita del servicio). Intenta mañana."
+    )
+
+
 def demoro_demasiado() -> str:
     return "El servicio está lento y no alcanzó a responder. ¿Lo intentas de nuevo?"
 

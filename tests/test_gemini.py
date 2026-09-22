@@ -5,7 +5,13 @@ from typing import Any
 
 import pytest
 
-from family_expense_bot.extraction.gemini import TIMEOUT_MS, ErrorDelLLM, GeminiCliente
+from family_expense_bot.extraction.gemini import (
+    INTENTOS,
+    TIMEOUT_MS,
+    CuotaAgotada,
+    ErrorDelLLM,
+    GeminiCliente,
+)
 
 
 @pytest.fixture
@@ -26,6 +32,12 @@ def sdk_falso(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def test_configura_timeout(sdk_falso: dict[str, Any]) -> None:
     GeminiCliente("fake-key")
     assert sdk_falso["kwargs"]["http_options"].timeout == TIMEOUT_MS
+
+
+def test_limita_los_reintentos(sdk_falso: dict[str, Any]) -> None:
+    """Ante un 429, reintentar con backoff solo alarga la espera de la persona."""
+    GeminiCliente("fake-key")
+    assert sdk_falso["kwargs"]["http_options"].retry_options.attempts == INTENTOS
 
 
 def test_devuelve_el_texto_de_la_respuesta(sdk_falso: dict[str, Any]) -> None:
@@ -50,3 +62,39 @@ def test_error_del_sdk_se_traduce(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("google.genai.Client", client_que_falla)
     with pytest.raises(ErrorDelLLM, match="no respondió"):
         GeminiCliente("fake-key").completar_json("prompt", {})
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    [
+        "Error code: 429 - {'error': {'message': 'Rate limit exceeded'}}",
+        "RESOURCE_EXHAUSTED: quota exceeded",
+    ],
+)
+def test_la_cuota_agotada_se_distingue_del_resto(
+    monkeypatch: pytest.MonkeyPatch, mensaje: str
+) -> None:
+    """El bot dice "vuelve mañana", no "no te entendí": son problemas distintos."""
+
+    def client_con_429(**kwargs: Any) -> Any:
+        def explota(**k: Any) -> Any:
+            raise RuntimeError(mensaje)
+
+        return SimpleNamespace(interactions=SimpleNamespace(create=explota))
+
+    monkeypatch.setattr("google.genai.Client", client_con_429)
+    with pytest.raises(CuotaAgotada):
+        GeminiCliente("fake-key").completar_json("prompt", {})
+
+
+def test_un_error_cualquiera_no_se_confunde_con_cuota(monkeypatch: pytest.MonkeyPatch) -> None:
+    def client_roto(**kwargs: Any) -> Any:
+        def explota(**k: Any) -> Any:
+            raise RuntimeError("connection reset")
+
+        return SimpleNamespace(interactions=SimpleNamespace(create=explota))
+
+    monkeypatch.setattr("google.genai.Client", client_roto)
+    with pytest.raises(ErrorDelLLM) as e:
+        GeminiCliente("fake-key").completar_json("prompt", {})
+    assert not isinstance(e.value, CuotaAgotada)

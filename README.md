@@ -56,10 +56,11 @@ pytest && ruff check . && ruff format --check . && mypy
 
 1. Llega el mensaje. Si el ID de Telegram no está autorizado, se ignora en
    silencio y se loguea (nunca se llama al LLM por un desconocido).
-2. El bot responde "Leyendo tu mensaje..." al instante, porque la extracción
-   puede tardar más de un minuto.
-3. Se extrae con un límite de 45 s impuesto por el bot. Si se pasa, o si el
-   LLM falla, se avisa y se pide reintentar. El bot nunca muere por eso.
+2. El bot responde "Leyendo tu mensaje..." al instante, para que nadie se
+   quede mirando un chat mudo.
+3. Se extrae con un límite de 45 s impuesto por el bot (una extracción normal
+   toma ~3 s). Si se pasa, si se agota la cuota del LLM o si falla cualquier
+   otra cosa, se avisa con el motivo. El bot nunca muere por eso.
 4. Se muestra lo entendido, con ❓ en cada campo dudoso y las notas que lo
    explican, más dos botones.
 5. **Solo al tocar "Sí, guardar" se escribe en la base.** Si dice que no, se
@@ -95,16 +96,27 @@ sigan excluidos. Los ejemplos y capturas usan solo datos sintéticos.
   usuarios no usan Telegram, así que instalarlo es una fricción de adopción
   real: justo lo que el proyecto busca minimizar. WhatsApp se descartó
   porque la Business API exige aprobación de Meta y no apunta a uso personal.
-- **LLM: Gemini** (`gemini-3.8-flash`), por su salida estructurada nativa.
-  Google ya no publica las cuotas del free tier: son por cuenta y se ven en
-  https://aistudio.google.com/rate-limit. Si el límite diario resulta bajo
-  para el uso de la familia, hay que medirlo antes de prometer que el bot
-  responde siempre. El parser depende de un protocolo `ClienteLLM`, así que
-  cambiar de proveedor no toca la lógica de verificación.
-- **Latencia alta y variable.** Medido contra Gemini: 14 s para un mensaje
-  simple y 84 s para uno ambiguo. El timeout de 30 s que pide el SDK no cortó
-  esa llamada de 84 s, así que en la Fase 3 el corte tiene que imponerlo el
-  bot, y avisarle a la persona que está procesando.
+- **LLM: Gemini** (`gemini-3.5-flash-lite`), por su salida estructurada
+  nativa. El modelo importa más de lo esperado. Medido con el prompt real de
+  este proyecto, mismo mensaje:
+
+  | Modelo | Tiempo | Resultado |
+  |---|---|---|
+  | `gemini-3.8-flash` | 109 s | HTTP 429: 20 requests/día en el plan gratuito |
+  | `gemini-3.5-flash` | 15.3 s | ok |
+  | `gemini-3.5-flash-lite` | **2.8 s** | ok |
+
+  El límite de 20 requests diarios de los modelos grandes hace inviable un bot
+  familiar: tres personas registrando gastos lo agotan en un día. `flash-lite`
+  es además cinco veces más rápido. El parser depende de un protocolo
+  `ClienteLLM`, así que cambiar de modelo o de proveedor (`GEMINI_MODELO` en
+  `.env`) no toca la lógica de verificación.
+- **La cuota diaria es el límite real, no la velocidad.** Con `flash-lite`
+  una extracción toma ~3 s, pero el plan gratuito tiene un tope de requests
+  por día que se ve en https://aistudio.google.com/rate-limit. Al agotarse,
+  el bot lo dice explícitamente ("vuelve mañana") en vez de fingir que no
+  entendió. Cuántos gastos diarios aguanta la familia es algo que hay que
+  medir con uso real.
 - **Solo dólares.** No se guarda la moneda; se asume USD (Ecuador).
 - **Un gasto por mensaje.** "20 de gasolina y 8 del almuerzo" se extrae como
   uno solo y queda marcado con confianza baja para que la persona corrija.

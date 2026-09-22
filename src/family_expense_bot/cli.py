@@ -68,7 +68,7 @@ def main() -> None:
 def _cliente_gemini(settings: Settings) -> GeminiCliente:
     if settings.gemini_api_key is None:
         raise SystemExit("Falta GEMINI_API_KEY en .env")
-    return GeminiCliente(settings.gemini_api_key.get_secret_value())
+    return GeminiCliente(settings.gemini_api_key.get_secret_value(), modelo=settings.gemini_modelo)
 
 
 def _mostrar_extraccion(mensaje: str, settings: Settings) -> None:

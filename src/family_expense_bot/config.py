@@ -3,12 +3,15 @@
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from family_expense_bot.extraction.gemini import MODELO_POR_DEFECTO
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     telegram_bot_token: SecretStr
     gemini_api_key: SecretStr | None = None
+    gemini_modelo: str = MODELO_POR_DEFECTO
     database_url: str = "sqlite:///data/processed/gastos.db"
 
     telegram_allowed_ids: str = ""
