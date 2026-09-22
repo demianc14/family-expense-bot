@@ -4,11 +4,12 @@ import argparse
 import asyncio
 import logging
 
-from family_expense_bot.bot.handlers import build_application, obtener_identidad
+from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
 from family_expense_bot.config import Settings
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import GeminiCliente
 from family_expense_bot.extraction.parser import extraer
+from family_expense_bot.storage.repository import RepositorioGastos, crear_engine
 
 
 def _configurar_logging() -> None:
@@ -47,14 +48,31 @@ def main() -> None:
         _mostrar_extraccion(args.extraer, settings)
         return
 
-    build_application(token).run_polling()
+    servicios = Servicios(
+        repositorio=RepositorioGastos(crear_engine(settings.database_url)),
+        cliente=_cliente_gemini(settings),
+        taxonomia=cargar_taxonomia(),
+        ids_autorizados=settings.ids_autorizados,
+    )
+    if not servicios.ids_autorizados:
+        # Sin allowlist el bot no le responde a nadie: es la falla segura para
+        # un bot que cualquiera en Telegram puede encontrar.
+        logging.getLogger(__name__).warning(
+            "TELEGRAM_ALLOWED_IDS está vacío: el bot va a ignorar todos los mensajes. "
+            "Escríbele a @userinfobot para saber tu ID y agrégalo en .env"
+        )
+
+    build_application(token, servicios).run_polling()
+
+
+def _cliente_gemini(settings: Settings) -> GeminiCliente:
+    if settings.gemini_api_key is None:
+        raise SystemExit("Falta GEMINI_API_KEY en .env")
+    return GeminiCliente(settings.gemini_api_key.get_secret_value())
 
 
 def _mostrar_extraccion(mensaje: str, settings: Settings) -> None:
-    if settings.gemini_api_key is None:
-        raise SystemExit("Falta GEMINI_API_KEY en .env")
-
-    cliente = GeminiCliente(settings.gemini_api_key.get_secret_value())
+    cliente = _cliente_gemini(settings)
     gasto = extraer(mensaje, cliente, cargar_taxonomia())
 
     print(f"  monto:       {gasto.monto} ({gasto.confianza_monto})")

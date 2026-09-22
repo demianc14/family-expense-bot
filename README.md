@@ -5,8 +5,8 @@ Bot de Telegram para que una familia registre gastos en texto libre
 descripción con un LLM gratuito, pide confirmación y guarda el gasto para un
 reporte mensual.
 
-> **Estado: Fase 2.** Contrato de extracción y almacenamiento listos y
-> testeados. El bot todavía responde solo con eco: conectarlo todo es la Fase 3.
+> **Estado: Fase 3.** El flujo completo funciona: mensaje → extracción →
+> confirmación humana → guardado. Falta el reporte mensual (Fase 4).
 
 ## Pipeline (objetivo)
 
@@ -51,6 +51,22 @@ tenga puede leer los mensajes del bot y responder como si fuera él.
 ```bash
 pytest && ruff check . && ruff format --check . && mypy
 ```
+
+## Flujo de confirmación
+
+1. Llega el mensaje. Si el ID de Telegram no está autorizado, se ignora en
+   silencio y se loguea (nunca se llama al LLM por un desconocido).
+2. El bot responde "Leyendo tu mensaje..." al instante, porque la extracción
+   puede tardar más de un minuto.
+3. Se extrae con un límite de 45 s impuesto por el bot. Si se pasa, o si el
+   LLM falla, se avisa y se pide reintentar. El bot nunca muere por eso.
+4. Se muestra lo entendido, con ❓ en cada campo dudoso y las notas que lo
+   explican, más dos botones.
+5. **Solo al tocar "Sí, guardar" se escribe en la base.** Si dice que no, se
+   descarta y se le pide reescribirlo.
+
+Las extracciones sin confirmar viven en memoria, nunca en disco. Si el bot se
+reinicia, un botón viejo ya no guarda nada: responde como descartado.
 
 ## Almacenamiento
 
