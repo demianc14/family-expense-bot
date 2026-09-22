@@ -1,0 +1,35 @@
+# --- Privacidad: datos financieros reales de la familia. NUNCA versionar. ---
+data/processed/
+data/raw/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+exports/
+*.csv
+*.xlsx
+*.parquet
+*.pbix
+
+# Secretos (token del bot, API keys del LLM)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editores
+.DS_Store
+.vscode/
+.idea/
