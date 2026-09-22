@@ -9,6 +9,14 @@ class Settings(BaseSettings):
 
     telegram_bot_token: SecretStr
     gemini_api_key: SecretStr | None = None
+    database_url: str = "sqlite:///data/processed/gastos.db"
+
+    telegram_allowed_ids: str = ""
+    """IDs de Telegram autorizados, separados por coma.
+
+    Va en `.env` y no en `config/`, a propósito: este repo es público y los IDs
+    de la familia son datos personales.
+    """
 
     @field_validator("telegram_bot_token")
     @classmethod
@@ -16,3 +24,14 @@ class Settings(BaseSettings):
         if not v.get_secret_value().strip():
             raise ValueError("TELEGRAM_BOT_TOKEN está vacío; configúralo en .env")
         return v
+
+    @property
+    def ids_autorizados(self) -> frozenset[int]:
+        crudos = (parte.strip() for parte in self.telegram_allowed_ids.split(","))
+        try:
+            return frozenset(int(c) for c in crudos if c)
+        except ValueError as e:
+            raise ValueError(
+                f"TELEGRAM_ALLOWED_IDS debe ser una lista de números separados por coma, "
+                f"llegó {self.telegram_allowed_ids!r}"
+            ) from e

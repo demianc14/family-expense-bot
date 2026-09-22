@@ -5,8 +5,8 @@ Bot de Telegram para que una familia registre gastos en texto libre
 descripción con un LLM gratuito, pide confirmación y guarda el gasto para un
 reporte mensual.
 
-> **Estado: Fase 1.** El contrato de extracción funciona y está testeado. El
-> bot todavía responde solo con eco: conectar el parser al bot es la Fase 3.
+> **Estado: Fase 2.** Contrato de extracción y almacenamiento listos y
+> testeados. El bot todavía responde solo con eco: conectarlo todo es la Fase 3.
 
 ## Pipeline (objetivo)
 
@@ -51,6 +51,21 @@ tenga puede leer los mensajes del bot y responder como si fuera él.
 ```bash
 pytest && ruff check . && ruff format --check . && mypy
 ```
+
+## Almacenamiento
+
+Solo se guardan gastos **confirmados por una persona**; las extracciones sin
+confirmar viven en memoria y se descartan si se rechazan. Decisiones del
+esquema (`src/family_expense_bot/storage/`):
+
+- **Montos en centavos, como enteros.** En punto flotante, `0.1 + 0.2` no da
+  `0.3`; sumar gastos de una familia durante un año arrastraría ese error.
+- **Nada se borra.** `anular()` marca el gasto con fecha y motivo. El historial
+  queda auditable, que es lo mínimo cuando es dinero de otras personas.
+- **Se guarda cómo se extrajo cada gasto** (la confianza por campo y si hubo
+  corrección manual). Es el insumo del reporte de calidad de la Fase 4.
+- **Los IDs de Telegram autorizados van en `.env`**, no en `config/`: son
+  datos personales y este repo es público.
 
 ## Privacidad
 
