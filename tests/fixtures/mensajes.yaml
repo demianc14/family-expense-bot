@@ -1,0 +1,141 @@
+# Mensajes de ejemplo (sintéticos, no son gastos reales de nadie) junto con la
+# respuesta que simulamos del LLM. Sirven para testear la capa de verificación
+# sin llamar a ningún LLM: el `respuesta_llm` es la afirmación cruda, y `espera`
+# es lo que el sistema debe sostener después de verificarla.
+#
+# `hoy` es 2026-03-15 en todos los casos.
+
+- id: monto_y_categoria_claros
+  texto: "200 dólares mercado"
+  respuesta_llm: |
+    {"monto": "200", "categoria": "mercado", "fecha": null,
+     "descripcion": "compra de mercado", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  espera:
+    monto: "200"
+    categoria: mercado
+    fecha: "2026-03-15"
+    confianza_monto: alta
+    confianza_categoria: alta
+    confianza_fecha: media # sin fecha en el mensaje: se asume hoy, y se dice
+    campos_dudosos: ["fecha"]
+
+- id: fecha_relativa_resuelta
+  texto: "pagué 15 dólares de taxi ayer"
+  respuesta_llm: |
+    {"monto": "15", "categoria": "transporte", "fecha": "2026-03-14",
+     "descripcion": "taxi", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "alta"}
+  espera:
+    monto: "15"
+    categoria: transporte
+    fecha: "2026-03-14"
+    confianza_monto: alta
+    confianza_categoria: alta
+    confianza_fecha: alta
+    campos_dudosos: []
+
+- id: decimales_con_coma
+  texto: "12,50 en pan"
+  respuesta_llm: |
+    {"monto": "12,50", "categoria": "mercado", "fecha": null,
+     "descripcion": "pan", "confianza_monto": "alta",
+     "confianza_categoria": "media", "confianza_fecha": "baja"}
+  espera:
+    monto: "12.50"
+    categoria: mercado
+    fecha: "2026-03-15"
+    confianza_monto: alta
+    confianza_categoria: media
+    confianza_fecha: media
+    campos_dudosos: ["categoria", "fecha"]
+
+- id: monto_inventado_por_el_llm
+  texto: "compré cosas en el super"
+  respuesta_llm: |
+    {"monto": "50", "categoria": "mercado", "fecha": null,
+     "descripcion": "compras", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  espera:
+    monto: "50"
+    categoria: mercado
+    fecha: "2026-03-15"
+    confianza_monto: baja # el 50 no está en el mensaje: no se acepta
+    confianza_categoria: alta
+    confianza_fecha: media
+    campos_dudosos: ["monto", "fecha"]
+
+- id: sin_monto
+  texto: "fui al doctor"
+  respuesta_llm: |
+    {"monto": null, "categoria": "salud", "fecha": null,
+     "descripcion": "consulta médica", "confianza_monto": "baja",
+     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  espera:
+    monto: null
+    categoria: salud
+    fecha: "2026-03-15"
+    confianza_monto: baja
+    confianza_categoria: alta
+    confianza_fecha: media
+    campos_dudosos: ["monto", "fecha"]
+
+- id: categoria_fuera_de_taxonomia
+  texto: "35 en un regalo de cumpleaños"
+  respuesta_llm: |
+    {"monto": "35", "categoria": "regalos", "fecha": null,
+     "descripcion": "regalo de cumpleaños", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  espera:
+    monto: "35"
+    categoria: otros # "regalos" no existe en la taxonomía
+    fecha: "2026-03-15"
+    confianza_monto: alta
+    confianza_categoria: baja
+    confianza_fecha: media
+    campos_dudosos: ["categoria", "fecha"]
+
+- id: dos_gastos_en_un_mensaje
+  texto: "20 de gasolina y 8 del almuerzo"
+  respuesta_llm: |
+    {"monto": "20", "categoria": "transporte", "fecha": null,
+     "descripcion": "gasolina", "confianza_monto": "baja",
+     "confianza_categoria": "baja", "confianza_fecha": "baja"}
+  espera:
+    monto: "20"
+    categoria: transporte
+    fecha: "2026-03-15"
+    confianza_monto: baja
+    confianza_categoria: baja
+    confianza_fecha: media
+    campos_dudosos: ["monto", "categoria", "fecha"]
+
+- id: fecha_en_el_futuro
+  texto: "80 de luz"
+  respuesta_llm: |
+    {"monto": "80", "categoria": "servicios", "fecha": "2026-04-20",
+     "descripcion": "planilla de luz", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "alta"}
+  espera:
+    monto: "80"
+    categoria: servicios
+    fecha: "2026-04-20"
+    confianza_monto: alta
+    confianza_categoria: alta
+    confianza_fecha: baja # nadie gasta en el futuro
+    campos_dudosos: ["fecha"]
+
+- id: monto_con_separador_de_miles
+  texto: "1.200 del arriendo"
+  respuesta_llm: |
+    {"monto": "1.200", "categoria": "hogar", "fecha": null,
+     "descripcion": "arriendo", "confianza_monto": "alta",
+     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  espera:
+    monto: "1200"
+    categoria: hogar
+    fecha: "2026-03-15"
+    confianza_monto: alta
+    confianza_categoria: alta
+    confianza_fecha: media
+    campos_dudosos: ["fecha"]

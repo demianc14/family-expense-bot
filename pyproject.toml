@@ -12,6 +12,8 @@ dependencies = [
     "python-telegram-bot>=21.0,<23",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
+    "pyyaml>=6",
+    "google-genai>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +22,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "mypy>=1.10",
+    "types-PyYAML",
 ]
 
 [project.scripts]
@@ -47,3 +50,7 @@ strict = true
 mypy_path = "src"
 packages = ["family_expense_bot"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["google.genai.*"]
+ignore_missing_imports = true

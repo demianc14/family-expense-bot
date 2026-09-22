@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     telegram_bot_token: SecretStr
+    gemini_api_key: SecretStr | None = None
 
     @field_validator("telegram_bot_token")
     @classmethod

@@ -1,0 +1,37 @@
+# Taxonomía de categorías: fuente de verdad, no se hardcodea en el parser.
+# El parser solo puede devolver uno de estos nombres; cualquier otra cosa cae
+# en `fallback` y se marca con confianza BAJA para que el bot pregunte.
+fallback: otros
+
+categorias:
+  - nombre: mercado
+    descripcion: "Compras de comida y productos del hogar en supermercado, tienda o feria."
+    ejemplos: ["supermercado", "verduras", "carne", "tienda del barrio"]
+
+  - nombre: transporte
+    descripcion: "Movilizarse: taxi, bus, gasolina, parqueo, mantenimiento del carro."
+    ejemplos: ["taxi", "gasolina", "pasaje", "peaje"]
+
+  - nombre: servicios
+    descripcion: "Servicios básicos y recurrentes del hogar."
+    ejemplos: ["luz", "agua", "internet", "teléfono", "gas"]
+
+  - nombre: salud
+    descripcion: "Medicinas, consultas médicas, exámenes, seguro de salud."
+    ejemplos: ["farmacia", "doctor", "laboratorio"]
+
+  - nombre: educacion
+    descripcion: "Pensiones, matrículas, útiles, cursos, libros."
+    ejemplos: ["pensión", "matrícula", "útiles"]
+
+  - nombre: restaurantes
+    descripcion: "Comida preparada fuera de casa o a domicilio."
+    ejemplos: ["almuerzo", "café", "delivery", "pizza"]
+
+  - nombre: hogar
+    descripcion: "Arriendo, mantenimiento, muebles, electrodomésticos, limpieza."
+    ejemplos: ["arriendo", "plomero", "muebles"]
+
+  - nombre: otros
+    descripcion: "Gastos que no encajan claramente en ninguna otra categoría."
+    ejemplos: ["regalo", "donación"]
