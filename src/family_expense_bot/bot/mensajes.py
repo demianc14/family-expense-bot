@@ -4,6 +4,7 @@ Lo que el bot muestra no es un resumen bonito: es la evidencia con la que
 alguien decide si guardar un gasto. Por eso lo dudoso se marca, no se esconde.
 """
 
+from family_expense_bot.dashboard.report import ResumenMensual
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.repository import GastoRegistrado
 
@@ -77,5 +78,42 @@ PROCESANDO = "Leyendo tu mensaje..."
 BIENVENIDA = (
     "Hola 👋 Escríbeme tus gastos como los dirías normalmente, "
     'por ejemplo "200 dólares mercado" o "pagué 15 de taxi ayer".\n\n'
-    "Te muestro lo que entendí y solo guardo si me dices que sí."
+    "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n"
+    "Escribe /reporte para ver el total del mes."
 )
+
+
+MESES = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
+def reporte(resumen: ResumenMensual) -> str:
+    titulo = f"Gastos de {MESES[resumen.mes - 1]} {resumen.anio}"
+    if resumen.cantidad == 0:
+        return f"{titulo}\n\nTodavía no hay gastos registrados este mes."
+
+    lineas = [titulo, "", f"Total: ${resumen.total:,.2f} en {resumen.cantidad} gasto(s)", ""]
+    ancho = max(len(c.categoria) for c in resumen.por_categoria)
+    for c in resumen.por_categoria:
+        lineas.append(f"  {c.categoria.ljust(ancho)}  ${c.total:>9,.2f}  ({c.cantidad})")
+
+    calidad = resumen.calidad
+    if calidad.tasa_confirmacion is not None:
+        lineas += [
+            "",
+            f"De {calidad.intentos} mensaje(s) que leí, confirmaste "
+            f"{calidad.confirmadas} ({calidad.tasa_confirmacion:.0%}).",
+        ]
+    return "\n".join(lineas)

@@ -3,13 +3,19 @@
 import argparse
 import asyncio
 import logging
+from pathlib import Path
 
 from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
 from family_expense_bot.config import Settings
+from family_expense_bot.dashboard.report import exportar_csv
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import GeminiCliente
 from family_expense_bot.extraction.parser import extraer
-from family_expense_bot.storage.repository import RepositorioGastos, crear_engine
+from family_expense_bot.storage.repository import (
+    RepositorioExtracciones,
+    RepositorioGastos,
+    crear_engine,
+)
 
 
 def _configurar_logging() -> None:
@@ -28,6 +34,14 @@ def main() -> None:
         help="Verifica el token contra la API de Telegram y sale. No levanta el bot.",
     )
     parser.add_argument(
+        "--exportar",
+        metavar="RUTA",
+        nargs="?",
+        const="data/processed/gastos.csv",
+        help="Exporta los gastos a CSV para Power BI. El archivo lleva montos reales "
+        "y vive en data/processed/, que está fuera de git.",
+    )
+    parser.add_argument(
         "--extraer",
         metavar="MENSAJE",
         help="Extrae un gasto de un mensaje usando el LLM real y muestra el resultado. "
@@ -44,12 +58,18 @@ def main() -> None:
         print(f"Token válido. Conectado como @{username}")
         return
 
+    if args.exportar:
+        _exportar(Path(args.exportar), settings)
+        return
+
     if args.extraer:
         _mostrar_extraccion(args.extraer, settings)
         return
 
+    engine = crear_engine(settings.database_url)
     servicios = Servicios(
-        repositorio=RepositorioGastos(crear_engine(settings.database_url)),
+        repositorio=RepositorioGastos(engine),
+        extracciones=RepositorioExtracciones(engine),
         cliente=_cliente_gemini(settings),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=settings.ids_autorizados,
@@ -63,6 +83,13 @@ def main() -> None:
         )
 
     build_application(token, servicios).run_polling()
+
+
+def _exportar(ruta: Path, settings: Settings) -> None:
+    repositorio = RepositorioGastos(crear_engine(settings.database_url))
+    gastos = repositorio.listar()
+    exportar_csv(gastos, ruta)
+    print(f"{len(gastos)} gasto(s) exportados a {ruta}")
 
 
 def _cliente_gemini(settings: Settings) -> GeminiCliente:

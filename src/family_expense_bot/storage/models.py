@@ -52,3 +52,27 @@ class Gasto(Base):
     # Borrado lógico: nada desaparece, se marca.
     anulado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     motivo_anulacion: Mapped[str | None] = mapped_column(String(200), default=None)
+
+
+class Extraccion(Base):
+    """Registro de cada extracción, se haya guardado o no.
+
+    Sin esta tabla el reporte de calidad mentiría: la tabla `gastos` solo
+    contiene los aciertos, así que medir sobre ella daría 100% siempre.
+
+    A propósito no guarda montos ni el texto del mensaje: son gastos que nadie
+    confirmó, y para medir la calidad basta el veredicto y las confianzas.
+    """
+
+    __tablename__ = "extracciones"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora, index=True)
+
+    confirmada: Mapped[bool]
+    """False si la persona dijo que no, o si no se pudo ni ofrecer guardar."""
+
+    tenia_monto: Mapped[bool]
+    confianza_monto: Mapped[str] = mapped_column(String(5))
+    confianza_categoria: Mapped[str] = mapped_column(String(5))
+    confianza_fecha: Mapped[str] = mapped_column(String(5))

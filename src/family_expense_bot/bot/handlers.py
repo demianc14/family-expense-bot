@@ -7,6 +7,7 @@ solo si dice que sí, se guarda. Nada se persiste antes de ese sí.
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 from uuid import uuid4
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -21,11 +22,12 @@ from telegram.ext import (
 )
 
 from family_expense_bot.bot import mensajes
+from family_expense_bot.dashboard.report import inicio_y_fin_utc, rango_del_mes, resumen_mensual
 from family_expense_bot.extraction.categorias import Taxonomia
 from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.extraction.parser import ClienteLLM, extraer
 from family_expense_bot.extraction.schema import GastoExtraido
-from family_expense_bot.storage.repository import RepositorioGastos
+from family_expense_bot.storage.repository import RepositorioExtracciones, RepositorioGastos
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ class Servicios:
     """Todo lo que los handlers necesitan, inyectado en vez de importado."""
 
     repositorio: RepositorioGastos
+    extracciones: RepositorioExtracciones
     cliente: ClienteLLM
     taxonomia: Taxonomia
     ids_autorizados: frozenset[int] = field(default_factory=frozenset)
@@ -107,7 +110,9 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if gasto.monto is None:
-        # Sin monto no hay gasto que guardar; se pide de nuevo.
+        # Sin monto no hay gasto que guardar; se pide de nuevo. Cuenta como
+        # intento fallido para el reporte de calidad.
+        servicios.extracciones.registrar(gasto, confirmada=False)
         await espera.edit_text(mensajes.falta_monto(gasto))
         return
 
@@ -129,14 +134,35 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         await consulta.edit_message_text(mensajes.descartado())
         return
 
+    servicios = _servicios(context)
     if accion == DESCARTAR:
+        # Se registra el rechazo: sin esto el reporte de calidad solo vería
+        # aciertos y diría 100% siempre.
+        servicios.extracciones.registrar(gasto, confirmada=False)
         await consulta.edit_message_text(mensajes.descartado())
         return
 
-    registrado = _servicios(context).repositorio.guardar(
-        gasto, registrado_por=update.effective_user.id
-    )
+    registrado = servicios.repositorio.guardar(gasto, registrado_por=update.effective_user.id)
+    servicios.extracciones.registrar(gasto, confirmada=True)
     await consulta.edit_message_text(mensajes.guardado(registrado))
+
+
+async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Total del mes en curso, por categoría, ahí mismo en el chat."""
+    servicios = _servicios(context)
+    if update.effective_message is None or not _autorizado(update, servicios):
+        return
+
+    hoy = date.today()
+    desde, hasta = rango_del_mes(hoy.year, hoy.month)
+    inicio, fin = inicio_y_fin_utc(hoy.year, hoy.month)
+    resumen = resumen_mensual(
+        servicios.repositorio.listar(desde=desde, hasta=hasta),
+        servicios.extracciones.listar(inicio, fin),
+        hoy.year,
+        hoy.month,
+    )
+    await update.effective_message.reply_text(mensajes.reporte(resumen))
 
 
 async def reportar_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -178,6 +204,7 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
     if servicios is not None:
         app.bot_data["servicios"] = servicios
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reporte", reporte))
     app.add_handler(CallbackQueryHandler(responder_confirmacion))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registrar_gasto))
     app.add_error_handler(reportar_error)

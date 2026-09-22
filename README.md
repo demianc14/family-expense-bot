@@ -5,8 +5,8 @@ Bot de Telegram para que una familia registre gastos en texto libre
 descripción con un LLM gratuito, pide confirmación y guarda el gasto para un
 reporte mensual.
 
-> **Estado: Fase 3.** El flujo completo funciona: mensaje → extracción →
-> confirmación humana → guardado. Falta el reporte mensual (Fase 4).
+> **Estado: Fase 4.** Pipeline completo: captura → extracción verificada →
+> confirmación humana → almacenamiento → reporte mensual con métrica de calidad.
 
 ## Pipeline (objetivo)
 
@@ -39,8 +39,11 @@ pip install -e '.[dev]'
 cp .env.example .env   # pega aquí el token de @BotFather
 family-expense-bot --check   # valida el token contra la API de Telegram
 family-expense-bot --extraer "200 dólares mercado"   # prueba el parser (usa Gemini)
+family-expense-bot --exportar   # CSV para Power BI (queda fuera de git)
 family-expense-bot           # levanta el bot (modo polling)
 ```
+
+En Telegram, `/reporte` devuelve el total del mes por categoría.
 
 El token vive solo en `.env`. Si alguna vez se filtra (por ejemplo, pegado en
 un chat o en una captura), revócalo con `/revoke` en @BotFather: quien lo
@@ -83,6 +86,26 @@ esquema (`src/family_expense_bot/storage/`):
   corrección manual). Es el insumo del reporte de calidad de la Fase 4.
 - **Los IDs de Telegram autorizados van en `.env`**, no en `config/`: son
   datos personales y este repo es público.
+
+## Reporte de calidad
+
+La pregunta que el proyecto se hace a sí mismo es *¿qué tan bien lee el LLM lo
+que escribe la familia?*, y responderla honestamente exige una decisión de
+diseño que no es obvia: **se registra cada extracción, no solo las que se
+guardaron.**
+
+Si la medición saliera de la tabla `gastos`, daría 100% de acierto siempre,
+porque ahí solo llegan las confirmadas — sesgo del superviviente. Por eso
+existe la tabla `extracciones`, que guarda el veredicto (confirmada o no) y
+las confianzas por campo. A propósito **no** guarda montos ni el texto del
+mensaje: son gastos que nadie confirmó, y para medir calidad no hacen falta.
+
+Dos métricas salen de ahí:
+
+- **Tasa de confirmación:** de cada 10 mensajes leídos, cuántos aceptó la
+  persona tal como el bot los entendió.
+- **Tasa sin dudas:** cuántas extracciones salieron con los tres campos en
+  confianza alta, sin necesidad de que nadie revisara nada.
 
 ## Privacidad
 

@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from family_expense_bot.extraction.schema import GastoExtraido
 from family_expense_bot.storage.dinero import a_centavos, a_decimal
-from family_expense_bot.storage.models import Base, Gasto
+from family_expense_bot.storage.models import Base, Extraccion, Gasto
 
 
 def _como_utc(momento: datetime) -> datetime:
@@ -127,3 +127,31 @@ class RepositorioGastos:
             fila.anulado_en = datetime.now(UTC)
             fila.motivo_anulacion = motivo.strip()
             return True
+
+
+class RepositorioExtracciones:
+    """Registro de intentos de extracción. Insumo del reporte de calidad."""
+
+    def __init__(self, engine: Engine) -> None:
+        self._sesion = sessionmaker(engine, expire_on_commit=False)
+
+    def registrar(self, gasto: GastoExtraido, confirmada: bool) -> None:
+        with self._sesion.begin() as sesion:
+            sesion.add(
+                Extraccion(
+                    confirmada=confirmada,
+                    tenia_monto=gasto.monto is not None,
+                    confianza_monto=gasto.confianza_monto,
+                    confianza_categoria=gasto.confianza_categoria,
+                    confianza_fecha=gasto.confianza_fecha,
+                )
+            )
+
+    def listar(self, desde: datetime, hasta: datetime) -> Sequence[Extraccion]:
+        consulta = (
+            select(Extraccion)
+            .where(Extraccion.creado_en >= desde, Extraccion.creado_en < hasta)
+            .order_by(Extraccion.id)
+        )
+        with self._sesion() as sesion:
+            return list(sesion.scalars(consulta))

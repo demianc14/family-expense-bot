@@ -1,11 +1,12 @@
 """Tests del flujo del bot. Sin red: Telegram y el LLM están falseados."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import Engine
 from telegram.error import Conflict
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
@@ -17,14 +18,21 @@ from family_expense_bot.bot.handlers import (
     obtener_identidad,
     registrar_gasto,
     reportar_error,
+    reporte,
     responder_confirmacion,
     start,
 )
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import CuotaAgotada
-from family_expense_bot.storage.repository import RepositorioGastos, crear_engine
+from family_expense_bot.storage.repository import (
+    RepositorioExtracciones,
+    RepositorioGastos,
+    crear_engine,
+)
 
 AUTORIZADO = 111
+_INICIO = datetime(2000, 1, 1, tzinfo=UTC)
+_FIN = datetime(2100, 1, 1, tzinfo=UTC)
 DESCONOCIDO = 999
 
 RESPUESTA_OK = (
@@ -68,14 +76,25 @@ class ClienteQueExplota:
 
 
 @pytest.fixture
-def repo() -> RepositorioGastos:
-    return RepositorioGastos(crear_engine("sqlite://"))
+def engine() -> Engine:
+    return crear_engine("sqlite://")
 
 
 @pytest.fixture
-def servicios(repo: RepositorioGastos) -> Servicios:
+def repo(engine: Engine) -> RepositorioGastos:
+    return RepositorioGastos(engine)
+
+
+@pytest.fixture
+def extracciones(engine: Engine) -> RepositorioExtracciones:
+    return RepositorioExtracciones(engine)
+
+
+@pytest.fixture
+def servicios(repo: RepositorioGastos, extracciones: RepositorioExtracciones) -> Servicios:
     return Servicios(
         repositorio=repo,
+        extracciones=extracciones,
         cliente=ClienteFalso(),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=frozenset({AUTORIZADO}),
@@ -188,6 +207,7 @@ async def test_avisa_mientras_procesa(servicios: Servicios) -> None:
 async def test_si_el_llm_demora_demasiado_corta_y_avisa(repo: RepositorioGastos) -> None:
     servicios = Servicios(
         repositorio=repo,
+        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
         cliente=ClienteLento(),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=frozenset({AUTORIZADO}),
@@ -203,6 +223,7 @@ async def test_si_el_llm_demora_demasiado_corta_y_avisa(repo: RepositorioGastos)
 async def test_si_el_llm_falla_el_bot_sigue_vivo(repo: RepositorioGastos) -> None:
     servicios = Servicios(
         repositorio=repo,
+        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
         cliente=ClienteQueExplota(),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=frozenset({AUTORIZADO}),
@@ -218,6 +239,7 @@ async def test_si_se_agota_la_cuota_lo_dice_claro(repo: RepositorioGastos) -> No
     """No es lo mismo "no te entendí" que "hoy ya no puedo": la persona actúa distinto."""
     servicios = Servicios(
         repositorio=repo,
+        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
         cliente=ClienteSinCuota(),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=frozenset({AUTORIZADO}),
@@ -232,6 +254,7 @@ async def test_si_se_agota_la_cuota_lo_dice_claro(repo: RepositorioGastos) -> No
 async def test_sin_monto_no_ofrece_guardar(repo: RepositorioGastos) -> None:
     servicios = Servicios(
         repositorio=repo,
+        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
         cliente=ClienteFalso(RESPUESTA_SIN_MONTO),
         taxonomia=cargar_taxonomia(),
         ids_autorizados=frozenset({AUTORIZADO}),
@@ -283,7 +306,12 @@ def test_los_botones_caben_en_el_limite_de_telegram() -> None:
 
 def test_sin_allowlist_no_se_autoriza_a_nadie(repo: RepositorioGastos) -> None:
     """La falla segura: sin allowlist configurada, el bot no le responde a nadie."""
-    servicios = Servicios(repositorio=repo, cliente=ClienteFalso(), taxonomia=cargar_taxonomia())
+    servicios = Servicios(
+        repositorio=repo,
+        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
+        cliente=ClienteFalso(),
+        taxonomia=cargar_taxonomia(),
+    )
     assert servicios.ids_autorizados == frozenset()
 
 
@@ -317,3 +345,54 @@ async def test_un_error_inesperado_si_deja_el_detalle(
 def test_la_aplicacion_registra_el_manejador_de_errores(servicios: Servicios) -> None:
     app = build_application("123:fake-token", servicios)
     assert reportar_error in app.error_handlers
+
+
+# --- reporte y metrica de calidad -----------------------------------------
+
+
+async def test_el_rechazo_queda_registrado_para_la_metrica(
+    servicios: Servicios, extracciones: RepositorioExtracciones
+) -> None:
+    """Si solo contáramos lo guardado, la calidad siempre daría 100%."""
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer"), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    await responder_confirmacion(_callback(f"descartar:{token}"), contexto)
+
+    registradas = extracciones.listar(_INICIO, _FIN)
+    assert len(registradas) == 1
+    assert registradas[0].confirmada is False
+
+
+async def test_la_confirmacion_tambien_queda_registrada(
+    servicios: Servicios, extracciones: RepositorioExtracciones
+) -> None:
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer"), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
+
+    registradas = extracciones.listar(_INICIO, _FIN)
+    assert len(registradas) == 1
+    assert registradas[0].confirmada is True
+
+
+async def test_reporte_responde_con_el_total_del_mes(
+    servicios: Servicios, repo: RepositorioGastos
+) -> None:
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer"), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
+
+    update = _update("/reporte")
+    await reporte(update, contexto)
+
+    texto = update.effective_message.reply_text.await_args.args[0]
+    assert "Gastos de" in texto
+
+
+async def test_reporte_no_responde_a_desconocidos(servicios: Servicios) -> None:
+    update = _update("/reporte", user_id=DESCONOCIDO)
+    await reporte(update, _contexto(servicios))
+    update.effective_message.reply_text.assert_not_awaited()
