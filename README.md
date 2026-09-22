@@ -20,8 +20,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 cp .env.example .env   # pega aquí el token de @BotFather
-family-expense-bot
+family-expense-bot --check   # valida el token contra la API de Telegram
+family-expense-bot           # levanta el bot (modo polling)
 ```
+
+El token vive solo en `.env`. Si alguna vez se filtra (por ejemplo, pegado en
+un chat o en una captura), revócalo con `/revoke` en @BotFather: quien lo
+tenga puede leer los mensajes del bot y responder como si fuera él.
 
 ## Calidad
 

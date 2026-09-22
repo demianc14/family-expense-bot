@@ -3,8 +3,15 @@
 Fase 0: solo eco, para validar que el bot está conectado.
 """
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+
+
+async def obtener_identidad(token: str) -> str:
+    """Devuelve el username del bot. Sirve para validar el token sin levantar polling."""
+    async with Bot(token) as bot:
+        me = await bot.get_me()
+    return me.username or ""
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
