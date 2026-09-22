@@ -70,6 +70,10 @@ sigan excluidos. Los ejemplos y capturas usan solo datos sintéticos.
   para el uso de la familia, hay que medirlo antes de prometer que el bot
   responde siempre. El parser depende de un protocolo `ClienteLLM`, así que
   cambiar de proveedor no toca la lógica de verificación.
+- **Latencia alta y variable.** Medido contra Gemini: 14 s para un mensaje
+  simple y 84 s para uno ambiguo. El timeout de 30 s que pide el SDK no cortó
+  esa llamada de 84 s, así que en la Fase 3 el corte tiene que imponerlo el
+  bot, y avisarle a la persona que está procesando.
 - **Solo dólares.** No se guarda la moneda; se asume USD (Ecuador).
 - **Un gasto por mensaje.** "20 de gasolina y 8 del almuerzo" se extrae como
   uno solo y queda marcado con confianza baja para que la persona corrija.
