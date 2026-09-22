@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from telegram.error import Conflict
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from family_expense_bot.bot import mensajes
@@ -15,6 +16,7 @@ from family_expense_bot.bot.handlers import (
     build_application,
     obtener_identidad,
     registrar_gasto,
+    reportar_error,
     responder_confirmacion,
     start,
 )
@@ -283,3 +285,35 @@ def test_sin_allowlist_no_se_autoriza_a_nadie(repo: RepositorioGastos) -> None:
     """La falla segura: sin allowlist configurada, el bot no le responde a nadie."""
     servicios = Servicios(repositorio=repo, cliente=ClienteFalso(), taxonomia=cargar_taxonomia())
     assert servicios.ids_autorizados == frozenset()
+
+
+# --- errores del propio bot -----------------------------------------------
+
+
+async def test_dos_instancias_se_explican_en_una_linea(
+    servicios: Servicios, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Es el error más fácil de provocar y el que peor se lee sin manejador."""
+    contexto = _contexto(servicios)
+    contexto.error = Conflict("terminated by other getUpdates request")
+
+    await reportar_error(object(), contexto)
+
+    assert "otra instancia" in caplog.text
+    assert "Traceback" not in caplog.text
+
+
+async def test_un_error_inesperado_si_deja_el_detalle(
+    servicios: Servicios, caplog: pytest.LogCaptureFixture
+) -> None:
+    contexto = _contexto(servicios)
+    contexto.error = RuntimeError("algo raro")
+
+    await reportar_error(object(), contexto)
+
+    assert "algo raro" in caplog.text
+
+
+def test_la_aplicacion_registra_el_manejador_de_errores(servicios: Servicios) -> None:
+    app = build_application("123:fake-token", servicios)
+    assert reportar_error in app.error_handlers

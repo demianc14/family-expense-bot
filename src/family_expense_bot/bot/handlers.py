@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import Conflict
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -138,6 +139,22 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
     await consulta.edit_message_text(mensajes.guardado(registrado))
 
 
+async def reportar_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sin esto, python-telegram-bot vuelca un traceback por cada reintento.
+
+    El caso más común no es un bug del código: son dos instancias del bot
+    peleándose por el mismo token, y eso se explica en una línea.
+    """
+    error = context.error
+    if isinstance(error, Conflict):
+        log.error(
+            "Hay otra instancia de este bot corriendo con el mismo token. "
+            "Telegram solo permite una: deja viva una sola y reinicia."
+        )
+        return
+    log.error("Error no manejado en el bot: %s", error, exc_info=error)
+
+
 def _pendientes(context: ContextTypes.DEFAULT_TYPE) -> dict[str, GastoExtraido]:
     """Extracciones esperando confirmación. En memoria: no se persisten nunca."""
     if context.user_data is None:
@@ -163,4 +180,5 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(responder_confirmacion))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registrar_gasto))
+    app.add_error_handler(reportar_error)
     return app
