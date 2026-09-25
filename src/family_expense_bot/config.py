@@ -14,12 +14,16 @@ class Settings(BaseSettings):
     gemini_modelo: str = MODELO_POR_DEFECTO
     database_url: str = "sqlite:///data/processed/gastos.db"
 
-    telegram_allowed_ids: str = ""
-    """IDs de Telegram autorizados, separados por coma.
+    telegram_usuarios: str = ""
+    """Quién puede usar el bot y qué rol tiene: `id:rol,id:rol`.
 
+    Las claves son la allowlist, así que no existe "autorizado pero sin rol".
     Va en `.env` y no en `config/`, a propósito: este repo es público y los IDs
     de la familia son datos personales.
     """
+
+    telegram_allowed_ids: str = ""
+    """Obsoleta: reemplazada por TELEGRAM_USUARIOS. Solo se lee para avisar."""
 
     @field_validator("telegram_bot_token")
     @classmethod
@@ -29,12 +33,28 @@ class Settings(BaseSettings):
         return v
 
     @property
-    def ids_autorizados(self) -> frozenset[int]:
-        crudos = (parte.strip() for parte in self.telegram_allowed_ids.split(","))
-        try:
-            return frozenset(int(c) for c in crudos if c)
-        except ValueError as e:
+    def usuarios(self) -> dict[int, str]:
+        """ID de Telegram → rol. Los roles se validan contra la taxonomía al arrancar."""
+        if self.telegram_allowed_ids.strip() and not self.telegram_usuarios.strip():
             raise ValueError(
-                f"TELEGRAM_ALLOWED_IDS debe ser una lista de números separados por coma, "
-                f"llegó {self.telegram_allowed_ids!r}"
-            ) from e
+                "TELEGRAM_ALLOWED_IDS ya no se usa: cada ID necesita un rol. "
+                "Cámbialo en .env por TELEGRAM_USUARIOS=id:rol (ej. 123456:demian)"
+            )
+
+        usuarios: dict[int, str] = {}
+        for parte in self.telegram_usuarios.split(","):
+            if not parte.strip():
+                continue
+            id_crudo, sep, rol = parte.partition(":")
+            if not sep or not rol.strip():
+                raise ValueError(f"TELEGRAM_USUARIOS: {parte.strip()!r} no tiene la forma id:rol")
+            try:
+                id_telegram = int(id_crudo.strip())
+            except ValueError as e:
+                raise ValueError(
+                    f"TELEGRAM_USUARIOS: {id_crudo.strip()!r} no es un ID numérico"
+                ) from e
+            if id_telegram in usuarios:
+                raise ValueError(f"TELEGRAM_USUARIOS: el ID {id_telegram} aparece dos veces")
+            usuarios[id_telegram] = rol.strip().lower()
+        return usuarios

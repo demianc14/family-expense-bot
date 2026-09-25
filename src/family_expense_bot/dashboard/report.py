@@ -33,13 +33,25 @@ class Calidad(BaseModel):
 
     intentos: int
     confirmadas: int
+    corregidas: int
+    """Confirmadas, pero después de que la persona cambiara algo con los botones."""
+
     sin_dudas: int
-    """Extracciones donde los tres campos salieron con confianza alta."""
+    """Extracciones donde todos los campos salieron con confianza alta."""
+
+    @property
+    def confirmadas_sin_correccion(self) -> int:
+        return self.confirmadas - self.corregidas
 
     @property
     def tasa_confirmacion(self) -> float | None:
         """Proporción de extracciones que la persona aceptó. None si no hubo ninguna."""
         return self.confirmadas / self.intentos if self.intentos else None
+
+    @property
+    def tasa_acierto_directo(self) -> float | None:
+        """La métrica de calidad del proyecto: aceptadas tal cual, sin tocar nada."""
+        return self.confirmadas_sin_correccion / self.intentos if self.intentos else None
 
     @property
     def tasa_sin_dudas(self) -> float | None:
@@ -88,11 +100,20 @@ def calcular_calidad(extracciones: Sequence[Extraccion]) -> Calidad:
         1
         for e in extracciones
         if e.tenia_monto
-        and Confianza.ALTA == e.confianza_monto == e.confianza_categoria == e.confianza_fecha
+        and all(
+            c == Confianza.ALTA
+            for c in (
+                e.confianza_monto,
+                e.confianza_categoria,
+                e.confianza_fecha,
+                e.confianza_atribuido_a,
+            )
+        )
     )
     return Calidad(
         intentos=len(extracciones),
         confirmadas=sum(1 for e in extracciones if e.confirmada),
+        corregidas=sum(1 for e in extracciones if e.confirmada and e.corregida),
         sin_dudas=sin_dudas,
     )
 
@@ -114,7 +135,17 @@ def resumen_mensual(
     )
 
 
-COLUMNAS = ("id", "fecha", "categoria", "monto", "descripcion", "registrado_por", "creado_en")
+COLUMNAS = (
+    "id",
+    "fecha",
+    "categoria",
+    "atribuido_a",
+    "monto",
+    "descripcion",
+    "registrado_por",
+    "corregido_manualmente",
+    "creado_en",
+)
 
 
 def exportar_csv(gastos: Sequence[GastoRegistrado], ruta: Path) -> Path:
@@ -129,9 +160,11 @@ def exportar_csv(gastos: Sequence[GastoRegistrado], ruta: Path) -> Path:
                     g.id,
                     g.fecha.isoformat(),
                     g.categoria,
+                    g.atribuido_a,
                     f"{g.monto:.2f}",
                     g.descripcion,
                     g.registrado_por,
+                    g.corregido_manualmente,
                     g.creado_en.astimezone(UTC).isoformat(),
                 ]
             )

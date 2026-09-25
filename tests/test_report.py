@@ -22,6 +22,7 @@ def _gasto(monto: str, categoria: str = "mercado", dia: int = 5, id: int = 1) ->
         id=id,
         monto=Decimal(monto),
         categoria=categoria,
+        atribuido_a="casa",
         fecha=date(2026, 3, dia),
         descripcion="compra",
         registrado_por=1,
@@ -31,14 +32,22 @@ def _gasto(monto: str, categoria: str = "mercado", dia: int = 5, id: int = 1) ->
     )
 
 
-def _extraccion(confirmada: bool, todo_alto: bool = True, tenia_monto: bool = True) -> Extraccion:
+def _extraccion(
+    confirmada: bool,
+    todo_alto: bool = True,
+    tenia_monto: bool = True,
+    corregida: bool = False,
+    atribucion: Confianza = Confianza.ALTA,
+) -> Extraccion:
     c = Confianza.ALTA if todo_alto else Confianza.BAJA
     return Extraccion(
         confirmada=confirmada,
+        corregida=corregida,
         tenia_monto=tenia_monto,
         confianza_monto=c,
         confianza_categoria=c,
         confianza_fecha=c,
+        confianza_atribuido_a=atribucion,
     )
 
 
@@ -87,6 +96,7 @@ def test_sin_gastos_el_resumen_no_explota() -> None:
     assert resumen.cantidad == 0
     assert resumen.por_categoria == ()
     assert resumen.calidad.tasa_confirmacion is None
+    assert resumen.calidad.tasa_acierto_directo is None
 
 
 def test_los_centavos_no_se_pierden_al_sumar() -> None:
@@ -107,12 +117,34 @@ def test_la_calidad_cuenta_los_rechazos_no_solo_los_aciertos() -> None:
     assert calidad.tasa_confirmacion == 0.5
 
 
-def test_sin_dudas_exige_las_tres_confianzas_altas() -> None:
+def test_sin_dudas_exige_todas_las_confianzas_altas() -> None:
     calidad = calcular_calidad(
         [_extraccion(True, todo_alto=True), _extraccion(True, todo_alto=False)]
     )
     assert calidad.sin_dudas == 1
     assert calidad.tasa_sin_dudas == 0.5
+
+
+def test_una_atribucion_asumida_ya_no_cuenta_como_sin_dudas() -> None:
+    """El cuarto campo también tiene que estar en alta."""
+    calidad = calcular_calidad([_extraccion(True, atribucion=Confianza.MEDIA)])
+    assert calidad.sin_dudas == 0
+
+
+def test_acierto_directo_excluye_las_corregidas() -> None:
+    """La métrica del brief: aceptadas tal cual, sin tocar nada."""
+    calidad = calcular_calidad(
+        [
+            _extraccion(True),  # aceptada tal cual
+            _extraccion(True, corregida=True),  # aceptada tras cambiar la atribución
+            _extraccion(False),  # rechazada
+            _extraccion(False, corregida=True),  # corrigió y aun así rechazó
+        ]
+    )
+    assert calidad.confirmadas == 2
+    assert calidad.corregidas == 1  # solo cuentan las corregidas que se confirmaron
+    assert calidad.confirmadas_sin_correccion == 1
+    assert calidad.tasa_acierto_directo == 0.25
 
 
 def test_una_extraccion_sin_monto_nunca_cuenta_como_sin_dudas() -> None:
@@ -127,7 +159,7 @@ def test_exportar_csv_escribe_encabezado_y_filas(tmp_path: Path) -> None:
     ruta = exportar_csv([_gasto("15.50", "transporte")], tmp_path / "sub" / "gastos.csv")
 
     lineas = ruta.read_text(encoding="utf-8").splitlines()
-    assert lineas[0].startswith("id,fecha,categoria,monto")
+    assert lineas[0].startswith("id,fecha,categoria,atribuido_a,monto")
     assert "15.50" in lineas[1]
     assert "transporte" in lineas[1]
 

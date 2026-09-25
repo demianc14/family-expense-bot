@@ -25,20 +25,46 @@ def test_token_no_se_filtra_en_repr(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize(
     ("crudo", "esperado"),
-    [("", set()), ("123", {123}), ("123,456", {123, 456}), (" 123 , 456 ,", {123, 456})],
+    [
+        ("", {}),
+        ("123:demian", {123: "demian"}),
+        ("123:demian,456:mama", {123: "demian", 456: "mama"}),
+        (" 123 : Demian , 456:mama ,", {123: "demian", 456: "mama"}),
+    ],
 )
-def test_ids_autorizados(monkeypatch: pytest.MonkeyPatch, crudo: str, esperado: set[int]) -> None:
+def test_usuarios(monkeypatch: pytest.MonkeyPatch, crudo: str, esperado: dict[int, str]) -> None:
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
-    monkeypatch.setenv("TELEGRAM_ALLOWED_IDS", crudo)
-    assert Settings(_env_file=None).ids_autorizados == esperado  # type: ignore[call-arg]
+    monkeypatch.setenv("TELEGRAM_USUARIOS", crudo)
+    assert Settings(_env_file=None).usuarios == esperado  # type: ignore[call-arg]
 
 
-def test_ids_autorizados_falla_si_no_son_numeros(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("crudo", "error"),
+    [
+        ("123", "id:rol"),  # falta el rol
+        ("123:", "id:rol"),
+        ("demian:mama", "ID numérico"),
+        ("123:demian,123:mama", "dos veces"),
+    ],
+)
+def test_usuarios_mal_formados_fallan_con_un_mensaje_claro(
+    monkeypatch: pytest.MonkeyPatch, crudo: str, error: str
+) -> None:
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
-    monkeypatch.setenv("TELEGRAM_ALLOWED_IDS", "demian,456")
+    monkeypatch.setenv("TELEGRAM_USUARIOS", crudo)
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    with pytest.raises(ValueError, match="TELEGRAM_ALLOWED_IDS"):
-        _ = settings.ids_autorizados
+    with pytest.raises(ValueError, match=error):
+        _ = settings.usuarios
+
+
+def test_la_variable_vieja_avisa_como_migrar(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un .env de antes no debe dejar el bot mudo sin explicar por qué."""
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
+    monkeypatch.setenv("TELEGRAM_ALLOWED_IDS", "123")
+    monkeypatch.delenv("TELEGRAM_USUARIOS", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    with pytest.raises(ValueError, match="TELEGRAM_USUARIOS=id:rol"):
+        _ = settings.usuarios
 
 
 def test_la_base_vive_en_data_processed_que_esta_ignorada(

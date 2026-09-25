@@ -12,6 +12,7 @@ from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import GeminiCliente
 from family_expense_bot.extraction.parser import extraer
 from family_expense_bot.storage.repository import (
+    EsquemaDesactualizado,
     RepositorioExtracciones,
     RepositorioGastos,
     crear_engine,
@@ -45,7 +46,12 @@ def main() -> None:
         "--extraer",
         metavar="MENSAJE",
         help="Extrae un gasto de un mensaje usando el LLM real y muestra el resultado. "
-        "Prueba manual del parser; no guarda nada.",
+        "Prueba manual del parser; no guarda nada. Requiere --como.",
+    )
+    parser.add_argument(
+        "--como",
+        metavar="ROL",
+        help="Con --extraer: el rol de quien escribe (papa, mama, hermana, demian).",
     )
     args = parser.parse_args()
 
@@ -63,23 +69,29 @@ def main() -> None:
         return
 
     if args.extraer:
-        _mostrar_extraccion(args.extraer, settings)
+        if not args.como:
+            parser.error("--extraer necesita --como ROL: los parentescos dependen de quién escribe")
+        _mostrar_extraccion(args.extraer, args.como, settings)
         return
 
-    engine = crear_engine(settings.database_url)
-    servicios = Servicios(
-        repositorio=RepositorioGastos(engine),
-        extracciones=RepositorioExtracciones(engine),
-        cliente=_cliente_gemini(settings),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=settings.ids_autorizados,
-    )
-    if not servicios.ids_autorizados:
-        # Sin allowlist el bot no le responde a nadie: es la falla segura para
+    try:
+        servicios = Servicios(
+            repositorio=RepositorioGastos(engine := crear_engine(settings.database_url)),
+            extracciones=RepositorioExtracciones(engine),
+            cliente=_cliente_gemini(settings),
+            taxonomia=cargar_taxonomia(),
+            usuarios=settings.usuarios,
+        )
+    except (ValueError, EsquemaDesactualizado) as e:
+        # Errores de configuración: se explican en una línea, sin traceback.
+        raise SystemExit(f"No arranco: {e}") from e
+
+    if not servicios.usuarios:
+        # Sin usuarios el bot no le responde a nadie: es la falla segura para
         # un bot que cualquiera en Telegram puede encontrar.
         logging.getLogger(__name__).warning(
-            "TELEGRAM_ALLOWED_IDS está vacío: el bot va a ignorar todos los mensajes. "
-            "Escríbele a @userinfobot para saber tu ID y agrégalo en .env"
+            "TELEGRAM_USUARIOS está vacío: el bot va a ignorar todos los mensajes. "
+            "Escríbele a @userinfobot para saber tu ID y agrégalo en .env como id:rol"
         )
 
     build_application(token, servicios).run_polling()
@@ -98,16 +110,17 @@ def _cliente_gemini(settings: Settings) -> GeminiCliente:
     return GeminiCliente(settings.gemini_api_key.get_secret_value(), modelo=settings.gemini_modelo)
 
 
-def _mostrar_extraccion(mensaje: str, settings: Settings) -> None:
+def _mostrar_extraccion(mensaje: str, remitente: str, settings: Settings) -> None:
     cliente = _cliente_gemini(settings)
-    gasto = extraer(mensaje, cliente, cargar_taxonomia())
+    gasto = extraer(mensaje, cliente, cargar_taxonomia(), remitente.strip().lower())
 
     print(f"  monto:       {gasto.monto} ({gasto.confianza_monto})")
     print(f"  categoría:   {gasto.categoria} ({gasto.confianza_categoria})")
     print(f"  fecha:       {gasto.fecha} ({gasto.confianza_fecha})")
+    print(f"  de:          {gasto.atribuido_a} ({gasto.confianza_atribuido_a})")
     print(f"  descripción: {gasto.descripcion}")
     for nota in gasto.notas:
-        print(f"  ⚠ {nota}")
+        print(f"  ⚠ [{nota.campo}] {nota.texto}")
     print(f"\n  ¿Sin dudas? {'sí' if gasto.listo_para_guardar else 'no'}")
 
 

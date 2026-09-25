@@ -63,6 +63,23 @@ apunta a uso personal.
 extraction/, storage/, dashboard/, cli.py). Son los mismos módulos de abajo
 bajo un solo paquete.
 
+## Decisiones de atribución (resueltas 2026-09-25)
+
+Cada gasto tiene `categoria` (en qué) y `atribuido_a` (de quién), independientes.
+Detalle y mediciones en el README; lo que no se debe deshacer:
+
+- **`atribuido_a` = quién asume el costo**, no quién pagó en la caja ni el
+  beneficiario. Por defecto es el remitente, con confianza `media`, nunca `alta`.
+- **`casa` nunca se deduce**, ni del remitente ni del tipo de gasto. Solo se
+  acepta con confianza si el texto trae un marcador explícito del yaml.
+- **El LLM cita la frase ("mi hija"); el código resuelve el parentesco** con
+  `como_lo_llaman` del yaml. No volver a pedirle al LLM que elija el rol:
+  contra gemini-3.5-flash-lite fallaba en "mi hija" → `hermana` con cualquier
+  prompt que se probó.
+- **Categorías `candidata: true` están inactivas** (hoy: salud, servicios). No
+  activarlas sin confirmación de Demian con su familia.
+- El mapa ID de Telegram → rol va en `.env` (`TELEGRAM_USUARIOS`), nunca en el repo.
+
 ## Arquitectura propuesta
 
 ```

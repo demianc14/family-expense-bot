@@ -3,139 +3,374 @@
 # sin llamar a ningún LLM: el `respuesta_llm` es la afirmación cruda, y `espera`
 # es lo que el sistema debe sostener después de verificarla.
 #
-# `hoy` es 2026-03-15 en todos los casos.
+# `hoy` es 2026-03-15 en todos los casos. `remitente` es el rol de quien escribe.
+# Cada `respuesta_llm` se completa con los campos que no declara (ver
+# BASE_LLM en test_parser.py), para que cada caso muestre solo lo que importa.
+
+# --- monto, categoría y fecha ----------------------------------------------
 
 - id: monto_y_categoria_claros
-  texto: "200 dólares mercado"
-  respuesta_llm: |
-    {"monto": "200", "categoria": "mercado", "fecha": null,
-     "descripcion": "compra de mercado", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  remitente: mama
+  texto: "200 dólares supermercado"
+  respuesta_llm:
+    { monto: "200", categoria: alimentacion, descripcion: "supermercado" }
   espera:
     monto: "200"
-    categoria: mercado
+    categoria: alimentacion
     fecha: "2026-03-15"
-    confianza_monto: alta
-    confianza_categoria: alta
-    confianza_fecha: media # sin fecha en el mensaje: se asume hoy, y se dice
-    campos_dudosos: ["fecha"]
+    atribuido_a: mama
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: media }
 
 - id: fecha_relativa_resuelta
+  remitente: demian
   texto: "pagué 15 dólares de taxi ayer"
-  respuesta_llm: |
-    {"monto": "15", "categoria": "transporte", "fecha": "2026-03-14",
-     "descripcion": "taxi", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "alta"}
+  respuesta_llm:
+    {
+      monto: "15",
+      categoria: transporte,
+      fecha: "2026-03-14",
+      confianza_fecha: alta,
+      descripcion: taxi,
+    }
   espera:
     monto: "15"
     categoria: transporte
     fecha: "2026-03-14"
-    confianza_monto: alta
-    confianza_categoria: alta
-    confianza_fecha: alta
-    campos_dudosos: []
+    atribuido_a: demian
+    confianza: { monto: alta, categoria: alta, fecha: alta, atribuido_a: media }
 
 - id: decimales_con_coma
+  remitente: papa
   texto: "12,50 en pan"
-  respuesta_llm: |
-    {"monto": "12,50", "categoria": "mercado", "fecha": null,
-     "descripcion": "pan", "confianza_monto": "alta",
-     "confianza_categoria": "media", "confianza_fecha": "baja"}
+  respuesta_llm:
+    { monto: "12,50", categoria: alimentacion, confianza_categoria: media, descripcion: pan }
   espera:
     monto: "12.50"
-    categoria: mercado
+    categoria: alimentacion
     fecha: "2026-03-15"
-    confianza_monto: alta
-    confianza_categoria: media
-    confianza_fecha: media
-    campos_dudosos: ["categoria", "fecha"]
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: media, fecha: media, atribuido_a: media }
 
 - id: monto_inventado_por_el_llm
+  remitente: mama
   texto: "compré cosas en el super"
-  respuesta_llm: |
-    {"monto": "50", "categoria": "mercado", "fecha": null,
-     "descripcion": "compras", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  respuesta_llm: { monto: "50", categoria: alimentacion, descripcion: compras }
   espera:
     monto: "50"
-    categoria: mercado
+    categoria: alimentacion
     fecha: "2026-03-15"
-    confianza_monto: baja # el 50 no está en el mensaje: no se acepta
-    confianza_categoria: alta
-    confianza_fecha: media
-    campos_dudosos: ["monto", "fecha"]
+    atribuido_a: mama
+    # el 50 no está en el mensaje: no se acepta
+    confianza: { monto: baja, categoria: alta, fecha: media, atribuido_a: media }
 
 - id: sin_monto
-  texto: "fui al doctor"
-  respuesta_llm: |
-    {"monto": null, "categoria": "salud", "fecha": null,
-     "descripcion": "consulta médica", "confianza_monto": "baja",
-     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  remitente: papa
+  texto: "fui al veterinario"
+  respuesta_llm:
+    { monto: null, confianza_monto: baja, categoria: mascotas, descripcion: veterinario }
   espera:
     monto: null
-    categoria: salud
+    categoria: mascotas
     fecha: "2026-03-15"
-    confianza_monto: baja
-    confianza_categoria: alta
-    confianza_fecha: media
-    campos_dudosos: ["monto", "fecha"]
+    atribuido_a: papa
+    confianza: { monto: baja, categoria: alta, fecha: media, atribuido_a: media }
 
 - id: categoria_fuera_de_taxonomia
+  remitente: hermana
   texto: "35 en un regalo de cumpleaños"
-  respuesta_llm: |
-    {"monto": "35", "categoria": "regalos", "fecha": null,
-     "descripcion": "regalo de cumpleaños", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  respuesta_llm: { monto: "35", categoria: regalos, descripcion: "regalo de cumpleaños" }
   espera:
     monto: "35"
-    categoria: otros # "regalos" no existe en la taxonomía
+    categoria: otros # "regalos" no existe; la categoría correcta sería "extras"
     fecha: "2026-03-15"
-    confianza_monto: alta
-    confianza_categoria: baja
-    confianza_fecha: media
-    campos_dudosos: ["categoria", "fecha"]
+    atribuido_a: hermana
+    confianza: { monto: alta, categoria: baja, fecha: media, atribuido_a: media }
+
+- id: categoria_candidata_no_se_acepta
+  remitente: papa
+  texto: "45 de luz"
+  respuesta_llm: { monto: "45", categoria: servicios, descripcion: "planilla de luz" }
+  espera:
+    monto: "45"
+    # servicios está en el yaml como candidata: hasta confirmarla, no recibe datos
+    categoria: otros
+    fecha: "2026-03-15"
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: baja, fecha: media, atribuido_a: media }
 
 - id: dos_gastos_en_un_mensaje
+  remitente: demian
   texto: "20 de gasolina y 8 del almuerzo"
-  respuesta_llm: |
-    {"monto": "20", "categoria": "transporte", "fecha": null,
-     "descripcion": "gasolina", "confianza_monto": "baja",
-     "confianza_categoria": "baja", "confianza_fecha": "baja"}
+  respuesta_llm:
+    {
+      monto: "20",
+      confianza_monto: baja,
+      categoria: transporte,
+      confianza_categoria: baja,
+      descripcion: gasolina,
+    }
   espera:
     monto: "20"
     categoria: transporte
     fecha: "2026-03-15"
-    confianza_monto: baja
-    confianza_categoria: baja
-    confianza_fecha: media
-    campos_dudosos: ["monto", "categoria", "fecha"]
+    atribuido_a: demian
+    confianza: { monto: baja, categoria: baja, fecha: media, atribuido_a: media }
 
 - id: fecha_en_el_futuro
-  texto: "80 de luz"
-  respuesta_llm: |
-    {"monto": "80", "categoria": "servicios", "fecha": "2026-04-20",
-     "descripcion": "planilla de luz", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "alta"}
+  remitente: papa
+  texto: "80 de gasolina"
+  respuesta_llm:
+    {
+      monto: "80",
+      categoria: transporte,
+      fecha: "2026-04-20",
+      confianza_fecha: alta,
+      descripcion: gasolina,
+    }
   espera:
     monto: "80"
-    categoria: servicios
+    categoria: transporte
     fecha: "2026-04-20"
-    confianza_monto: alta
-    confianza_categoria: alta
-    confianza_fecha: baja # nadie gasta en el futuro
-    campos_dudosos: ["fecha"]
+    atribuido_a: papa
+    # nadie gasta en el futuro
+    confianza: { monto: alta, categoria: alta, fecha: baja, atribuido_a: media }
 
 - id: monto_con_separador_de_miles
-  texto: "1.200 del arriendo"
-  respuesta_llm: |
-    {"monto": "1.200", "categoria": "hogar", "fecha": null,
-     "descripcion": "arriendo", "confianza_monto": "alta",
-     "confianza_categoria": "alta", "confianza_fecha": "baja"}
+  remitente: papa
+  texto: "1.200 de la cuota del préstamo"
+  respuesta_llm: { monto: "1.200", categoria: deudas_cuotas, descripcion: "cuota del préstamo" }
   espera:
     monto: "1200"
-    categoria: hogar
+    categoria: deudas_cuotas
     fecha: "2026-03-15"
-    confianza_monto: alta
-    confianza_categoria: alta
-    confianza_fecha: media
-    campos_dudosos: ["fecha"]
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: media }
+
+# --- atribución: parentescos desde quien escribe ---------------------------
+
+- id: mi_hija_desde_mama_es_hermana
+  remitente: mama
+  texto: "mi hija se compró ropa, 45"
+  respuesta_llm:
+    {
+      monto: "45",
+      categoria: ropa,
+      quien_paga: "mi hija",
+      confianza_quien_paga: alta,
+      descripcion: ropa,
+    }
+  espera:
+    monto: "45"
+    categoria: ropa
+    fecha: "2026-03-15"
+    atribuido_a: hermana
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }
+
+- id: mi_hermana_desde_mama_es_una_tia
+  # El ejemplo original del diseño: desde mamá, "mi hermana" no es la hija.
+  # El LLM solo cita la frase; la tabla de parentescos dice que no es nadie.
+  remitente: mama
+  texto: "mi hermana se compró ropa, 45"
+  respuesta_llm:
+    {
+      monto: "45",
+      categoria: ropa,
+      quien_paga: "mi hermana",
+      confianza_quien_paga: baja,
+      descripcion: ropa,
+    }
+  espera:
+    monto: "45"
+    categoria: ropa
+    fecha: "2026-03-15"
+    atribuido_a: mama # provisional, y con duda: nadie de la lista
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+- id: mi_hermana_desde_demian_es_hermana
+  remitente: demian
+  texto: "mi hermana se compró ropa, 45"
+  respuesta_llm:
+    {
+      monto: "45",
+      categoria: ropa,
+      quien_paga: "mi hermana",
+      confianza_quien_paga: alta,
+      descripcion: ropa,
+    }
+  espera:
+    monto: "45"
+    categoria: ropa
+    fecha: "2026-03-15"
+    atribuido_a: hermana
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }
+
+- id: mi_esposo_desde_mama_es_papa
+  remitente: mama
+  texto: "mi esposo se compró zapatos, 60"
+  respuesta_llm:
+    {
+      monto: "60",
+      categoria: ropa,
+      quien_paga: "mi esposo",
+      confianza_quien_paga: alta,
+      descripcion: zapatos,
+    }
+  espera:
+    monto: "60"
+    categoria: ropa
+    fecha: "2026-03-15"
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }
+
+- id: persona_fuera_de_la_lista
+  remitente: demian
+  texto: "20 para mi tía"
+  respuesta_llm:
+    {
+      monto: "20",
+      categoria: extras,
+      quien_paga: "mi tía",
+      confianza_quien_paga: alta,
+      descripcion: "regalo tía",
+    }
+  espera:
+    monto: "20"
+    categoria: extras
+    fecha: "2026-03-15"
+    atribuido_a: demian
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+# --- atribución: quién asume el costo, no quién se beneficia ---------------
+
+- id: beneficiaria_no_es_quien_paga
+  remitente: papa
+  texto: "300 de la pensión de mi hija"
+  respuesta_llm:
+    {
+      monto: "300",
+      categoria: educacion,
+      quien_paga: null,
+      confianza_quien_paga: baja,
+      descripcion: pensión,
+    }
+  espera:
+    monto: "300"
+    categoria: educacion
+    fecha: "2026-03-15"
+    atribuido_a: papa # provisional; ¿salió del fondo común? no lo dice
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+# --- atribución: casa, solo si es explícito --------------------------------
+
+- id: casa_explicita
+  remitente: mama
+  texto: "80 de gasolina, gasto de la casa"
+  respuesta_llm:
+    {
+      monto: "80",
+      categoria: transporte,
+      quien_paga: "gasto de la casa",
+      confianza_quien_paga: alta,
+      descripcion: gasolina,
+    }
+  espera:
+    monto: "80"
+    categoria: transporte
+    fecha: "2026-03-15"
+    atribuido_a: casa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }
+
+- id: casa_sin_tilde_tambien_cuenta
+  remitente: papa
+  texto: "60 de gasolina, gasto comun"
+  respuesta_llm:
+    {
+      monto: "60",
+      categoria: transporte,
+      quien_paga: "gasto comun",
+      confianza_quien_paga: alta,
+      descripcion: gasolina,
+    }
+  espera:
+    monto: "60"
+    categoria: transporte
+    fecha: "2026-03-15"
+    atribuido_a: casa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }
+
+- id: casa_inferida_por_el_llm_sin_decirlo
+  # La pensión suele salir del fondo común, pero el mensaje no lo dice.
+  remitente: papa
+  texto: "300 de pensión"
+  respuesta_llm:
+    {
+      monto: "300",
+      categoria: educacion,
+      quien_paga: casa,
+      confianza_quien_paga: alta,
+      descripcion: pensión,
+    }
+  espera:
+    monto: "300"
+    categoria: educacion
+    fecha: "2026-03-15"
+    atribuido_a: casa # se muestra la propuesta, pero con duda
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+- id: comunion_no_es_comun
+  # "común" es marcador; "comunión" no lo es. Coincidencia por palabra completa.
+  remitente: demian
+  texto: "50 regalo de primera comunión"
+  respuesta_llm:
+    {
+      monto: "50",
+      categoria: extras,
+      quien_paga: casa,
+      confianza_quien_paga: alta,
+      descripcion: "regalo de comunión",
+    }
+  espera:
+    monto: "50"
+    categoria: extras
+    fecha: "2026-03-15"
+    atribuido_a: casa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+# --- atribución: el LLM no puede nombrar a quien el mensaje no nombra --------
+
+- id: persona_no_mencionada_en_el_texto
+  # El LLM atribuye a papa, pero el mensaje no lo menciona de ninguna forma.
+  remitente: demian
+  texto: "25 de gasolina"
+  respuesta_llm:
+    {
+      monto: "25",
+      categoria: transporte,
+      quien_paga: "mi papá",
+      confianza_quien_paga: alta,
+      descripcion: gasolina,
+    }
+  espera:
+    monto: "25"
+    categoria: transporte
+    fecha: "2026-03-15"
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: baja }
+
+- id: nana_ecuatoriano_es_hermana
+  remitente: demian
+  texto: "mi ñaña pagó 30 del cine con su plata"
+  respuesta_llm:
+    {
+      monto: "30",
+      categoria: entretenimiento,
+      quien_paga: "mi ñaña",
+      confianza_quien_paga: alta,
+      descripcion: cine,
+    }
+  espera:
+    monto: "30"
+    categoria: entretenimiento
+    fecha: "2026-03-15"
+    atribuido_a: hermana
+    confianza: { monto: alta, categoria: alta, fecha: media, atribuido_a: alta }

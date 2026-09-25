@@ -1,37 +1,147 @@
-# Taxonomía de categorías: fuente de verdad, no se hardcodea en el parser.
-# El parser solo puede devolver uno de estos nombres; cualquier otra cosa cae
-# en `fallback` y se marca con confianza BAJA para que el bot pregunte.
+# Taxonomía: fuente de verdad, no se hardcodea en el parser.
+#
+# Dos dimensiones independientes de cada gasto:
+#   - categoria:   en qué se gastó.
+#   - atribuido_a: quién asume el costo (de qué bolsillo sale), no quién pagó
+#                  en la caja ni quién se beneficia.
+#
+# Este archivo es público: acá van roles, nunca nombres reales ni IDs de
+# Telegram. El mapa ID → rol vive en .env (TELEGRAM_USUARIOS).
+
+# ---------------------------------------------------------------------------
+# Categorías
+# ---------------------------------------------------------------------------
+# El parser solo puede devolver una categoría activa. Cualquier otra cosa cae
+# en `fallback` con confianza baja para que el bot pregunte.
+#
+# `candidata: true` = propuesta, todavía no confirmada con la familia. Está
+# listada pero INACTIVA: el LLM no la ve y el parser no la acepta, así que no
+# entra ningún dato real bajo ella hasta cambiarla a `false`.
 fallback: otros
 
 categorias:
-  - nombre: mercado
-    descripcion: "Compras de comida y productos del hogar en supermercado, tienda o feria."
-    ejemplos: ["supermercado", "verduras", "carne", "tienda del barrio"]
-
   - nombre: transporte
-    descripcion: "Movilizarse: taxi, bus, gasolina, parqueo, mantenimiento del carro."
-    ejemplos: ["taxi", "gasolina", "pasaje", "peaje"]
+    descripcion: "Movilizarse: gasolina, taxi, bus, parqueo, peajes, mantenimiento del carro."
+    ejemplos: ["gasolina", "taxi", "Uber", "parqueadero", "peaje"]
 
-  - nombre: servicios
-    descripcion: "Servicios básicos y recurrentes del hogar."
-    ejemplos: ["luz", "agua", "internet", "teléfono", "gas"]
+  - nombre: alimentacion
+    descripcion: "Compras de comida para la casa: supermercado, Tipti, tienda, feria."
+    ejemplos: ["supermercado", "Tipti", "tienda", "verduras", "carne"]
 
-  - nombre: salud
-    descripcion: "Medicinas, consultas médicas, exámenes, seguro de salud."
-    ejemplos: ["farmacia", "doctor", "laboratorio"]
+  - nombre: comida_fuera
+    descripcion: "Comida preparada: restaurantes, cafés, delivery."
+    ejemplos: ["almuerzo", "café", "pizza", "delivery"]
 
   - nombre: educacion
-    descripcion: "Pensiones, matrículas, útiles, cursos, libros."
-    ejemplos: ["pensión", "matrícula", "útiles"]
+    descripcion: "Pensiones, matrículas, semestres, útiles, cursos."
+    ejemplos: ["pensión", "matrícula", "semestre", "útiles"]
 
-  - nombre: restaurantes
-    descripcion: "Comida preparada fuera de casa o a domicilio."
-    ejemplos: ["almuerzo", "café", "delivery", "pizza"]
+  - nombre: mesada
+    descripcion: "Dinero entregado a un hijo o hija como mesada."
+    ejemplos: ["mesada"]
+
+  - nombre: mascotas
+    descripcion: "Veterinario, comida y cuidado de mascotas."
+    ejemplos: ["veterinario", "comida del perro", "vacuna del gato"]
+
+  - nombre: entretenimiento
+    descripcion: "Salidas, cine, streaming, eventos, juegos."
+    ejemplos: ["cine", "Netflix", "concierto"]
 
   - nombre: hogar
-    descripcion: "Arriendo, mantenimiento, muebles, electrodomésticos, limpieza."
-    ejemplos: ["arriendo", "plomero", "muebles"]
+    descripcion: "Electrodomésticos y artículos para la casa."
+    ejemplos: ["licuadora", "sábanas", "focos", "artículos de limpieza"]
+
+  - nombre: ropa
+    descripcion: "Ropa, zapatos y accesorios."
+    ejemplos: ["camisa", "zapatos", "chompa"]
+
+  - nombre: deudas_cuotas
+    descripcion: "Cuotas de préstamos, tarjetas o compras a plazos."
+    ejemplos: ["cuota del préstamo", "tarjeta de crédito", "cuota"]
+
+  - nombre: extras
+    descripcion: "Gustos y regalos puntuales, fuera de lo cotidiano."
+    ejemplos: ["regalo de cumpleaños", "un gustito"]
 
   - nombre: otros
     descripcion: "Gastos que no encajan claramente en ninguna otra categoría."
-    ejemplos: ["regalo", "donación"]
+    ejemplos: []
+
+  # --- Candidatas: confirmar con la familia antes de activar ---------------
+  - nombre: salud
+    descripcion: "Medicinas, consultas médicas, exámenes, seguro de salud."
+    ejemplos: ["farmacia", "doctor", "laboratorio"]
+    candidata: true
+
+  - nombre: servicios
+    descripcion: "Servicios básicos del hogar: luz, agua, internet, teléfono, gas."
+    ejemplos: ["luz", "agua", "internet", "celular"]
+    candidata: true
+
+# ---------------------------------------------------------------------------
+# Atribuciones: quién asume el costo
+# ---------------------------------------------------------------------------
+# Por defecto el gasto se atribuye a quien escribe el mensaje, con confianza
+# media. El texto puede sobreescribirlo ("mi esposo pagó los zapatos").
+#
+# `como_lo_llaman`: cómo se refiere cada remitente a esta persona. Hace falta
+# porque los parentescos dependen de quién habla: "mi hermana" escrito por
+# demian es `hermana`, pero escrito por mama es una tía, que no está en la
+# lista. Con una descripción en prosa el modelo no lo resolvía bien (probado
+# contra gemini-3.5-flash-lite: "mi hija" desde mama no llegaba a `hermana`).
+# El prompt recibe solo las expresiones de quien escribe, y el parser exige
+# que el mensaje contenga alguna para aceptar con confianza a otra persona.
+#
+# La atribución `compartida` nunca se asigna por defecto: solo se acepta con
+# confianza si el mensaje contiene alguno de sus `marcadores`. Si el LLM la
+# propone sin marcador, queda con confianza baja para que alguien la confirme.
+atribuciones:
+  - nombre: papa
+    etiqueta: "Papá"
+    descripcion: "El papá."
+    como_lo_llaman:
+      mama: ["mi esposo", "mi marido"]
+      hermana: ["mi papá", "mi papi"]
+      demian: ["mi papá", "mi papi"]
+
+  - nombre: mama
+    etiqueta: "Mamá"
+    descripcion: "La mamá."
+    como_lo_llaman:
+      papa: ["mi esposa", "mi mujer"]
+      hermana: ["mi mamá", "mi mami"]
+      demian: ["mi mamá", "mi mami"]
+
+  - nombre: hermana
+    etiqueta: "Hermana"
+    descripcion: "La hija de papa y mama."
+    como_lo_llaman:
+      papa: ["mi hija"]
+      mama: ["mi hija"]
+      demian: ["mi hermana", "mi ñaña"]
+
+  - nombre: demian
+    etiqueta: "Demian"
+    descripcion: "El hijo de papa y mama."
+    como_lo_llaman:
+      papa: ["mi hijo"]
+      mama: ["mi hijo"]
+      hermana: ["mi hermano", "mi ñaño"]
+
+  - nombre: casa
+    etiqueta: "Casa"
+    descripcion: "Gasto compartido 50/50 entre papa y mama, del fondo común."
+    compartida: true
+    # Frases, no palabras sueltas: "casa" sola aparece en "llegué a casa en taxi".
+    # Se comparan sin tildes y como palabras completas ("casamiento" no cuenta).
+    marcadores:
+      - de la casa
+      - para la casa
+      - gasto de casa
+      - compartido
+      - compartida
+      - común
+      - entre los dos
+      - de todos
+      - familiar

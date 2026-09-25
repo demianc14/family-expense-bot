@@ -33,6 +33,10 @@ class Gasto(Base):
     """En centavos de dólar. Ver `storage.dinero`."""
 
     categoria: Mapped[str] = mapped_column(String(50), index=True)
+    atribuido_a: Mapped[str] = mapped_column(String(20), index=True)
+    """Quién asume el costo. Independiente de `registrado_por`: tu mamá puede
+    registrar un gasto de tu hermana."""
+
     fecha: Mapped[date] = mapped_column(Date, index=True)
     descripcion: Mapped[str] = mapped_column(String(500))
     texto_original: Mapped[str] = mapped_column(Text)
@@ -46,6 +50,7 @@ class Gasto(Base):
     confianza_monto: Mapped[str] = mapped_column(String(5))
     confianza_categoria: Mapped[str] = mapped_column(String(5))
     confianza_fecha: Mapped[str] = mapped_column(String(5))
+    confianza_atribuido_a: Mapped[str] = mapped_column(String(5))
     corregido_manualmente: Mapped[bool] = mapped_column(default=False)
     """True si la persona tuvo que arreglar lo que el LLM entendió."""
 
@@ -72,7 +77,11 @@ class Extraccion(Base):
     confirmada: Mapped[bool]
     """False si la persona dijo que no, o si no se pudo ni ofrecer guardar."""
 
+    corregida: Mapped[bool] = mapped_column(default=False)
+    """True si la persona cambió algo con los botones antes de confirmar."""
+
     tenia_monto: Mapped[bool]
     confianza_monto: Mapped[str] = mapped_column(String(5))
     confianza_categoria: Mapped[str] = mapped_column(String(5))
     confianza_fecha: Mapped[str] = mapped_column(String(5))
+    confianza_atribuido_a: Mapped[str] = mapped_column(String(5))

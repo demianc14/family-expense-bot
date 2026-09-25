@@ -4,51 +4,73 @@ Lo que el bot muestra no es un resumen bonito: es la evidencia con la que
 alguien decide si guardar un gasto. Por eso lo dudoso se marca, no se esconde.
 """
 
+from collections.abc import Collection, Mapping
+
 from family_expense_bot.dashboard.report import ResumenMensual
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.repository import GastoRegistrado
 
 DUDOSO = "❓"
+CORREGIDO = "✏️"
 
 
-def _marca(confianza: Confianza) -> str:
-    return "" if confianza is Confianza.ALTA else f" {DUDOSO}"
+def _marca(gasto: GastoExtraido, campo: str, corregidos: Collection[str]) -> str:
+    if campo in corregidos:
+        return f" {CORREGIDO}"
+    return "" if gasto.confianza(campo) is Confianza.ALTA else f" {DUDOSO}"
 
 
-def resumen(gasto: GastoExtraido) -> str:
+def resumen(
+    gasto: GastoExtraido,
+    etiquetas: Mapping[str, str] | None = None,
+    corregidos: Collection[str] = (),
+) -> str:
+    """`corregidos`: campos que la persona ya cambió; no llevan duda ni notas."""
+    etiquetas = etiquetas or {}
     monto = f"${gasto.monto:,.2f}" if gasto.monto is not None else "—"
     fecha = gasto.fecha.strftime("%d/%m/%Y") if gasto.fecha else "—"
+    quien = etiquetas.get(gasto.atribuido_a, gasto.atribuido_a)
 
     lineas = [
         "Entendí esto:",
         "",
-        f"Monto: {monto}{_marca(gasto.confianza_monto)}",
-        f"Categoría: {gasto.categoria}{_marca(gasto.confianza_categoria)}",
-        f"Fecha: {fecha}{_marca(gasto.confianza_fecha)}",
+        f"Monto: {monto}{_marca(gasto, 'monto', corregidos)}",
+        f"Categoría: {gasto.categoria}{_marca(gasto, 'categoria', corregidos)}",
+        f"Fecha: {fecha}{_marca(gasto, 'fecha', corregidos)}",
+        f"De: {quien}{_marca(gasto, 'atribuido_a', corregidos)}",
         f"Descripción: {gasto.descripcion}",
     ]
-    if gasto.notas:
-        lineas += ["", *(f"{DUDOSO} {nota}" for nota in gasto.notas)]
+    notas = [n for n in gasto.notas if n.campo not in corregidos]
+    if notas:
+        lineas += ["", *(f"{DUDOSO} {n.texto}" for n in notas)]
     return "\n".join(lineas)
 
 
-def pedir_confirmacion(gasto: GastoExtraido) -> str:
-    return f"{resumen(gasto)}\n\n¿Lo guardo?"
+def pedir_confirmacion(
+    gasto: GastoExtraido,
+    etiquetas: Mapping[str, str] | None = None,
+    corregidos: Collection[str] = (),
+) -> str:
+    return (
+        f"{resumen(gasto, etiquetas, corregidos)}\n\n"
+        "¿Lo guardo? Si no es de quien dice, tócalo abajo."
+    )
 
 
-def falta_monto(gasto: GastoExtraido) -> str:
+def falta_monto(gasto: GastoExtraido, etiquetas: Mapping[str, str] | None = None) -> str:
     """Sin monto no hay nada que guardar: se pide de nuevo, no se inventa."""
     return (
-        f"{resumen(gasto)}\n\n"
+        f"{resumen(gasto, etiquetas)}\n\n"
         "No encontré el monto, así que no puedo guardarlo. "
         "¿Me lo escribes de nuevo incluyendo el valor?"
     )
 
 
-def guardado(registrado: GastoRegistrado) -> str:
+def guardado(registrado: GastoRegistrado, etiquetas: Mapping[str, str] | None = None) -> str:
+    quien = (etiquetas or {}).get(registrado.atribuido_a, registrado.atribuido_a)
     return (
         f"Guardado ✅\n\n"
-        f"${registrado.monto:,.2f} en {registrado.categoria} "
+        f"${registrado.monto:,.2f} en {registrado.categoria}, de {quien}, "
         f"el {registrado.fecha.strftime('%d/%m/%Y')}."
     )
 
@@ -77,7 +99,9 @@ PROCESANDO = "Leyendo tu mensaje..."
 
 BIENVENIDA = (
     "Hola 👋 Escríbeme tus gastos como los dirías normalmente, "
-    'por ejemplo "200 dólares mercado" o "pagué 15 de taxi ayer".\n\n'
+    'por ejemplo "200 dólares supermercado" o "pagué 15 de taxi ayer".\n\n'
+    "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, "
+    'dilo: "gasolina de la casa".\n\n'
     "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n"
     "Escribe /reporte para ver el total del mes."
 )
@@ -110,10 +134,10 @@ def reporte(resumen: ResumenMensual) -> str:
         lineas.append(f"  {c.categoria.ljust(ancho)}  ${c.total:>9,.2f}  ({c.cantidad})")
 
     calidad = resumen.calidad
-    if calidad.tasa_confirmacion is not None:
+    if calidad.tasa_acierto_directo is not None:
         lineas += [
             "",
-            f"De {calidad.intentos} mensaje(s) que leí, confirmaste "
-            f"{calidad.confirmadas} ({calidad.tasa_confirmacion:.0%}).",
+            f"De {calidad.intentos} mensaje(s) que leí, {calidad.confirmadas_sin_correccion} "
+            f"({calidad.tasa_acierto_directo:.0%}) los entendí bien a la primera.",
         ]
     return "\n".join(lineas)

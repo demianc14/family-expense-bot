@@ -1,13 +1,15 @@
 """I/O de Telegram. Sin lógica de negocio.
 
-El flujo completo: mensaje → parser → mostrar lo entendido → botón sí/no →
+El flujo completo: mensaje → parser → mostrar lo entendido → botones →
 solo si dice que sí, se guarda. Nada se persiste antes de ese sí.
 """
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from datetime import date
+from types import MappingProxyType
 from uuid import uuid4
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -38,6 +40,8 @@ reintentos una llamada puede pasar del minuto."""
 
 GUARDAR = "guardar"
 DESCARTAR = "descartar"
+ATRIBUIR = "atrib"
+BOTONES_POR_FILA = 3
 
 
 @dataclass(frozen=True)
@@ -48,8 +52,33 @@ class Servicios:
     extracciones: RepositorioExtracciones
     cliente: ClienteLLM
     taxonomia: Taxonomia
-    ids_autorizados: frozenset[int] = field(default_factory=frozenset)
+    usuarios: Mapping[int, str] = field(default_factory=lambda: MappingProxyType({}))
+    """ID de Telegram → rol. Es la allowlist: quien no está acá, no existe."""
+
     timeout_s: float = TIMEOUT_EXTRACCION_S
+
+    def __post_init__(self) -> None:
+        # Falla al arrancar, no cuando esa persona escriba por primera vez.
+        invalidos = {r for r in self.usuarios.values() if r not in self.taxonomia.personas}
+        if invalidos:
+            raise ValueError(
+                f"TELEGRAM_USUARIOS tiene roles que no son personas de la taxonomía: "
+                f"{sorted(invalidos)}. Válidos: {list(self.taxonomia.personas)} "
+                f"({self.taxonomia.compartida.nombre!r} no escribe: es compartido)"
+            )
+
+
+@dataclass(frozen=True)
+class Pendiente:
+    """Una extracción esperando el sí. Vive en memoria; nunca se persiste así."""
+
+    gasto: GastoExtraido
+    """Lo que se guardaría, con las correcciones de la persona ya aplicadas."""
+
+    original: GastoExtraido
+    """Lo que extrajo el LLM. De acá salen las confianzas del reporte de calidad."""
+
+    corregidos: frozenset[str] = frozenset()
 
 
 def _servicios(context: ContextTypes.DEFAULT_TYPE) -> Servicios:
@@ -58,16 +87,17 @@ def _servicios(context: ContextTypes.DEFAULT_TYPE) -> Servicios:
     return servicios
 
 
-def _autorizado(update: Update, servicios: Servicios) -> bool:
+def _rol(update: Update, servicios: Servicios) -> str | None:
+    """El rol de quien escribe, o None si no está autorizado."""
     usuario = update.effective_user
     if usuario is None:
-        return False
-    if usuario.id in servicios.ids_autorizados:
-        return True
-    # Se ignora en silencio, pero queda en el log: si a alguien de la familia le
-    # cambia el ID, este es el único lugar donde se ve cuál agregar.
-    log.warning("Mensaje ignorado de un ID no autorizado: %s", usuario.id)
-    return False
+        return None
+    rol = servicios.usuarios.get(usuario.id)
+    if rol is None:
+        # Se ignora en silencio, pero queda en el log: si a alguien de la familia le
+        # cambia el ID, este es el único lugar donde se ve cuál agregar.
+        log.warning("Mensaje ignorado de un ID no autorizado: %s", usuario.id)
+    return rol
 
 
 async def obtener_identidad(token: str) -> str:
@@ -78,7 +108,7 @@ async def obtener_identidad(token: str) -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_message is None or not _autorizado(update, _servicios(context)):
+    if update.effective_message is None or _rol(update, _servicios(context)) is None:
         return
     await update.effective_message.reply_text(mensajes.BIENVENIDA)
 
@@ -86,14 +116,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     mensaje = update.effective_message
     servicios = _servicios(context)
-    if mensaje is None or mensaje.text is None or not _autorizado(update, servicios):
+    if mensaje is None or mensaje.text is None:
+        return
+    remitente = _rol(update, servicios)
+    if remitente is None:
         return
 
     espera = await mensaje.reply_text(mensajes.PROCESANDO)
+    etiquetas = servicios.taxonomia.etiquetas
 
     try:
         gasto = await asyncio.wait_for(
-            asyncio.to_thread(extraer, mensaje.text, servicios.cliente, servicios.taxonomia),
+            asyncio.to_thread(
+                extraer, mensaje.text, servicios.cliente, servicios.taxonomia, remitente
+            ),
             timeout=servicios.timeout_s,
         )
     except TimeoutError:
@@ -113,12 +149,16 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Sin monto no hay gasto que guardar; se pide de nuevo. Cuenta como
         # intento fallido para el reporte de calidad.
         servicios.extracciones.registrar(gasto, confirmada=False)
-        await espera.edit_text(mensajes.falta_monto(gasto))
+        await espera.edit_text(mensajes.falta_monto(gasto, etiquetas))
         return
 
     token = uuid4().hex
-    _pendientes(context)[token] = gasto
-    await espera.edit_text(mensajes.pedir_confirmacion(gasto), reply_markup=_botones(token))
+    pendiente = Pendiente(gasto=gasto, original=gasto)
+    _pendientes(context)[token] = pendiente
+    await espera.edit_text(
+        mensajes.pedir_confirmacion(gasto, etiquetas),
+        reply_markup=_botones(token, pendiente, servicios.taxonomia),
+    )
 
 
 async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,30 +167,60 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         return
     await consulta.answer()
 
-    accion, _, token = consulta.data.partition(":")
-    gasto = _pendientes(context).pop(token, None)
-    if gasto is None:
+    accion, _, resto = consulta.data.partition(":")
+    token, _, valor = resto.partition(":")
+    pendientes = _pendientes(context)
+    pendiente = pendientes.get(token)
+    if pendiente is None:
         # El bot se reinició o ya se respondió: las extracciones viven en memoria.
         await consulta.edit_message_text(mensajes.descartado())
         return
 
     servicios = _servicios(context)
+    etiquetas = servicios.taxonomia.etiquetas
+
+    if accion == ATRIBUIR:
+        if not servicios.taxonomia.contiene_atribucion(valor):
+            log.warning("Botón de atribución con un valor desconocido: %r", valor)
+            return
+        # Corregir no guarda: vuelve a mostrar el resumen y espera el sí.
+        corregido = replace(
+            pendiente,
+            gasto=pendiente.gasto.model_copy(update={"atribuido_a": valor}),
+            corregidos=pendiente.corregidos | {"atribuido_a"},
+        )
+        pendientes[token] = corregido
+        await consulta.edit_message_text(
+            mensajes.pedir_confirmacion(corregido.gasto, etiquetas, corregido.corregidos),
+            reply_markup=_botones(token, corregido, servicios.taxonomia),
+        )
+        return
+
+    del pendientes[token]
+    fue_corregido = bool(pendiente.corregidos)
+
     if accion == DESCARTAR:
         # Se registra el rechazo: sin esto el reporte de calidad solo vería
         # aciertos y diría 100% siempre.
-        servicios.extracciones.registrar(gasto, confirmada=False)
+        servicios.extracciones.registrar(
+            pendiente.original, confirmada=False, corregida=fue_corregido
+        )
         await consulta.edit_message_text(mensajes.descartado())
         return
 
-    registrado = servicios.repositorio.guardar(gasto, registrado_por=update.effective_user.id)
-    servicios.extracciones.registrar(gasto, confirmada=True)
-    await consulta.edit_message_text(mensajes.guardado(registrado))
+    registrado = servicios.repositorio.guardar(
+        pendiente.gasto,
+        registrado_por=update.effective_user.id,
+        corregido_manualmente=fue_corregido,
+    )
+    servicios.extracciones.registrar(pendiente.original, confirmada=True, corregida=fue_corregido)
+    await consulta.edit_message_text(mensajes.guardado(registrado, etiquetas))
 
 
 async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Total del mes en curso, por categoría, ahí mismo en el chat."""
     servicios = _servicios(context)
-    if update.effective_message is None or not _autorizado(update, servicios):
+    if update.effective_message is None or _rol(update, servicios) is None:
         return
 
     hoy = date.today()
@@ -181,22 +251,31 @@ async def reportar_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
     log.error("Error no manejado en el bot: %s", error, exc_info=error)
 
 
-def _pendientes(context: ContextTypes.DEFAULT_TYPE) -> dict[str, GastoExtraido]:
+def _pendientes(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Pendiente]:
     """Extracciones esperando confirmación. En memoria: no se persisten nunca."""
     if context.user_data is None:
         return {}
     return context.user_data.setdefault("pendientes", {})  # type: ignore[no-any-return]
 
 
-def _botones(token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+def _botones(token: str, pendiente: Pendiente, taxonomia: Taxonomia) -> InlineKeyboardMarkup:
+    """Sí/No, y debajo, a quién más podría corresponder el gasto (un toque, sin reescribir)."""
+    alternativas = [
+        InlineKeyboardButton(a.etiqueta, callback_data=f"{ATRIBUIR}:{token}:{a.nombre}")
+        for a in taxonomia.atribuciones
+        if a.nombre != pendiente.gasto.atribuido_a
+    ]
+    filas = [
         [
-            [
-                InlineKeyboardButton("Sí, guardar", callback_data=f"{GUARDAR}:{token}"),
-                InlineKeyboardButton("No", callback_data=f"{DESCARTAR}:{token}"),
-            ]
-        ]
-    )
+            InlineKeyboardButton("Sí, guardar", callback_data=f"{GUARDAR}:{token}"),
+            InlineKeyboardButton("No", callback_data=f"{DESCARTAR}:{token}"),
+        ],
+        *(
+            alternativas[i : i + BOTONES_POR_FILA]
+            for i in range(0, len(alternativas), BOTONES_POR_FILA)
+        ),
+    ]
+    return InlineKeyboardMarkup(filas)
 
 
 def build_application(token: str, servicios: Servicios | None = None) -> Application:  # type: ignore[type-arg]

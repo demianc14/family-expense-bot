@@ -1,8 +1,10 @@
 """Tests del flujo del bot. Sin red: Telegram y el LLM están falseados."""
 
+import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,6 +14,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from family_expense_bot.bot import mensajes
 from family_expense_bot.bot.handlers import (
+    Pendiente,
     Servicios,
     _botones,
     build_application,
@@ -24,27 +27,42 @@ from family_expense_bot.bot.handlers import (
 )
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import CuotaAgotada
+from family_expense_bot.extraction.parser import ClienteLLM
+from family_expense_bot.extraction.schema import Confianza
 from family_expense_bot.storage.repository import (
     RepositorioExtracciones,
     RepositorioGastos,
     crear_engine,
 )
 
-AUTORIZADO = 111
+TAXONOMIA = cargar_taxonomia()
+
+MAMA = 111
+DEMIAN = 222
+DESCONOCIDO = 999
+USUARIOS = {MAMA: "mama", DEMIAN: "demian"}
+
 _INICIO = datetime(2000, 1, 1, tzinfo=UTC)
 _FIN = datetime(2100, 1, 1, tzinfo=UTC)
-DESCONOCIDO = 999
 
-RESPUESTA_OK = (
-    '{"monto": "15", "categoria": "transporte", "fecha": "2026-03-14",'
-    ' "descripcion": "taxi", "confianza_monto": "alta",'
-    ' "confianza_categoria": "alta", "confianza_fecha": "alta"}'
-)
-RESPUESTA_SIN_MONTO = (
-    '{"monto": null, "categoria": "salud", "fecha": null,'
-    ' "descripcion": "consulta", "confianza_monto": "baja",'
-    ' "confianza_categoria": "alta", "confianza_fecha": "baja"}'
-)
+
+def _respuesta(**campos: Any) -> str:
+    base: dict[str, Any] = {
+        "monto": "15",
+        "categoria": "transporte",
+        "fecha": "2026-03-14",
+        "quien_paga": None,
+        "descripcion": "taxi",
+        "confianza_monto": "alta",
+        "confianza_categoria": "alta",
+        "confianza_fecha": "alta",
+        "confianza_quien_paga": "alta",
+    }
+    return json.dumps(base | campos)
+
+
+RESPUESTA_OK = _respuesta()
+"""No dice de quién es: queda del remitente, con confianza media."""
 
 
 class ClienteFalso:
@@ -56,7 +74,7 @@ class ClienteFalso:
 
 
 class ClienteLento:
-    """Simula la llamada de 84 segundos que medimos contra Gemini."""
+    """Simula una llamada que no vuelve a tiempo."""
 
     def completar_json(self, prompt: str, schema: dict[str, object]) -> str:
         import time
@@ -72,7 +90,7 @@ class ClienteSinCuota:
 
 class ClienteQueExplota:
     def completar_json(self, prompt: str, schema: dict[str, object]) -> str:
-        raise RuntimeError("cuota agotada")
+        raise RuntimeError("algo raro")
 
 
 @pytest.fixture
@@ -90,22 +108,27 @@ def extracciones(engine: Engine) -> RepositorioExtracciones:
     return RepositorioExtracciones(engine)
 
 
-@pytest.fixture
-def servicios(repo: RepositorioGastos, extracciones: RepositorioExtracciones) -> Servicios:
+def _servicios_con(engine: Engine, cliente: ClienteLLM | None = None, **kwargs: Any) -> Servicios:
     return Servicios(
-        repositorio=repo,
-        extracciones=extracciones,
-        cliente=ClienteFalso(),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=frozenset({AUTORIZADO}),
+        repositorio=RepositorioGastos(engine),
+        extracciones=RepositorioExtracciones(engine),
+        cliente=cliente or ClienteFalso(),
+        taxonomia=TAXONOMIA,
+        usuarios=USUARIOS,
+        **kwargs,
     )
+
+
+@pytest.fixture
+def servicios(engine: Engine) -> Servicios:
+    return _servicios_con(engine)
 
 
 def _contexto(servicios: Servicios) -> MagicMock:
     return MagicMock(bot_data={"servicios": servicios}, user_data={})
 
 
-def _update(texto: str, user_id: int = AUTORIZADO) -> MagicMock:
+def _update(texto: str, user_id: int = MAMA) -> MagicMock:
     espera = SimpleNamespace(edit_text=AsyncMock())
     mensaje = SimpleNamespace(text=texto, reply_text=AsyncMock(return_value=espera))
     update = MagicMock(effective_message=mensaje, effective_user=SimpleNamespace(id=user_id))
@@ -113,9 +136,15 @@ def _update(texto: str, user_id: int = AUTORIZADO) -> MagicMock:
     return update
 
 
-def _callback(data: str, user_id: int = AUTORIZADO) -> MagicMock:
+def _callback(data: str, user_id: int = MAMA) -> MagicMock:
     consulta = SimpleNamespace(data=data, answer=AsyncMock(), edit_message_text=AsyncMock())
     return MagicMock(callback_query=consulta, effective_user=SimpleNamespace(id=user_id))
+
+
+async def _extraer_pendiente(contexto: MagicMock, texto: str = "15 de taxi ayer") -> str:
+    """Manda un mensaje y devuelve el token del gasto que queda esperando el sí."""
+    await registrar_gasto(_update(texto), contexto)
+    return str(next(iter(contexto.user_data["pendientes"])))
 
 
 # --- el principio no negociable -------------------------------------------
@@ -130,23 +159,19 @@ async def test_extraer_no_guarda_nada_hasta_que_la_persona_confirme(
 
 async def test_solo_al_confirmar_se_guarda(servicios: Servicios, repo: RepositorioGastos) -> None:
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
     await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
 
     guardados = repo.listar()
     assert len(guardados) == 1
     assert guardados[0].monto == Decimal("15")
     assert guardados[0].fecha == date(2026, 3, 14)
-    assert guardados[0].registrado_por == AUTORIZADO
+    assert guardados[0].registrado_por == MAMA
 
 
 async def test_rechazar_descarta_y_no_guarda(servicios: Servicios, repo: RepositorioGastos) -> None:
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
     callback = _callback(f"descartar:{token}")
     await responder_confirmacion(callback, contexto)
 
@@ -160,13 +185,115 @@ async def test_no_se_puede_confirmar_dos_veces(
 ) -> None:
     """El botón queda en el chat: tocarlo de nuevo no debe duplicar el gasto."""
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
 
     await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
     await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
 
     assert len(repo.listar()) == 1
+
+
+# --- atribución -----------------------------------------------------------
+
+
+async def test_por_defecto_el_gasto_es_de_quien_escribe(
+    servicios: Servicios, repo: RepositorioGastos
+) -> None:
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    await responder_confirmacion(_callback(f"guardar:{token}", user_id=DEMIAN), contexto)
+
+    assert repo.listar()[0].atribuido_a == "demian"
+
+
+async def test_la_atribucion_asumida_se_muestra_como_duda(servicios: Servicios) -> None:
+    update = _update("15 de taxi ayer")
+    await registrar_gasto(update, _contexto(servicios))
+
+    texto = update.espera.edit_text.await_args.args[0]
+    assert f"De: Mamá {mensajes.DUDOSO}" in texto
+
+
+async def test_el_boton_cambia_la_atribucion_sin_guardar(
+    servicios: Servicios, repo: RepositorioGastos
+) -> None:
+    """Corregir y confirmar son dos pasos: tocar "Casa" no guarda nada todavía."""
+    contexto = _contexto(servicios)
+    token = await _extraer_pendiente(contexto)
+
+    callback = _callback(f"atrib:{token}:casa")
+    await responder_confirmacion(callback, contexto)
+
+    assert repo.listar() == []
+    pendiente: Pendiente = contexto.user_data["pendientes"][token]
+    assert pendiente.gasto.atribuido_a == "casa"
+    texto = callback.callback_query.edit_message_text.await_args.args[0]
+    assert f"De: Casa {mensajes.CORREGIDO}" in texto
+
+
+async def test_confirmar_tras_corregir_guarda_lo_corregido_y_lo_marca(
+    servicios: Servicios, repo: RepositorioGastos, extracciones: RepositorioExtracciones
+) -> None:
+    contexto = _contexto(servicios)
+    token = await _extraer_pendiente(contexto)
+    await responder_confirmacion(_callback(f"atrib:{token}:casa"), contexto)
+    await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
+
+    guardado = repo.listar()[0]
+    assert guardado.atribuido_a == "casa"
+    assert guardado.corregido_manualmente is True
+
+    registrada = extracciones.listar(_INICIO, _FIN)[0]
+    assert registrada.corregida is True
+    # La métrica mide lo que extrajo el LLM, no lo que dejó la persona.
+    assert registrada.confianza_atribuido_a == Confianza.MEDIA
+
+
+async def test_confirmar_sin_tocar_nada_no_cuenta_como_correccion(
+    servicios: Servicios, repo: RepositorioGastos, extracciones: RepositorioExtracciones
+) -> None:
+    contexto = _contexto(servicios)
+    token = await _extraer_pendiente(contexto)
+    await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
+
+    assert repo.listar()[0].corregido_manualmente is False
+    assert extracciones.listar(_INICIO, _FIN)[0].corregida is False
+
+
+async def test_un_boton_de_atribucion_con_valor_desconocido_se_ignora(
+    servicios: Servicios, repo: RepositorioGastos
+) -> None:
+    contexto = _contexto(servicios)
+    token = await _extraer_pendiente(contexto)
+    await responder_confirmacion(_callback(f"atrib:{token}:tia"), contexto)
+
+    pendiente: Pendiente = contexto.user_data["pendientes"][token]
+    assert pendiente.gasto.atribuido_a == "mama"
+    assert not pendiente.corregidos
+
+
+def test_los_botones_ofrecen_las_demas_atribuciones(servicios: Servicios) -> None:
+    from family_expense_bot.extraction.parser import extraer
+
+    gasto = extraer("15 de taxi", ClienteFalso(), TAXONOMIA, "mama", date(2026, 3, 15))
+    teclado = _botones("t" * 32, Pendiente(gasto=gasto, original=gasto), TAXONOMIA)
+    ofrecidas = {
+        str(b.callback_data).rsplit(":", 1)[1] for fila in teclado.inline_keyboard[1:] for b in fila
+    }
+    assert ofrecidas == set(TAXONOMIA.nombres_atribucion) - {"mama"}
+
+
+def test_los_botones_caben_en_el_limite_de_telegram() -> None:
+    """callback_data no puede pasar de 64 bytes."""
+    from family_expense_bot.extraction.parser import extraer
+
+    gasto = extraer("15 de taxi", ClienteFalso(), TAXONOMIA, "mama", date(2026, 3, 15))
+    teclado = _botones("a" * 32, Pendiente(gasto=gasto, original=gasto), TAXONOMIA)
+    for fila in teclado.inline_keyboard:
+        for boton in fila:
+            assert boton.callback_data is not None
+            assert len(str(boton.callback_data).encode()) <= 64
 
 
 # --- autorización ---------------------------------------------------------
@@ -195,6 +322,30 @@ async def test_start_solo_responde_a_los_autorizados(servicios: Servicios) -> No
     ajeno.effective_message.reply_text.assert_not_awaited()
 
 
+def test_sin_usuarios_no_se_autoriza_a_nadie(engine: Engine) -> None:
+    """La falla segura: sin usuarios configurados, el bot no le responde a nadie."""
+    servicios = Servicios(
+        repositorio=RepositorioGastos(engine),
+        extracciones=RepositorioExtracciones(engine),
+        cliente=ClienteFalso(),
+        taxonomia=TAXONOMIA,
+    )
+    assert dict(servicios.usuarios) == {}
+
+
+@pytest.mark.parametrize("rol", ["casa", "tia", "Papá"])
+def test_un_rol_invalido_falla_al_arrancar(engine: Engine, rol: str) -> None:
+    """Mejor no arrancar que descubrirlo cuando esa persona escriba por primera vez."""
+    with pytest.raises(ValueError, match="TELEGRAM_USUARIOS"):
+        Servicios(
+            repositorio=RepositorioGastos(engine),
+            extracciones=RepositorioExtracciones(engine),
+            cliente=ClienteFalso(),
+            taxonomia=TAXONOMIA,
+            usuarios={1: rol},
+        )
+
+
 # --- fallas del LLM -------------------------------------------------------
 
 
@@ -204,15 +355,10 @@ async def test_avisa_mientras_procesa(servicios: Servicios) -> None:
     update.effective_message.reply_text.assert_awaited_once_with(mensajes.PROCESANDO)
 
 
-async def test_si_el_llm_demora_demasiado_corta_y_avisa(repo: RepositorioGastos) -> None:
-    servicios = Servicios(
-        repositorio=repo,
-        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
-        cliente=ClienteLento(),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=frozenset({AUTORIZADO}),
-        timeout_s=0.1,
-    )
+async def test_si_el_llm_demora_demasiado_corta_y_avisa(
+    engine: Engine, repo: RepositorioGastos
+) -> None:
+    servicios = _servicios_con(engine, ClienteLento(), timeout_s=0.1)
     update = _update("15 de taxi ayer")
     await registrar_gasto(update, _contexto(servicios))
 
@@ -220,47 +366,27 @@ async def test_si_el_llm_demora_demasiado_corta_y_avisa(repo: RepositorioGastos)
     assert repo.listar() == []
 
 
-async def test_si_el_llm_falla_el_bot_sigue_vivo(repo: RepositorioGastos) -> None:
-    servicios = Servicios(
-        repositorio=repo,
-        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
-        cliente=ClienteQueExplota(),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=frozenset({AUTORIZADO}),
-    )
+async def test_si_el_llm_falla_el_bot_sigue_vivo(engine: Engine, repo: RepositorioGastos) -> None:
     update = _update("15 de taxi ayer")
-    await registrar_gasto(update, _contexto(servicios))
+    await registrar_gasto(update, _contexto(_servicios_con(engine, ClienteQueExplota())))
 
     update.espera.edit_text.assert_awaited_once_with(mensajes.error_de_extraccion())
     assert repo.listar() == []
 
 
-async def test_si_se_agota_la_cuota_lo_dice_claro(repo: RepositorioGastos) -> None:
+async def test_si_se_agota_la_cuota_lo_dice_claro(engine: Engine, repo: RepositorioGastos) -> None:
     """No es lo mismo "no te entendí" que "hoy ya no puedo": la persona actúa distinto."""
-    servicios = Servicios(
-        repositorio=repo,
-        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
-        cliente=ClienteSinCuota(),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=frozenset({AUTORIZADO}),
-    )
     update = _update("15 de taxi ayer")
-    await registrar_gasto(update, _contexto(servicios))
+    await registrar_gasto(update, _contexto(_servicios_con(engine, ClienteSinCuota())))
 
     update.espera.edit_text.assert_awaited_once_with(mensajes.cuota_agotada())
     assert repo.listar() == []
 
 
-async def test_sin_monto_no_ofrece_guardar(repo: RepositorioGastos) -> None:
-    servicios = Servicios(
-        repositorio=repo,
-        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
-        cliente=ClienteFalso(RESPUESTA_SIN_MONTO),
-        taxonomia=cargar_taxonomia(),
-        ids_autorizados=frozenset({AUTORIZADO}),
-    )
-    contexto = _contexto(servicios)
-    update = _update("fui al doctor")
+async def test_sin_monto_no_ofrece_guardar(engine: Engine) -> None:
+    sin_monto = _respuesta(monto=None, confianza_monto="baja", categoria="mascotas")
+    contexto = _contexto(_servicios_con(engine, ClienteFalso(sin_monto)))
+    update = _update("fui al veterinario")
     await registrar_gasto(update, contexto)
 
     texto = update.espera.edit_text.await_args.args[0]
@@ -278,7 +404,7 @@ async def test_confirmar_algo_que_ya_no_existe_no_rompe(servicios: Servicios) ->
 # --- cableado -------------------------------------------------------------
 
 
-def test_build_application_registra_los_tres_handlers(servicios: Servicios) -> None:
+def test_build_application_registra_los_handlers(servicios: Servicios) -> None:
     app = build_application("123:fake-token", servicios)
     tipos = [type(h) for h in app.handlers[0]]
     assert CommandHandler in tipos
@@ -294,25 +420,6 @@ async def test_obtener_identidad_devuelve_username(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("family_expense_bot.bot.handlers.Bot", lambda token: bot)
 
     assert await obtener_identidad("123:fake-token") == "CR_family_bot"
-
-
-def test_los_botones_caben_en_el_limite_de_telegram() -> None:
-    """callback_data no puede pasar de 64 bytes."""
-    for fila in _botones("a" * 32).inline_keyboard:
-        for boton in fila:
-            assert boton.callback_data is not None
-            assert len(str(boton.callback_data).encode()) <= 64
-
-
-def test_sin_allowlist_no_se_autoriza_a_nadie(repo: RepositorioGastos) -> None:
-    """La falla segura: sin allowlist configurada, el bot no le responde a nadie."""
-    servicios = Servicios(
-        repositorio=repo,
-        extracciones=RepositorioExtracciones(crear_engine("sqlite://")),
-        cliente=ClienteFalso(),
-        taxonomia=cargar_taxonomia(),
-    )
-    assert servicios.ids_autorizados == frozenset()
 
 
 # --- errores del propio bot -----------------------------------------------
@@ -347,7 +454,7 @@ def test_la_aplicacion_registra_el_manejador_de_errores(servicios: Servicios) ->
     assert reportar_error in app.error_handlers
 
 
-# --- reporte y metrica de calidad -----------------------------------------
+# --- reporte y métrica de calidad -----------------------------------------
 
 
 async def test_el_rechazo_queda_registrado_para_la_metrica(
@@ -355,8 +462,7 @@ async def test_el_rechazo_queda_registrado_para_la_metrica(
 ) -> None:
     """Si solo contáramos lo guardado, la calidad siempre daría 100%."""
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
     await responder_confirmacion(_callback(f"descartar:{token}"), contexto)
 
     registradas = extracciones.listar(_INICIO, _FIN)
@@ -368,8 +474,7 @@ async def test_la_confirmacion_tambien_queda_registrada(
     servicios: Servicios, extracciones: RepositorioExtracciones
 ) -> None:
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
     await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
 
     registradas = extracciones.listar(_INICIO, _FIN)
@@ -377,12 +482,9 @@ async def test_la_confirmacion_tambien_queda_registrada(
     assert registradas[0].confirmada is True
 
 
-async def test_reporte_responde_con_el_total_del_mes(
-    servicios: Servicios, repo: RepositorioGastos
-) -> None:
+async def test_reporte_responde_con_el_total_del_mes(servicios: Servicios) -> None:
     contexto = _contexto(servicios)
-    await registrar_gasto(_update("15 de taxi ayer"), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = await _extraer_pendiente(contexto)
     await responder_confirmacion(_callback(f"guardar:{token}"), contexto)
 
     update = _update("/reporte")

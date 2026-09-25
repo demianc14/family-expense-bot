@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Engine, create_engine, select
+from sqlalchemy import Engine, create_engine, inspect, select
 from sqlalchemy.orm import sessionmaker
 
 from family_expense_bot.extraction.schema import GastoExtraido
@@ -34,6 +34,7 @@ class GastoRegistrado(BaseModel):
     id: int
     monto: Decimal
     categoria: str
+    atribuido_a: str
     fecha: date
     descripcion: str
     registrado_por: int
@@ -47,6 +48,7 @@ class GastoRegistrado(BaseModel):
             id=fila.id,
             monto=a_decimal(fila.monto_centavos),
             categoria=fila.categoria,
+            atribuido_a=fila.atribuido_a,
             fecha=fila.fecha,
             descripcion=fila.descripcion,
             registrado_por=fila.registrado_por,
@@ -60,10 +62,34 @@ class GastoSinMonto(ValueError):
     """No se guarda un gasto sin monto: sería una fila inútil y engañosa."""
 
 
+class EsquemaDesactualizado(RuntimeError):
+    """La base existe pero no coincide con el modelo actual."""
+
+
 def crear_engine(url: str) -> Engine:
     engine = create_engine(url)
     Base.metadata.create_all(engine)
+    verificar_esquema(engine)
     return engine
+
+
+def verificar_esquema(engine: Engine) -> None:
+    """Falla al arrancar si a la base le faltan columnas del modelo.
+
+    `create_all` crea las tablas que faltan, pero no toca las que ya existen.
+    Sin esta verificación, una base vieja no avisa nada al arrancar y el bot
+    se cae en el primer insert, en medio de una conversación con alguien.
+    """
+    inspector = inspect(engine)
+    faltantes: list[str] = []
+    for tabla in Base.metadata.sorted_tables:
+        existentes = {c["name"] for c in inspector.get_columns(tabla.name)}
+        faltantes += [f"{tabla.name}.{c.name}" for c in tabla.columns if c.name not in existentes]
+    if faltantes:
+        raise EsquemaDesactualizado(
+            f"La base en {engine.url} tiene un esquema viejo; le faltan: {', '.join(faltantes)}. "
+            "Respáldala y muévela para que se cree de nuevo, o escribe una migración."
+        )
 
 
 class RepositorioGastos:
@@ -80,6 +106,7 @@ class RepositorioGastos:
         fila = Gasto(
             monto_centavos=a_centavos(gasto.monto),
             categoria=gasto.categoria,
+            atribuido_a=gasto.atribuido_a,
             fecha=gasto.fecha or date.today(),
             descripcion=gasto.descripcion,
             texto_original=gasto.texto_original,
@@ -87,6 +114,7 @@ class RepositorioGastos:
             confianza_monto=gasto.confianza_monto,
             confianza_categoria=gasto.confianza_categoria,
             confianza_fecha=gasto.confianza_fecha,
+            confianza_atribuido_a=gasto.confianza_atribuido_a,
             corregido_manualmente=corregido_manualmente,
         )
         with self._sesion.begin() as sesion:
@@ -135,15 +163,18 @@ class RepositorioExtracciones:
     def __init__(self, engine: Engine) -> None:
         self._sesion = sessionmaker(engine, expire_on_commit=False)
 
-    def registrar(self, gasto: GastoExtraido, confirmada: bool) -> None:
+    def registrar(self, gasto: GastoExtraido, confirmada: bool, corregida: bool = False) -> None:
+        """Registra las confianzas **originales** del LLM, aunque se haya corregido algo."""
         with self._sesion.begin() as sesion:
             sesion.add(
                 Extraccion(
                     confirmada=confirmada,
+                    corregida=corregida,
                     tenia_monto=gasto.monto is not None,
                     confianza_monto=gasto.confianza_monto,
                     confianza_categoria=gasto.confianza_categoria,
                     confianza_fecha=gasto.confianza_fecha,
+                    confianza_atribuido_a=gasto.confianza_atribuido_a,
                 )
             )
 

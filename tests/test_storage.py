@@ -3,11 +3,12 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.dinero import a_centavos, a_decimal
 from family_expense_bot.storage.repository import (
+    EsquemaDesactualizado,
     GastoSinMonto,
     RepositorioGastos,
     crear_engine,
@@ -25,11 +26,14 @@ def _gasto(monto: str | None = "15.50", **kwargs: object) -> GastoExtraido:
         "monto": Decimal(monto) if monto is not None else None,
         "categoria": "transporte",
         "fecha": date(2026, 3, 14),
+        "atribuido_a": "demian",
         "descripcion": "taxi",
         "texto_original": "15,50 de taxi ayer",
+        "remitente": "demian",
         "confianza_monto": Confianza.ALTA,
         "confianza_categoria": Confianza.ALTA,
         "confianza_fecha": Confianza.ALTA,
+        "confianza_atribuido_a": Confianza.MEDIA,
     }
     return GastoExtraido.model_validate(base | kwargs)
 
@@ -152,3 +156,36 @@ def test_creado_en_vuelve_con_zona_horaria(tmp_path: Path) -> None:
     assert releido is not None
     assert releido.creado_en.tzinfo is not None
     assert releido.creado_en.utcoffset() == timedelta(0)
+
+
+def test_atribucion_y_remitente_son_independientes(repo: RepositorioGastos) -> None:
+    """Tu mamá puede registrar un gasto de tu hermana: quien escribe no es a quien se atribuye."""
+    guardado = repo.guardar(_gasto(atribuido_a="hermana"), registrado_por=222)
+
+    recuperado = repo.obtener(guardado.id)
+    assert recuperado is not None
+    assert recuperado.atribuido_a == "hermana"
+    assert recuperado.registrado_por == 222
+
+
+# --- esquema --------------------------------------------------------------
+
+
+def test_una_base_con_esquema_viejo_falla_al_arrancar(tmp_path: Path) -> None:
+    """create_all no agrega columnas a tablas existentes. Sin esta verificación,
+    el bot arrancaría normal y se caería en el primer insert, frente a alguien."""
+    ruta = tmp_path / "vieja.db"
+    vieja = create_engine(f"sqlite:///{ruta}")
+    with vieja.begin() as con:
+        con.exec_driver_sql(
+            "CREATE TABLE gastos (id INTEGER PRIMARY KEY, monto_centavos INTEGER, categoria TEXT)"
+        )
+    vieja.dispose()
+
+    with pytest.raises(EsquemaDesactualizado, match=r"gastos\.atribuido_a"):
+        crear_engine(f"sqlite:///{ruta}")
+
+
+def test_una_base_nueva_pasa_la_verificacion(tmp_path: Path) -> None:
+    crear_engine(f"sqlite:///{tmp_path / 'nueva.db'}")
+    crear_engine(f"sqlite:///{tmp_path / 'nueva.db'}")  # reabrirla tampoco falla
