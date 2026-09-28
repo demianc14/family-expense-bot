@@ -1,0 +1,246 @@
+{
+  "categorias": [
+    {
+      "nombre": "transporte",
+      "descripcion": "Movilizarse: gasolina, taxi, bus, parqueo, peajes, mantenimiento del carro.",
+      "ejemplos": [
+        "gasolina",
+        "taxi",
+        "Uber",
+        "parqueadero",
+        "peaje"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "alimentacion",
+      "descripcion": "Compras de comida para la casa: supermercado, Tipti, tienda, feria.",
+      "ejemplos": [
+        "supermercado",
+        "Tipti",
+        "tienda",
+        "verduras",
+        "carne"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "comida_fuera",
+      "descripcion": "Comida preparada: restaurantes, cafés, delivery.",
+      "ejemplos": [
+        "almuerzo",
+        "café",
+        "pizza",
+        "delivery"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "educacion",
+      "descripcion": "Pensiones, matrículas, semestres, útiles, cursos.",
+      "ejemplos": [
+        "pensión",
+        "matrícula",
+        "semestre",
+        "útiles"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "mesada",
+      "descripcion": "Dinero entregado a un hijo o hija como mesada.",
+      "ejemplos": [
+        "mesada"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "mascotas",
+      "descripcion": "Veterinario, comida y cuidado de mascotas.",
+      "ejemplos": [
+        "veterinario",
+        "comida del perro",
+        "vacuna del gato"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "entretenimiento",
+      "descripcion": "Salidas, cine, streaming, eventos, juegos.",
+      "ejemplos": [
+        "cine",
+        "Netflix",
+        "concierto"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "hogar",
+      "descripcion": "Electrodomésticos y artículos para la casa.",
+      "ejemplos": [
+        "licuadora",
+        "sábanas",
+        "focos",
+        "artículos de limpieza"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "ropa",
+      "descripcion": "Ropa, zapatos y accesorios.",
+      "ejemplos": [
+        "camisa",
+        "zapatos",
+        "chompa"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "deudas_cuotas",
+      "descripcion": "Cuotas de préstamos, tarjetas o compras a plazos.",
+      "ejemplos": [
+        "cuota del préstamo",
+        "tarjeta de crédito",
+        "cuota"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "extras",
+      "descripcion": "Gustos y regalos puntuales, fuera de lo cotidiano.",
+      "ejemplos": [
+        "regalo de cumpleaños",
+        "un gustito"
+      ],
+      "candidata": false
+    },
+    {
+      "nombre": "otros",
+      "descripcion": "Gastos que no encajan claramente en ninguna otra categoría.",
+      "ejemplos": [],
+      "candidata": false
+    },
+    {
+      "nombre": "salud",
+      "descripcion": "Medicinas, consultas médicas, exámenes, seguro de salud.",
+      "ejemplos": [
+        "farmacia",
+        "doctor",
+        "laboratorio"
+      ],
+      "candidata": true
+    },
+    {
+      "nombre": "servicios",
+      "descripcion": "Servicios básicos del hogar: luz, agua, internet, teléfono, gas.",
+      "ejemplos": [
+        "luz",
+        "agua",
+        "internet",
+        "celular"
+      ],
+      "candidata": true
+    }
+  ],
+  "fallback": "otros",
+  "atribuciones": [
+    {
+      "nombre": "papa",
+      "etiqueta": "Papá",
+      "descripcion": "El papá.",
+      "compartida": false,
+      "marcadores": [],
+      "como_lo_llaman": {
+        "mama": [
+          "mi esposo",
+          "mi marido"
+        ],
+        "hermana": [
+          "mi papá",
+          "mi papi"
+        ],
+        "demian": [
+          "mi papá",
+          "mi papi"
+        ]
+      }
+    },
+    {
+      "nombre": "mama",
+      "etiqueta": "Mamá",
+      "descripcion": "La mamá.",
+      "compartida": false,
+      "marcadores": [],
+      "como_lo_llaman": {
+        "papa": [
+          "mi esposa",
+          "mi mujer"
+        ],
+        "hermana": [
+          "mi mamá",
+          "mi mami"
+        ],
+        "demian": [
+          "mi mamá",
+          "mi mami"
+        ]
+      }
+    },
+    {
+      "nombre": "hermana",
+      "etiqueta": "Hermana",
+      "descripcion": "La hija de papa y mama.",
+      "compartida": false,
+      "marcadores": [],
+      "como_lo_llaman": {
+        "papa": [
+          "mi hija"
+        ],
+        "mama": [
+          "mi hija"
+        ],
+        "demian": [
+          "mi hermana",
+          "mi ñaña"
+        ]
+      }
+    },
+    {
+      "nombre": "demian",
+      "etiqueta": "Demian",
+      "descripcion": "El hijo de papa y mama.",
+      "compartida": false,
+      "marcadores": [],
+      "como_lo_llaman": {
+        "papa": [
+          "mi hijo"
+        ],
+        "mama": [
+          "mi hijo"
+        ],
+        "hermana": [
+          "mi hermano",
+          "mi ñaño"
+        ]
+      }
+    },
+    {
+      "nombre": "casa",
+      "etiqueta": "Casa",
+      "descripcion": "Gasto compartido 50/50 entre papa y mama, del fondo común.",
+      "compartida": true,
+      "marcadores": [
+        "de la casa",
+        "para la casa",
+        "gasto de casa",
+        "compartido",
+        "compartida",
+        "común",
+        "entre los dos",
+        "de todos",
+        "familiar"
+      ],
+      "como_lo_llaman": {}
+    }
+  ]
+}
