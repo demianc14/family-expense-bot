@@ -93,3 +93,19 @@ def test_ningun_archivo_versionado_contiene_secretos() -> None:
             f"{nombre}: {tipo}" for tipo, p in PATRONES_DE_SECRETOS.items() if p.search(texto)
         ]
     assert not hallazgos, f"Posibles secretos versionados: {hallazgos}"
+
+
+def test_ningun_commit_del_historial_contiene_secretos() -> None:
+    """Revisa cada objeto de git, no solo la versión actual: un push publica todo el historial.
+
+    El historial se limpió con `git filter-repo --replace-text` después de que
+    `.env.example` llegara a versionarse con un token real.
+    """
+    objetos = subprocess.run(
+        ["git", "cat-file", "--batch-all-objects", "--batch"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8", errors="ignore")
+    hallazgos = [tipo for tipo, p in PATRONES_DE_SECRETOS.items() if p.search(objetos)]
+    assert not hallazgos, f"El historial de git contiene: {hallazgos}"
