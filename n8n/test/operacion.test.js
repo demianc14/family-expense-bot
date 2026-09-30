@@ -60,8 +60,9 @@ test("TELEGRAM_USUARIOS mal escrito falla rápido", () => {
 test("el hilo junta los mensajes para respaldar el monto de una respuesta", () => {
   const hilos = {};
   op.agregarAlHilo(hilos, 1, "fui al veterinario", 0);
-  const { abandonado, textoRespaldo } = op.agregarAlHilo(hilos, 1, "40", 60_000);
+  const { abandonado, textoRespaldo, hiloId } = op.agregarAlHilo(hilos, 1, "40", 60_000);
   assert.equal(abandonado, false);
+  assert.equal(hiloId, "1:0");
   assert.equal(textoRespaldo, "fui al veterinario\n40");
 
   const g = gasto({ monto: "40", categoria: "mascotas" }, textoRespaldo, "papa");
@@ -84,6 +85,7 @@ test("un hilo vencido se reporta como abandonado y empieza de cero", () => {
   const r = op.agregarAlHilo(hilos, 1, "200 supermercado", op.TTL_HILO_MS + 1);
   assert.equal(r.abandonado, true);
   assert.equal(r.textoRespaldo, "200 supermercado");
+  assert.notEqual(r.hiloId, "1:0", "un hilo nuevo es una sesión de memoria nueva");
 });
 
 test("un hilo no crece sin límite", () => {
@@ -107,11 +109,14 @@ test("cada fallo del modelo se clasifica con un motivo que la persona entiende",
     [{ message: "[429 Too Many Requests] RESOURCE_EXHAUSTED" }, "cuota"],
     [{ httpCode: "429", message: "Request failed" }, "cuota"],
     [{ message: "You exceeded your current quota" }, "cuota"],
+    // Así llega en n8n 2.40.7 un 429 de Gemini (visto en el E2E):
+    [{ message: "The service is receiving too many requests from you" }, "cuota"],
     [{ message: "Request timed out" }, "timeout"],
     [{ message: "ETIMEDOUT" }, "timeout"],
     [{ message: "Failed to parse. Text: ..." , description: "output parser" }, "contrato"],
     [{ message: "algo inesperado" }, "desconocido"],
     [undefined, "desconocido"],
+    ["The resource you are requesting could not be found (429)", "cuota"],
   ];
   for (const [error, motivo] of casos) {
     const f = op.clasificarFallo(error);
@@ -125,11 +130,14 @@ test("la auditoría detecta tools inexistentes y caídas, no confía en el agent
   const ok = JSON.stringify({ ok: true, gasto: {} });
   const pasos = [
     { action: { tool: "verificar_gasto" }, observation: ok },
-    { action: { tool: "reporte_mes" }, observation: { ok: true } },
+    { action: { tool: "verificar_gasto" }, observation: { ok: true } },
+    // Así responde la tool en n8n 2.40.7 (visto en el E2E): los items del último nodo.
+    { action: { tool: "verificar_gasto" }, observation: JSON.stringify([{ ok: true, monto: "45" }]) },
     { action: { tool: "guardar_gasto" }, observation: "guardar_gasto is not a valid tool" },
     { action: { tool: "verificar_gasto" }, observation: "There was an error: timeout" },
     { action: { tool: "verificar_gasto" }, observation: JSON.stringify({ ok: false, error: "x" }) },
     { action: {}, observation: "" },
+    { action: { tool: "format_final_json_response" }, observation: "" },
   ];
   assert.deepEqual(
     op.auditarPasos(pasos).map((p) => [p.tool, p.motivo]),

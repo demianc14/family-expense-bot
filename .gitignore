@@ -33,3 +33,8 @@ htmlcov/
 .DS_Store
 .vscode/
 .idea/
+
+# n8n: estado local de la instancia (base de datos con gastos reales) y credenciales
+n8n/.datos/
+n8n/e2e/.datos/
+n8n/credenciales.json

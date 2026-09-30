@@ -10,9 +10,10 @@ instalado, estos tests se saltan con un motivo visible, no pasan en silencio.
 
 import itertools
 import json
+import random
 import shutil
 import subprocess
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -20,9 +21,14 @@ from typing import Any
 import pytest
 import yaml
 
+from family_expense_bot.bot import mensajes
+from family_expense_bot.dashboard.report import resumen_mensual
 from family_expense_bot.extraction.categorias import cargar_taxonomia, normalizar
 from family_expense_bot.extraction.parser import ErrorDeExtraccion, extraer
 from family_expense_bot.extraction.verificacion import montos_en_texto, parsear_monto
+from family_expense_bot.storage.dinero import a_decimal
+from family_expense_bot.storage.models import Extraccion
+from family_expense_bot.storage.repository import GastoRegistrado
 from tests.test_parser import BASE_LLM, HOY, ClienteFalso
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -450,6 +456,156 @@ def test_compuerta_rechaza_lo_mismo_que_python() -> None:
     # Remitente que no es persona: error de configuración, antes que nada.
     entradas += [[validas, "20", r, HOY.isoformat()] for r in ["casa", "tia", ""]]
     comparar("verificar_gasto", entradas, _extraer_py)
+
+
+# --- Lo que ve la persona -------------------------------------------------------
+
+
+def _gasto_py(respuesta: Any, texto: str, remitente: str, hoy: str) -> Any:
+    return extraer(
+        texto, ClienteFalso(json.dumps(respuesta)), TAXONOMIA, remitente, date.fromisoformat(hoy)
+    )
+
+
+def test_resumen_y_falta_monto_son_el_mismo_texto() -> None:
+    entradas = [
+        [BASE_LLM | c["respuesta_llm"], c["texto"], c["remitente"], HOY.isoformat()]
+        for c in FIXTURES
+    ] + [
+        [
+            BASE_LLM | {"monto": "1.234.567,8", "categoria": "otros"},
+            "1.234.567,8",
+            "papa",
+            "2026-03-15",
+        ]
+    ]
+    comparar(
+        "resumen",
+        entradas,
+        lambda *a: mensajes.resumen(_gasto_py(*a), TAXONOMIA.etiquetas),
+    )
+    comparar(
+        "falta_monto",
+        entradas,
+        lambda *a: mensajes.falta_monto(_gasto_py(*a), TAXONOMIA.etiquetas),
+    )
+
+
+def _fila_gasto(
+    id_: int, centavos: int, categoria: str, fecha: str, anulado: bool
+) -> dict[str, Any]:
+    return {
+        "id": id_,
+        "monto_centavos": centavos,
+        "categoria": categoria,
+        "atribuido_a": random.choice(TAXONOMIA.nombres_atribucion),
+        "fecha": fecha,
+        "anulado_en": "2026-03-20T00:00:00Z" if anulado else None,
+    }
+
+
+def _registrado(fila: dict[str, Any]) -> GastoRegistrado:
+    return GastoRegistrado(
+        id=fila["id"],
+        monto=a_decimal(fila["monto_centavos"]),
+        categoria=fila["categoria"],
+        atribuido_a=fila["atribuido_a"],
+        fecha=date.fromisoformat(fila["fecha"]),
+        descripcion="x",
+        registrado_por=1,
+        creado_en=datetime(2026, 3, 1, tzinfo=UTC),
+        corregido_manualmente=False,
+        anulado=fila["anulado_en"] is not None,
+    )
+
+
+def test_guardado_es_el_mismo_texto() -> None:
+    random.seed(7)
+    filas = [
+        _fila_gasto(i, c, "ropa", "2026-03-05", False)
+        for i, c in enumerate([1, 5, 50, 99, 100, 1250, 123456789, 100000000])
+    ]
+    comparar(
+        "guardado",
+        [[f] for f in filas],
+        lambda f: mensajes.guardado(_registrado(f), TAXONOMIA.etiquetas),
+    )
+
+
+def _reporte_py(
+    filas: list[dict[str, Any]], extracciones: list[dict[str, Any]], anio: int, mes: int
+) -> str:
+    del_mes = sorted(
+        (f for f in filas if f["anulado_en"] is None and f["fecha"][:7] == f"{anio}-{mes:02d}"),
+        key=lambda f: (f["fecha"], f["id"]),
+        reverse=True,
+    )  # como RepositorioGastos.listar: fecha e id descendente, sin anulados
+    registros = [
+        Extraccion(
+            confirmada=e["confirmada"],
+            corregida=e["corregida"],
+            tenia_monto=e["tenia_monto"],
+            confianza_monto=e["confianza_monto"],
+            confianza_categoria=e["confianza_categoria"],
+            confianza_fecha=e["confianza_fecha"],
+            confianza_atribuido_a=e["confianza_atribuido_a"],
+        )
+        for e in extracciones
+    ]
+    return mensajes.reporte(
+        resumen_mensual([_registrado(f) for f in del_mes], registros, anio, mes)
+    )
+
+
+def test_reporte_es_el_mismo_texto() -> None:
+    random.seed(11)
+    categorias = ["transporte", "alimentacion", "comida_fuera", "ropa", "otros"]
+    entradas: list[list[Any]] = [[[], [], 2026, 3]]
+    for n_filas, n_extr in [(1, 1), (5, 8), (30, 40), (3, 0), (4, 7), (2, 3)]:
+        filas = [
+            _fila_gasto(
+                i,
+                random.choice([100, 250, 1250, 99999, random.randint(1, 5_000_000)]),
+                random.choice(categorias),
+                f"2026-{random.choice(['02', '03', '03', '04'])}-{random.randint(1, 28):02d}",
+                random.random() < 0.1,
+            )
+            for i in range(1, n_filas + 1)
+        ]
+        extracciones = [
+            {
+                "confirmada": (c := random.random() < 0.7),
+                "corregida": c and random.random() < 0.3,
+                "tenia_monto": random.random() < 0.9,
+                **{
+                    f"confianza_{campo}": random.choice(["alta", "alta", "media", "baja"])
+                    for campo in ("monto", "categoria", "fecha", "atribuido_a")
+                },
+            }
+            for _ in range(n_extr)
+        ]
+        entradas.append([filas, extracciones, 2026, 3])
+    # Empate exacto en el porcentaje: 1/8 = 12.5 %. Python redondea al par.
+    entradas.append(
+        [
+            [_fila_gasto(1, 100, "ropa", "2026-03-01", False)],
+            [
+                {
+                    "confirmada": i == 0,
+                    "corregida": False,
+                    "tenia_monto": True,
+                    **{
+                        f"confianza_{c}": "alta"
+                        for c in ("monto", "categoria", "fecha", "atribuido_a")
+                    },
+                }
+                for i in range(8)
+            ],
+            2026,
+            3,
+        ]
+    )
+    comparar("reporte", entradas, _reporte_py)
 
 
 # --- Tests propios del port (node --test) ---------------------------------------

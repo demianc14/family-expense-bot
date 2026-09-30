@@ -10,7 +10,12 @@
 const { CAMPOS, aCentavos, montosEnTexto, repr, strip } = require("./verificacion.js");
 // </solo-tests>
 
-const HERRAMIENTAS = ["verificar_gasto", "reporte_mes"];
+// Única tool del agente. El reporte no es tool a propósito: los totales de la
+// familia no pasan por el LLM (el agente solo pide `accion: "reporte"`).
+const HERRAMIENTAS = ["verificar_gasto"];
+
+/** La tool con la que el Agent de n8n entrega la salida estructurada. No es nuestra. */
+const TOOL_SALIDA = "format_final_json_response";
 
 const TTL_HILO_MS = 30 * 60 * 1000;
 const MAX_MENSAJES_HILO = 5;
@@ -67,6 +72,9 @@ function remitenteDe(idTelegram, usuarios) {
  * Agrega el mensaje al hilo del chat. Si el hilo anterior quedó abierto (el
  * agente preguntó y nadie respondió a tiempo), lo reporta como abandonado:
  * también cuenta para el reporte de calidad.
+ *
+ * `hiloId` es además la sesión de la memoria del agente: un hilo nuevo empieza
+ * con la memoria vacía, sin tener que borrarla a mano.
  */
 function agregarAlHilo(hilos, chatId, texto, ahoraMs) {
   const clave = String(chatId);
@@ -79,11 +87,11 @@ function agregarAlHilo(hilos, chatId, texto, ahoraMs) {
     abandonado = true;
     delete hilos[clave];
   }
-  const hilo = hilos[clave] || { mensajes: [], ultimoMs: ahoraMs };
+  const hilo = hilos[clave] || { id: `${clave}:${ahoraMs}`, mensajes: [], ultimoMs: ahoraMs };
   hilo.mensajes.push(texto);
   hilo.ultimoMs = ahoraMs;
   hilos[clave] = hilo;
-  return { abandonado, textoRespaldo: hilo.mensajes.join("\n") };
+  return { abandonado, hiloId: hilo.id, textoRespaldo: hilo.mensajes.join("\n") };
 }
 
 function cerrarHilo(hilos, chatId) {
@@ -108,24 +116,33 @@ const MENSAJES = {
  * de error del nodo del agente ({ message, description, httpCode, ... }).
  */
 function clasificarFallo(error) {
-  const e = error || {};
+  const e = typeof error === "string" ? { message: error } : error || {};
   const texto = [e.message, e.description, e.name, e.httpCode, e.code]
     .filter((v) => v !== undefined && v !== null)
     .join(" ");
   let motivo = "desconocido";
-  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(texto)) motivo = "cuota";
+  // n8n reescribe el 429 del proveedor como "too many requests".
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota|too many requests/i.test(texto)) motivo = "cuota";
   else if (/timed? ?out|timeout|ETIMEDOUT|ECONNABORTED|aborted/i.test(texto)) motivo = "timeout";
   else if (/output parser|parse|contrato|schema|JSON/i.test(texto)) motivo = "contrato";
   return { motivo, mensaje: MENSAJES[motivo], detalle: texto.slice(0, 300) };
 }
 
+/** La tool responde con los items de su último nodo: un arreglo de un elemento. */
 function interpretarObservacion(observacion) {
-  if (observacion && typeof observacion === "object") return observacion;
-  try {
-    return JSON.parse(observacion);
-  } catch {
-    return null;
+  let valor = observacion;
+  if (typeof valor === "string") {
+    try {
+      valor = JSON.parse(valor);
+    } catch {
+      return null;
+    }
   }
+  if (Array.isArray(valor)) valor = valor.length === 1 ? valor[0] : null;
+  if (valor && typeof valor === "object" && valor.json && typeof valor.json === "object") {
+    valor = valor.json;
+  }
+  return valor && typeof valor === "object" ? valor : null;
 }
 
 /**
@@ -140,6 +157,7 @@ function auditarPasos(pasos) {
   const problemas = [];
   for (const paso of pasos || []) {
     const tool = paso && paso.action ? paso.action.tool : undefined;
+    if (tool === TOOL_SALIDA) continue;
     if (!HERRAMIENTAS.includes(tool)) {
       problemas.push({ tool: tool ?? null, motivo: "tool_inexistente" });
       continue;
@@ -216,6 +234,7 @@ const RESULTADOS = [
   "no_ofrecible", // la compuerta no encontró monto: no se puede ofrecer guardar
   "no_propuesto", // el agente no propuso nada y el mensaje traía un número
   "abandonada", // el agente preguntó algo y nadie respondió
+  "error_al_guardar", // la persona dijo que sí, pero la escritura falló
 ];
 
 /**
@@ -292,6 +311,7 @@ module.exports = {
   MAX_MENSAJES_HILO,
   MENSAJES,
   RESULTADOS,
+  TOOL_SALIDA,
   TTL_HILO_MS,
   agregarAlHilo,
   auditarPasos,

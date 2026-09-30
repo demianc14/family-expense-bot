@@ -1,0 +1,20 @@
+[
+  {
+    "id": "TelegramBotN8n01",
+    "name": "Telegram (bot n8n)",
+    "type": "telegramApi",
+    "data": {
+      "accessToken": "<TOKEN_DEL_BOT_DE_BOTFATHER>",
+      "baseUrl": "https://api.telegram.org"
+    }
+  },
+  {
+    "id": "GeminiApiN8n0001",
+    "name": "Gemini (plan gratuito)",
+    "type": "googlePalmApi",
+    "data": {
+      "apiKey": "<API_KEY_DE_GEMINI>",
+      "host": "https://generativelanguage.googleapis.com"
+    }
+  }
+]

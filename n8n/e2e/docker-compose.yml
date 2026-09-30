@@ -1,0 +1,48 @@
+# Entorno de pruebas E2E: n8n real + Telegram y Gemini falsos (falsos.mjs).
+# Todo sintético: token, API key e IDs de Telegram son inventados.
+# Lo levanta y lo baja n8n/e2e/e2e.test.mjs; no hace falta correrlo a mano.
+
+name: family-expense-bot-e2e
+
+services:
+  falsos:
+    image: node:24-alpine
+    command: ["node", "/e2e/falsos.mjs"]
+    volumes:
+      - ./falsos.mjs:/e2e/falsos.mjs:ro
+    ports:
+      - "18080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/_control/salud"]
+      interval: 2s
+      retries: 30
+
+  n8n:
+    image: n8nio/n8n:2.40.7
+    depends_on:
+      falsos:
+        condition: service_healthy
+    ports:
+      - "15678:5678"
+    environment:
+      N8N_ENCRYPTION_KEY: clave-sintetica-solo-para-e2e
+      N8N_WEBHOOK_URL: http://n8n:5678/
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      TELEGRAM_USUARIOS: "111:mama,222:demian,333:papa"
+      TELEGRAM_ADMIN_CHAT_ID: "999"
+      MINUTOS_PARA_CONFIRMAR: "1"
+      GENERIC_TIMEZONE: America/Guayaquil
+      TZ: America/Guayaquil
+      CODE_ENABLE_STDOUT: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_LOG_LEVEL: info
+    volumes:
+      - ./.datos:/home/node/.n8n
+      - ../workflow.json:/importar/workflow.json:ro
+      - ./credenciales.e2e.json:/importar/credenciales.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5678/healthz"]
+      interval: 2s
+      retries: 60

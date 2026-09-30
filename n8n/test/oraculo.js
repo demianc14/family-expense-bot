@@ -8,6 +8,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const v = require("../lib/verificacion.js");
+const op = require("../lib/operacion.js");
+const m = require("../lib/mensajes.js");
 
 const taxonomia = v.crearTaxonomia(
   JSON.parse(fs.readFileSync(path.join(__dirname, "..", "taxonomia.json"), "utf8")),
@@ -31,6 +33,13 @@ const FUNCIONES = {
   describir_para_prompt: () => taxonomia.describirParaPrompt(),
   verificar_gasto: (respuesta, texto, remitente, hoy) =>
     v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia }),
+  resumen: (respuesta, texto, remitente, hoy) =>
+    m.resumen(v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia }), taxonomia.etiquetas),
+  falta_monto: (respuesta, texto, remitente, hoy) =>
+    m.faltaMonto(v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia }), taxonomia.etiquetas),
+  guardado: (fila) => m.guardado(fila, taxonomia.etiquetas),
+  reporte: (filas, extracciones, anio, mes) =>
+    m.reporte(op.reporteMes(filas, anio, mes), op.calcularCalidad(extracciones)),
 };
 
 const casos = JSON.parse(fs.readFileSync(0, "utf8"));

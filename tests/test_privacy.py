@@ -1,5 +1,6 @@
 """Guardas de privacidad: el repo es público y maneja dinero real de terceros."""
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -14,6 +15,10 @@ DEBEN_IGNORARSE = [
     "gastos.sqlite",
     "reporte.xlsx",
     ".env",
+    "n8n/.env",
+    "n8n/credenciales.json",
+    "n8n/.datos/database.sqlite",
+    "n8n/e2e/.datos/database.sqlite",
 ]
 
 
@@ -36,15 +41,34 @@ SECRETOS = ("TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "TELEGRAM_USUARIOS")
 """Variables que en `.env.example` tienen que ir vacías: son secretos o IDs personales."""
 
 
-def test_env_example_no_trae_valores_secretos() -> None:
+SECRETOS_N8N = (
+    "N8N_ENCRYPTION_KEY",
+    "N8N_WEBHOOK_URL",
+    "TELEGRAM_USUARIOS",
+    "TELEGRAM_ADMIN_CHAT_ID",
+)
+
+
+@pytest.mark.parametrize(
+    ("archivo", "secretos"), [(".env.example", SECRETOS), ("n8n/.env.example", SECRETOS_N8N)]
+)
+def test_env_example_no_trae_valores_secretos(archivo: str, secretos: tuple[str, ...]) -> None:
     valores = dict(
         linea.split("=", 1)
-        for linea in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+        for linea in (ROOT / archivo).read_text(encoding="utf-8").splitlines()
         if "=" in linea and not linea.lstrip().startswith("#")
     )
-    assert set(SECRETOS) <= valores.keys()
-    con_valor = [clave for clave in SECRETOS if valores[clave].strip()]
-    assert not con_valor, f".env.example trae valores en {con_valor}"
+    assert set(secretos) <= valores.keys()
+    con_valor = [clave for clave in secretos if valores[clave].strip()]
+    assert not con_valor, f"{archivo} trae valores en {con_valor}"
+
+
+def test_credenciales_de_ejemplo_n8n_solo_tienen_marcadores() -> None:
+    credenciales = json.loads((ROOT / "n8n" / "credenciales.ejemplo.json").read_text())
+    for credencial in credenciales:
+        for campo in ("accessToken", "apiKey"):
+            if campo in credencial["data"]:
+                assert re.fullmatch(r"<[A-Z_]+>", credencial["data"][campo]), campo
 
 
 PATRONES_DE_SECRETOS = {

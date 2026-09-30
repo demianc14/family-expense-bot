@@ -1,0 +1,20 @@
+[
+  {
+    "id": "TelegramBotN8n01",
+    "name": "Telegram (bot n8n)",
+    "type": "telegramApi",
+    "data": {
+      "accessToken": "000000:token-sintetico-de-prueba",
+      "baseUrl": "http://falsos:8080"
+    }
+  },
+  {
+    "id": "GeminiApiN8n0001",
+    "name": "Gemini (plan gratuito)",
+    "type": "googlePalmApi",
+    "data": {
+      "apiKey": "clave-sintetica-de-prueba",
+      "host": "http://falsos:8080"
+    }
+  }
+]

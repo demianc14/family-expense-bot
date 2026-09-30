@@ -1,0 +1,27 @@
+# n8n para la familia. Instalación: ver n8n/instalar.sh y el README.
+# Los valores reales viven en n8n/.env (ignorado por git), nunca acá.
+
+name: family-expense-bot-n8n
+
+services:
+  n8n:
+    image: n8nio/n8n:2.40.7 # fija: el workflow se probó contra esta versión
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678" # solo local; Telegram llega por el túnel HTTPS
+    env_file: .env
+    environment:
+      GENERIC_TIMEZONE: America/Guayaquil
+      TZ: America/Guayaquil
+      # Los Code nodes leen TELEGRAM_USUARIOS y TELEGRAM_ADMIN_CHAT_ID del entorno.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      CODE_ENABLE_STDOUT: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # Las ejecuciones fallidas guardan el mensaje para depurarlas: que no se acumulen.
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+    volumes:
+      - ./.datos:/home/node/.n8n # base de datos con gastos reales: ignorada por git
+      - ./workflow.json:/importar/workflow.json:ro
+      - ./credenciales.json:/importar/credenciales.json:ro
