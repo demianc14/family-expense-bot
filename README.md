@@ -207,8 +207,11 @@ actual: un push publica el historial completo.
 En la versión n8n, las credenciales viven cifradas en la base de n8n
 (`n8n/.datos/`, ignorada), el workflow exportado solo tiene referencias
 (`id` y `name`), y los IDs de Telegram entran por el entorno. Las ejecuciones
-exitosas no se guardan (llevan montos y el texto del mensaje); las fallidas sí,
-para depurarlas, y se purgan a los 7 días.
+exitosas llevan montos y el texto del mensaje, así que el workflow pide no
+guardarlas. Ojo: la prueba real mostró que n8n no las borra al terminar, solo
+las marca como borradas; los datos siguen en la base local hasta la purga
+física, cerca de una hora después (`EXECUTIONS_DATA_HARD_DELETE_BUFFER`). Las
+fallidas se guardan a propósito, para depurarlas, y se purgan a los 7 días.
 
 ## Decisiones y limitaciones
 
