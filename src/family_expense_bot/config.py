@@ -1,6 +1,7 @@
 """Configuración de runtime leída del entorno / .env. Falla rápido si falta algo."""
 
-from decimal import Decimal, InvalidOperation
+import re
+from decimal import Decimal
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -81,15 +82,16 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"INGRESOS_MENSUALES: {parte.strip()!r} no tiene la forma rol:monto"
                 )
-            try:
-                monto = Decimal(crudo.strip())
-            except InvalidOperation as e:
-                raise ValueError(f"INGRESOS_MENSUALES: {crudo.strip()!r} no es un monto") from e
-            if not monto.is_finite() or monto <= 0 or monto != monto.quantize(Decimal("0.01")):
+            # Estricto a propósito (nada de "1e3" ni "1_200", que Decimal acepta):
+            # el mismo formato que valida la versión n8n.
+            if not re.fullmatch(r"\d+(\.\d{1,2})?", crudo.strip()):
                 raise ValueError(
-                    f"INGRESOS_MENSUALES: el ingreso de {rol} debe ser positivo y con "
-                    "hasta dos decimales"
+                    f"INGRESOS_MENSUALES: {crudo.strip()!r} no es un monto "
+                    "(dígitos y hasta dos decimales, con punto)"
                 )
+            monto = Decimal(crudo.strip())
+            if monto <= 0:
+                raise ValueError(f"INGRESOS_MENSUALES: el ingreso de {rol} debe ser positivo")
             if rol in ingresos:
                 raise ValueError(f"INGRESOS_MENSUALES: {rol} aparece dos veces")
             ingresos[rol] = monto

@@ -250,10 +250,16 @@ function crearTaxonomia(datos) {
     return expresiones(persona, remitente).some((e) => contieneFrase(normalizado, e));
   }
 
-  function mencionaGastoCompartido(texto) {
+  function mencionaAlguna(texto, frases) {
     const normalizado = normalizar(texto);
-    return compartida.marcadores.some((m) => contieneFrase(normalizado, m));
+    return frases.some((f) => contieneFrase(normalizado, f));
   }
+
+  function mencionaGastoCompartido(texto) {
+    return mencionaAlguna(texto, compartida.marcadores);
+  }
+
+  const bolsillos = datos.presupuesto ? datos.presupuesto.bolsillos : [];
 
   return {
     fallback: datos.fallback,
@@ -280,6 +286,17 @@ function crearTaxonomia(datos) {
       personas.filter((p) => p !== remitente && mencionaA(p, remitente, cita)),
     esCompartida: (cita) =>
       strip(normalizar(cita)) === compartida.nombre || mencionaGastoCompartido(cita),
+    bolsillos,
+    /**
+     * Contra qué bolsillo cuenta un gasto, o null (categorias.py: bolsillo_de).
+     * Un marcador ("del fondo") gana sobre la categoría si apunta a un solo bolsillo.
+     */
+    bolsilloDe: (categoria, texto) => {
+      const porMarcador = bolsillos.filter((b) => mencionaAlguna(texto, b.marcadores));
+      if (porMarcador.length === 1) return porMarcador[0].nombre;
+      const deCategoria = bolsillos.find((b) => b.categorias.includes(categoria));
+      return deCategoria ? deCategoria.nombre : null;
+    },
   };
 }
 

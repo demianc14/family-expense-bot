@@ -103,6 +103,9 @@ def test_ingresos(monkeypatch: pytest.MonkeyPatch, crudo: str, esperado: dict[st
         "demian:NaN",
         "demian:1,demian:2",
         ":100",
+        "demian:1e3",
+        "demian:1_200",
+        "demian:+5",
     ],
 )
 def test_ingresos_mal_escritos_fallan_rapido(monkeypatch: pytest.MonkeyPatch, crudo: str) -> None:

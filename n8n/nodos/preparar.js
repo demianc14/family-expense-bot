@@ -5,6 +5,7 @@ const msg = update.message;
 if (!msg || !msg.chat || !msg.from) return [];
 
 const usuarios = parsearUsuarios($env.TELEGRAM_USUARIOS, TAXONOMIA);
+const ingresos = parsearIngresos($env.INGRESOS_MENSUALES, TAXONOMIA);
 const remitente = remitenteDe(msg.from.id, usuarios);
 if (remitente === null) {
   console.log(`Mensaje ignorado: el ID ${msg.from.id} no está en TELEGRAM_USUARIOS`);
@@ -19,11 +20,13 @@ const base = {
   remitente,
   hoy: ahora.toISODate(),
   mes_actual: ahora.toFormat("yyyy-MM"),
+  ingresos, // rol → monto; solo vive en esta ejecución, que no se guarda
 };
 
 const comando = strip(msg.text).split(/\s+/)[0].split("@")[0].toLowerCase();
 if (comando === "/start") return [{ json: { ...base, ruta: "start" } }];
 if (comando === "/reporte") return [{ json: { ...base, ruta: "reporte", mes: base.mes_actual } }];
+if (comando === "/presupuesto") return [{ json: { ...base, ruta: "presupuesto" } }];
 
 // El estado del hilo solo se toca antes de esperar la confirmación: una
 // ejecución que se reanuda no vuelve a guardarlo (ver README).

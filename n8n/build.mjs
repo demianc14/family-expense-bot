@@ -229,6 +229,7 @@ Decide qué hacer con cada mensaje y entrega tu decisión con format_final_json_
 - "proponer": el mensaje registra UN gasto. Llena los campos del gasto. Tú no guardas nada: la persona confirma después, y un verificador revisa cada campo contra lo que escribió.
 - "preguntar": falta el monto, no se entiende, o trae varios gastos. Pregunta en \`mensaje\`, corto y amable; si son varios gastos, pide que los mande uno por uno.
 - "reporte": la persona quiere ver cuánto se ha gastado. Si nombra un mes, ponlo en \`mes\` como YYYY-MM.
+- "presupuesto": la persona pregunta cuánto le queda o cómo va su presupuesto o algún bolsillo (necesarios, fondo, lujos, ahorro).
 - "responder": saludos o cosas que no son gastos. Responde corto en \`mensaje\`.
 
 Si dudas del monto o de quién paga, puedes llamar a verificar_gasto con los campos que propondrías: te dice qué entendería el verificador. Si el monto no aparece en lo que escribió la persona, no lo inventes: pregunta.
@@ -250,7 +251,10 @@ const CONFIANZA = { type: "string", enum: ["alta", "media", "baja"] };
 const ESQUEMA_SALIDA = {
   type: "object",
   properties: {
-    accion: { type: "string", enum: ["proponer", "preguntar", "reporte", "responder"] },
+    accion: {
+      type: "string",
+      enum: ["proponer", "preguntar", "reporte", "presupuesto", "responder"],
+    },
     mensaje: { type: "string", description: "Texto para la persona. Vacío en proponer y reporte." },
     monto: { type: "string", description: "Solo el número, tal como aparece en el mensaje." },
     categoria: { type: "string", description: "Una de las categorías permitidas." },
@@ -316,8 +320,8 @@ crearTabla("Tabla de extracciones", [X(3), Y(2)], TABLA_EXTRACCIONES);
 conectar("Preparar", "Tabla de gastos");
 conectar("Tabla de gastos", "Tabla de extracciones");
 
-ruta("Ruta", [X(4), Y(2)], 3,
-  `={{ ["start", "reporte", "agente"].indexOf($('Preparar').first().json.ruta) }}`);
+ruta("Ruta", [X(4), Y(2)], 4,
+  `={{ ["start", "reporte", "agente", "presupuesto"].indexOf($('Preparar').first().json.ruta) }}`);
 conectar("Tabla de extracciones", "Ruta");
 
 telegramTexto(
@@ -329,7 +333,8 @@ telegramTexto(
     "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, " +
     'dilo: "gasolina de la casa".\n\n' +
     "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n" +
-    "Escribe /reporte para ver el total del mes.",
+    "Escribe /reporte para ver el total del mes y /presupuesto para ver " +
+    "cuánto te queda en cada bolsillo.",
   ),
 );
 conectar("Ruta", "Bienvenida", { salida: 0 });
@@ -343,6 +348,15 @@ conectar("Ruta", "Leer gastos", { salida: 1 });
 conectar("Leer gastos", "Leer extracciones");
 conectar("Leer extracciones", "Armar reporte");
 conectar("Armar reporte", "Enviar reporte");
+
+// Presupuesto: determinista, por /presupuesto o porque el agente lo pidió. Como el
+// reporte, los montos no pasan por el LLM.
+leerTabla("Leer gastos del presupuesto", [X(10), Y(-1)], TABLA_GASTOS);
+code("Armar presupuesto", [X(11), Y(-1)], "armar_presupuesto");
+telegramTexto("Enviar presupuesto", [X(12), Y(-1)], textoDe("$json.mensaje"));
+conectar("Ruta", "Leer gastos del presupuesto", { salida: 3 });
+conectar("Leer gastos del presupuesto", "Armar presupuesto");
+conectar("Armar presupuesto", "Enviar presupuesto");
 
 // Hilo abandonado: también es un intento que cuenta.
 ruta("¿Hilo abandonado?", [X(7), Y(5)], 2, "={{ $('Preparar').first().json.hilo_abandonado ? 0 : 1 }}");
@@ -425,7 +439,7 @@ conectar("Clasificar fallo", "Avisar fallo");
 code("Revisar agente", [X(7), Y(2)], "revisar_agente");
 conectar("Agente", "Revisar agente", { salida: 0 });
 
-const RUTAS_AGENTE = ["proponer", "enviar", "reporte", "no_propuesto", "fallo"];
+const RUTAS_AGENTE = ["proponer", "enviar", "reporte", "no_propuesto", "fallo", "presupuesto"];
 ruta("Según la acción", [X(8), Y(2)], RUTAS_AGENTE.length,
   `={{ ${JSON.stringify(RUTAS_AGENTE)}.indexOf($json.ruta) }}`);
 conectar("Revisar agente", "Según la acción");
@@ -437,6 +451,7 @@ conectar("Según la acción", "Enviar respuesta", { salida: 1 });
 conectar("Según la acción", "Leer gastos", { salida: 2 });
 // salida 3 (no_propuesto) va al embudo, más abajo
 conectar("Según la acción", "Avisar fallo", { salida: 4 });
+conectar("Según la acción", "Leer gastos del presupuesto", { salida: 5 });
 
 const ESTADOS_COMPUERTA = ["ofrecer", "sin_monto", "contrato_roto"];
 ruta("¿Se puede ofrecer?", [X(10), Y(2)], ESTADOS_COMPUERTA.length,
@@ -486,10 +501,13 @@ conectar("Decidir", "¿Guardar?");
 insertar("Guardar gasto", [X(14), Y(1)], TABLA_GASTOS, "$json.fila_gasto", {
   onError: "continueErrorOutput",
 });
-code("Guardado", [X(15), Y(1)], "guardado");
+// Ya guardado, se leen los gastos para decir cuánto queda en el bolsillo.
+leerTabla("Gastos tras guardar", [X(15), Y(0)], TABLA_GASTOS);
+code("Guardado", [X(16), Y(1)], "guardado");
 code("Guardar falló", [X(15), Y(2)], "guardar_fallo");
 conectar("¿Guardar?", "Guardar gasto", { salida: 0 });
-conectar("Guardar gasto", "Guardado", { salida: 0 });
+conectar("Guardar gasto", "Gastos tras guardar", { salida: 0 });
+conectar("Gastos tras guardar", "Guardado");
 conectar("Guardar gasto", "Guardar falló", { salida: 1 });
 
 // Embudo: todo resultado se registra una sola vez, se haya guardado o no.

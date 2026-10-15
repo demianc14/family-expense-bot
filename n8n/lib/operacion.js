@@ -305,6 +305,106 @@ function calcularCalidad(extracciones) {
   return { intentos: lista.length, confirmadas, corregidas, sin_dudas: sinDudas };
 }
 
+// --- Presupuesto (config.py: ingresos, dashboard/presupuesto.py) ---------------
+
+/**
+ * "rol:monto,rol:monto" → { rol: "monto" }. Mismo formato estricto que Python:
+ * dígitos y hasta dos decimales. Falla rápido, como la allowlist.
+ */
+function parsearIngresos(texto, taxonomia) {
+  const ingresos = {};
+  for (const parte of (texto || "").split(",")) {
+    if (!strip(parte)) continue;
+    const i = parte.indexOf(":");
+    const rol = strip(i === -1 ? parte : parte.slice(0, i)).toLowerCase();
+    const crudo = i === -1 ? "" : strip(parte.slice(i + 1));
+    if (i === -1 || !rol) {
+      throw new Error(`INGRESOS_MENSUALES: ${repr(strip(parte))} no tiene la forma rol:monto`);
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(crudo)) {
+      throw new Error(
+        `INGRESOS_MENSUALES: ${repr(crudo)} no es un monto (dígitos y hasta dos decimales, con punto)`,
+      );
+    }
+    if (aCentavos0(crudo) <= 0) {
+      throw new Error(`INGRESOS_MENSUALES: el ingreso de ${rol} debe ser positivo`);
+    }
+    if (rol in ingresos) throw new Error(`INGRESOS_MENSUALES: ${rol} aparece dos veces`);
+    if (!taxonomia.personas.includes(rol)) {
+      throw new Error(`INGRESOS_MENSUALES tiene roles que no son personas: ['${rol}']`);
+    }
+    ingresos[rol] = crudo;
+  }
+  if (Object.keys(ingresos).length && !taxonomia.bolsillos.length) {
+    throw new Error("Hay INGRESOS_MENSUALES pero categories.yaml no define un presupuesto");
+  }
+  return ingresos;
+}
+
+function aCentavos0(monto) {
+  const [entero, decimales = ""] = monto.split(".");
+  return Number(entero) * 100 + Number(decimales.padEnd(2, "0") || "0");
+}
+
+/** Centavos exactos por bolsillo: truncados, y lo que sobra, de a uno a los primeros. */
+function repartirCentavos(total, bolsillos) {
+  const partes = bolsillos.map((b) => Math.floor((total * b.porcentaje) / 100));
+  const sobra = total - partes.reduce((s, p) => s + p, 0);
+  for (let i = 0; i < sobra; i++) partes[i % partes.length] += 1;
+  return partes;
+}
+
+/**
+ * Cuánto lleva gastado `persona` en cada bolsillo durante el mes, sobre filas de
+ * `gastos`. Solo cuentan sus gastos (los atribuidos a ella) y no los anulados.
+ */
+function resumenPresupuesto(filas, taxonomia, persona, ingreso, anio, mes) {
+  const [desde, hasta] = rangoDelMes(anio, mes);
+  const suyas = (filas || [])
+    .filter((f) => !f.anulado_en && f.atribuido_a === persona && f.fecha >= desde && f.fecha <= hasta)
+    // Mismo orden que Python (fecha e id descendente): define el de "sin bolsillo".
+    .sort((a, b) => (a.fecha === b.fecha ? Number(b.id) - Number(a.id) : a.fecha < b.fecha ? 1 : -1));
+
+  const gastado = new Map();
+  const sueltas = [];
+  for (const f of suyas) {
+    const bolsillo = taxonomia.bolsilloDe(f.categoria, f.texto_original);
+    const acumulado = gastado.get(bolsillo) || { centavos: 0, cantidad: 0 };
+    acumulado.centavos += Number(f.monto_centavos);
+    acumulado.cantidad += 1;
+    gastado.set(bolsillo, acumulado);
+    if (bolsillo === null && !sueltas.includes(f.categoria)) sueltas.push(f.categoria);
+  }
+
+  const ingresoCentavos = aCentavos0(ingreso);
+  const asignados = repartirCentavos(ingresoCentavos, taxonomia.bolsillos);
+  return {
+    persona,
+    anio,
+    mes,
+    ingreso_centavos: ingresoCentavos,
+    bolsillos: taxonomia.bolsillos.map((b, i) => ({
+      nombre: b.nombre,
+      etiqueta: b.etiqueta,
+      porcentaje: b.porcentaje,
+      se_gasta: b.se_gasta,
+      asignado_centavos: asignados[i],
+      gastado_centavos: (gastado.get(b.nombre) || { centavos: 0 }).centavos,
+      cantidad: (gastado.get(b.nombre) || { cantidad: 0 }).cantidad,
+    })),
+    sin_bolsillo_centavos: (gastado.get(null) || { centavos: 0 }).centavos,
+    categorias_sin_bolsillo: sueltas,
+  };
+}
+
+/** Etiqueta del bolsillo de un gasto, si quien lo asume tiene presupuesto (handlers._bolsillo). */
+function bolsilloVisible(taxonomia, ingresos, gasto) {
+  if (!(gasto.atribuido_a in ingresos)) return null;
+  const nombre = taxonomia.bolsilloDe(gasto.categoria, gasto.texto_original);
+  const bolsillo = taxonomia.bolsillos.find((b) => b.nombre === nombre);
+  return bolsillo ? bolsillo.etiqueta : "ninguno";
+}
+
 // <solo-tests>
 module.exports = {
   HERRAMIENTAS,
@@ -315,16 +415,20 @@ module.exports = {
   TTL_HILO_MS,
   agregarAlHilo,
   auditarPasos,
+  bolsilloVisible,
   avisoDeProblemas,
   calcularCalidad,
   cerrarHilo,
   clasificarFallo,
   filaExtraccion,
   filaGasto,
+  parsearIngresos,
   parsearUsuarios,
   probableGastoNoRegistrado,
   rangoDelMes,
   remitenteDe,
   reporteMes,
+  repartirCentavos,
+  resumenPresupuesto,
 };
 // </solo-tests>

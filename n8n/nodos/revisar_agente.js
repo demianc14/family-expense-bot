@@ -1,7 +1,7 @@
 // Qué decidió el agente, revisado por código. No se confía en que el agente
 // cuente sus propios problemas: las tools que llamó se auditan acá.
 const preparar = $("Preparar").first().json;
-const ACCIONES = ["proponer", "preguntar", "reporte", "responder"];
+const ACCIONES = ["proponer", "preguntar", "reporte", "presupuesto", "responder"];
 
 let salida = $json.output;
 if (typeof salida === "string") {
@@ -52,6 +52,9 @@ if (salida.accion === "preguntar" && texto) {
 }
 
 cerrar();
+if (salida.accion === "presupuesto") {
+  return [{ json: { ruta: "presupuesto", aviso, problemas } }];
+}
 if (salida.accion === "reporte") {
   const pedido = typeof salida.mes === "string" ? strip(salida.mes) : "";
   const valido = /^\d{4}-(0[1-9]|1[0-2])$/.test(pedido) && pedido <= preparar.mes_actual;

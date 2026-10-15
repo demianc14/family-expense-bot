@@ -30,6 +30,7 @@ services:
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       TELEGRAM_USUARIOS: "111:mama,222:demian,333:papa"
       TELEGRAM_ADMIN_CHAT_ID: "999"
+      INGRESOS_MENSUALES: "demian:1200"
       MINUTOS_PARA_CONFIRMAR: "1"
       GENERIC_TIMEZONE: America/Guayaquil
       TZ: America/Guayaquil

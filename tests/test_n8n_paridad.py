@@ -609,6 +609,154 @@ def test_reporte_es_el_mismo_texto() -> None:
     comparar("reporte", entradas, _reporte_py)
 
 
+# --- Presupuesto ------------------------------------------------------------------
+
+
+def test_bolsillo_de_cada_categoria_con_y_sin_marcador() -> None:
+    textos = ["algo 5", "algo 5 del fondo", "5 con mi FONDO", "5 fondos", "5 del fondo común"]
+    entradas = [[c.nombre, t] for c in TAXONOMIA.categorias for t in textos]
+    comparar("bolsillo_de", entradas, TAXONOMIA.bolsillo_de)
+
+
+def _ingresos_py(texto: str) -> dict[str, str]:
+    from decimal import Decimal
+
+    from family_expense_bot.config import Settings
+
+    ingresos = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        telegram_bot_token="1:x",  # type: ignore[arg-type]
+        ingresos_mensuales=texto,
+    ).ingresos
+    # La misma validación que hace Servicios al arrancar.
+    if set(ingresos) - set(TAXONOMIA.personas):
+        raise ValueError("rol que no es persona")
+    return {rol: str(int(m * Decimal(100))) for rol, m in ingresos.items()}
+
+
+def test_ingresos_se_leen_igual() -> None:
+    textos = [
+        "",
+        "demian:1200",
+        " Demian : 1200.50 , mama:800,",
+        "demian:0100",
+        "demian",
+        "demian:",
+        "demian:mil",
+        "demian:-5",
+        "demian:0",
+        "demian:0.00",
+        "demian:1.005",
+        "demian:1e3",
+        "demian:1_200",
+        "demian:+5",
+        "demian:1,demian:2",
+        ":100",
+        "casa:100",
+        "tia:100",
+    ]
+    comparar("parsear_ingresos", [[t] for t in textos], _ingresos_py)
+
+
+def _filas_presupuesto(semilla: int, n: int) -> list[dict[str, Any]]:
+    rnd = random.Random(semilla)
+    categorias = [c.nombre for c in TAXONOMIA.categorias if not c.candidata]
+    return [
+        {
+            "id": i,
+            "monto_centavos": rnd.choice([100, 1250, 3000, 99999, rnd.randint(1, 500_000)]),
+            "categoria": rnd.choice(categorias),
+            "atribuido_a": rnd.choice(["demian", "demian", "mama", "casa"]),
+            "fecha": f"2026-{rnd.choice(['09', '10', '10', '11'])}-{rnd.randint(1, 28):02d}",
+            "texto_original": rnd.choice(["x", "algo del fondo", "con mi fondo", "nada"]),
+            "anulado_en": "2026-10-20T00:00:00Z" if rnd.random() < 0.1 else None,
+        }
+        for i in range(1, n + 1)
+    ]
+
+
+def _resumen_py(
+    filas: list[dict[str, Any]], persona: str, ingreso: str, anio: int, mes: int
+) -> Any:
+    from decimal import Decimal
+
+    from family_expense_bot.dashboard.presupuesto import resumen_presupuesto
+
+    vivas = [f for f in filas if f["anulado_en"] is None]
+    vivas.sort(key=lambda f: (f["fecha"], f["id"]), reverse=True)
+    gastos = [
+        _registrado(f).model_copy(update={"texto_original": f["texto_original"]}) for f in vivas
+    ]
+    return resumen_presupuesto(gastos, TAXONOMIA, persona, Decimal(ingreso), anio, mes)
+
+
+def test_presupuesto_es_el_mismo_texto() -> None:
+    entradas: list[list[Any]] = [[[], "demian", "1200", 2026, 10]]
+    for semilla, n in [(1, 5), (2, 30), (3, 80), (4, 12)]:
+        for ingreso in ["1200", "1000.01", "0.03", "350.5"]:
+            entradas.append([_filas_presupuesto(semilla, n), "demian", ingreso, 2026, 10])
+    comparar(
+        "presupuesto",
+        entradas,
+        lambda *a: mensajes.presupuesto(_resumen_py(*a)),
+    )
+
+
+def test_linea_de_bolsillo_es_el_mismo_texto() -> None:
+    entradas = [
+        [_filas_presupuesto(semilla, 40), "demian", ingreso, 2026, 10, nombre]
+        for semilla in (5, 6)
+        for ingreso in ("300", "1200")
+        for nombre in ("necesarios", "fondo", "lujos", None)
+    ]
+
+    def py(filas: Any, persona: str, ingreso: str, anio: int, mes: int, nombre: Any) -> str:
+        resumen = _resumen_py(filas, persona, ingreso, anio, mes)
+        return mensajes.linea_de_bolsillo(resumen.bolsillo(nombre) if nombre else None, mes)
+
+    comparar("linea_de_bolsillo", entradas, py)
+
+
+def test_la_confirmacion_muestra_el_mismo_bolsillo() -> None:
+    from decimal import Decimal
+
+    from family_expense_bot.bot.handlers import Servicios, _bolsillo
+
+    ingresos = {"demian": "1200", "mama": "800"}
+    servicios = Servicios(
+        repositorio=None,  # type: ignore[arg-type]
+        extracciones=None,  # type: ignore[arg-type]
+        cliente=ClienteFalso("{}"),
+        taxonomia=TAXONOMIA,
+        ingresos={rol: Decimal(m) for rol, m in ingresos.items()},
+    )
+
+    def py(respuesta: Any, texto: str, remitente: str, hoy: str, _: Any) -> str:
+        gasto = _gasto_py(respuesta, texto, remitente, hoy)
+        return mensajes.resumen(gasto, TAXONOMIA.etiquetas, bolsillo=_bolsillo(servicios, gasto))
+
+    entradas = [
+        [BASE_LLM | c["respuesta_llm"], c["texto"], c["remitente"], HOY.isoformat(), ingresos]
+        for c in FIXTURES
+    ] + [
+        [
+            BASE_LLM | {"monto": "30", "categoria": "ropa"},
+            "30 de camisa del fondo",
+            "demian",
+            HOY.isoformat(),
+            ingresos,
+        ],
+        [
+            BASE_LLM | {"monto": "30", "categoria": "otros"},
+            "30 de algo",
+            "demian",
+            HOY.isoformat(),
+            ingresos,
+        ],
+    ]
+    comparar("resumen_con_bolsillo", entradas, py)
+
+
 # --- Tests propios del port (node --test) ---------------------------------------
 
 

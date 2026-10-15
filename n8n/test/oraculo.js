@@ -38,6 +38,24 @@ const FUNCIONES = {
   falta_monto: (respuesta, texto, remitente, hoy) =>
     m.faltaMonto(v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia }), taxonomia.etiquetas),
   guardado: (fila) => m.guardado(fila, taxonomia.etiquetas),
+  bolsillo_de: (categoria, texto) => taxonomia.bolsilloDe(categoria, texto),
+  parsear_ingresos: (texto) =>
+    Object.fromEntries(
+      Object.entries(op.parsearIngresos(texto, taxonomia)).map(([rol, m]) => [
+        rol,
+        String(Math.round(Number(m) * 100)),
+      ]),
+    ),
+  presupuesto: (filas, persona, ingreso, anio, mes) =>
+    m.presupuesto(op.resumenPresupuesto(filas, taxonomia, persona, ingreso, anio, mes)),
+  linea_de_bolsillo: (filas, persona, ingreso, anio, mes, nombre) => {
+    const r = op.resumenPresupuesto(filas, taxonomia, persona, ingreso, anio, mes);
+    return m.lineaDeBolsillo(nombre ? r.bolsillos.find((b) => b.nombre === nombre) : null, mes);
+  },
+  resumen_con_bolsillo: (respuesta, texto, remitente, hoy, ingresos) => {
+    const gasto = v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia });
+    return m.resumen(gasto, taxonomia.etiquetas, op.bolsilloVisible(taxonomia, ingresos, gasto));
+  },
   reporte: (filas, extracciones, anio, mes) =>
     m.reporte(op.reporteMes(filas, anio, mes), op.calcularCalidad(extracciones)),
 };

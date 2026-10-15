@@ -43,7 +43,13 @@ return [
       gasto,
       chat_id: preparar.chat_id,
       usuario_id: preparar.usuario_id,
-      mensaje: conAviso(pedirConfirmacion(gasto, TAXONOMIA.etiquetas)),
+      mensaje: conAviso(
+        pedirConfirmacion(
+          gasto,
+          TAXONOMIA.etiquetas,
+          bolsilloVisible(TAXONOMIA, preparar.ingresos, gasto),
+        ),
+      ),
     },
   },
 ];

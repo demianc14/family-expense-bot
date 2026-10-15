@@ -1,6 +1,7 @@
 // Texto que ve la persona: port de bot/mensajes.py. Lo dudoso se marca, no se
-// esconde. `resumen`, `faltaMonto`, `guardado`, `descartado` y `reporte` dan el
-// mismo texto que Python (tests/test_n8n_paridad.py); el resto es propio de n8n.
+// esconde. `resumen`, `faltaMonto`, `guardado`, `descartado`, `reporte`,
+// `presupuesto` y `lineaDeBolsillo` dan el mismo texto que Python
+// (tests/test_n8n_paridad.py); el resto es propio de n8n.
 
 "use strict";
 
@@ -28,7 +29,8 @@ function marca(gasto, campo) {
   return gasto[`confianza_${campo}`] === "alta" ? "" : ` ${DUDOSO}`;
 }
 
-function resumen(gasto, etiquetas = {}) {
+/** `bolsillo`: etiqueta del bolsillo, solo si quien asume el gasto tiene presupuesto. */
+function resumen(gasto, etiquetas = {}, bolsillo = null) {
   const monto = gasto.monto !== null ? `$${formatoDinero(gasto.monto)}` : "—";
   const fecha = gasto.fecha ? formatoFecha(gasto.fecha) : "—";
   const quien = etiquetas[gasto.atribuido_a] ?? gasto.atribuido_a;
@@ -39,6 +41,7 @@ function resumen(gasto, etiquetas = {}) {
     `Categoría: ${gasto.categoria}${marca(gasto, "categoria")}`,
     `Fecha: ${fecha}${marca(gasto, "fecha")}`,
     `De: ${quien}${marca(gasto, "atribuido_a")}`,
+    ...(bolsillo !== null ? [`Bolsillo: ${bolsillo}`] : []),
     `Descripción: ${gasto.descripcion}`,
   ];
   if (gasto.notas.length) lineas.push("", ...gasto.notas.map((n) => `${DUDOSO} ${n.texto}`));
@@ -46,9 +49,9 @@ function resumen(gasto, etiquetas = {}) {
 }
 
 /** Sin botones para cambiar la atribución: corregir es decir que no y reescribir. */
-function pedirConfirmacion(gasto, etiquetas = {}) {
+function pedirConfirmacion(gasto, etiquetas = {}, bolsillo = null) {
   return (
-    `${resumen(gasto, etiquetas)}\n\n` +
+    `${resumen(gasto, etiquetas, bolsillo)}\n\n` +
     "¿Lo guardo? Si algo está mal, toca No y escríbemelo de nuevo."
   );
 }
@@ -61,14 +64,14 @@ function faltaMonto(gasto, etiquetas = {}) {
   );
 }
 
-/** `fila` es la fila de `gastos` que se guardó. */
-function guardado(fila, etiquetas = {}) {
+/** `fila` es la fila de `gastos` que se guardó; `presupuesto`, la línea de lineaDeBolsillo(). */
+function guardado(fila, etiquetas = {}, presupuesto = null) {
   const quien = etiquetas[fila.atribuido_a] ?? fila.atribuido_a;
-  return (
+  const texto =
     "Guardado ✅\n\n" +
     `$${formatoCentavos(fila.monto_centavos)} en ${fila.categoria}, de ${quien}, ` +
-    `el ${formatoFecha(fila.fecha)}.`
-  );
+    `el ${formatoFecha(fila.fecha)}.`;
+  return presupuesto ? `${texto}\n\n${presupuesto}` : texto;
 }
 
 function descartado() {
@@ -92,7 +95,8 @@ const BIENVENIDA =
   "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, " +
   'dilo: "gasolina de la casa".\n\n' +
   "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n" +
-  "Escribe /reporte para ver el total del mes.";
+  "Escribe /reporte para ver el total del mes y /presupuesto para ver " +
+  "cuánto te queda en cada bolsillo.";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -135,6 +139,54 @@ function reporte(resumenMes, calidad) {
   return lineas.join("\n");
 }
 
+// --- Presupuesto ---------------------------------------------------------------
+
+const disponible = (b) => b.asignado_centavos - b.gastado_centavos;
+
+/** Cómo quedó el bolsillo después de guardar. null = el gasto no cuenta en ninguno. */
+function lineaDeBolsillo(estado, mes) {
+  if (estado === null) return "Este gasto no cuenta en ningún bolsillo del presupuesto.";
+  const nombre = `${estado.etiqueta} de ${MESES[mes - 1]}`;
+  if (disponible(estado) < 0) {
+    return (
+      `⚠️ ${nombre}: te pasaste $${formatoCentavos(-disponible(estado))} ` +
+      `(llevas $${formatoCentavos(estado.gastado_centavos)} de $${formatoCentavos(estado.asignado_centavos)}).`
+    );
+  }
+  return `${nombre}: quedan $${formatoCentavos(disponible(estado))} de $${formatoCentavos(estado.asignado_centavos)}.`;
+}
+
+/** `r` es el resultado de resumenPresupuesto(). */
+function presupuesto(r) {
+  const lineas = [
+    `Presupuesto de ${MESES[r.mes - 1]} ${r.anio}`,
+    `Ingreso: $${formatoCentavos(r.ingreso_centavos)}`,
+    "",
+  ];
+  for (const b of r.bolsillos) {
+    const cabeza = `${b.etiqueta} (${b.porcentaje}%)`;
+    const llevado = `$${formatoCentavos(b.gastado_centavos)} de $${formatoCentavos(b.asignado_centavos)}`;
+    if (!b.se_gasta) lineas.push(`${cabeza}: aparta $${formatoCentavos(b.asignado_centavos)}`);
+    else if (disponible(b) < 0) {
+      lineas.push(`${cabeza}: ${llevado} · ⚠️ te pasaste $${formatoCentavos(-disponible(b))}`);
+    } else lineas.push(`${cabeza}: ${llevado} · quedan $${formatoCentavos(disponible(b))}`);
+  }
+  if (r.sin_bolsillo_centavos) {
+    lineas.push(
+      "",
+      `Sin bolsillo: $${formatoCentavos(r.sin_bolsillo_centavos)} (${r.categorias_sin_bolsillo.join(", ")})`,
+    );
+  }
+  return lineas.join("\n");
+}
+
+function sinPresupuesto() {
+  return (
+    "No tengo tu ingreso mensual, así que no puedo armar tu presupuesto. " +
+    "Quien mantiene el bot lo configura en INGRESOS_MENSUALES."
+  );
+}
+
 // <solo-tests>
 module.exports = {
   BIENVENIDA,
@@ -145,9 +197,12 @@ module.exports = {
   formatoCentavos,
   formatoDinero,
   guardado,
+  lineaDeBolsillo,
   pedirConfirmacion,
+  presupuesto,
   porcentaje,
   reporte,
   resumen,
+  sinPresupuesto,
 };
 // </solo-tests>

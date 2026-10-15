@@ -381,3 +381,45 @@ test("una confirmación sin respuesta vence y queda registrada como expirada", a
   const extracciones = await esperarExtracciones(antes + 1);
   assert.equal(extracciones.at(-1).resultado, "expirada");
 });
+
+// --- Presupuesto ---------------------------------------------------------------
+// En el entorno E2E solo demian tiene ingreso (INGRESOS_MENSUALES=demian:1200).
+
+test("presupuesto: un gasto 'del fondo' cuenta contra el fondo, sea cual sea su categoría", async () => {
+  await escenario();
+  await guion(salida({ monto: "30", categoria: "extras", descripcion: "libro" }));
+  await escribir(DEMIAN, "30 de un libro, del fondo");
+  const confirmacion = await esperarMensaje(esConfirmacion, "la confirmación");
+  assert.match(confirmacion.cuerpo.text, /Bolsillo: Fondo personal\n/);
+  await tocar("Sí, guardar");
+  const guardado = await esperarMensaje((m) => m.cuerpo.text.startsWith("Guardado ✅"), "el guardado");
+  assert.match(guardado.cuerpo.text, /Fondo personal de \S+: quedan \$210\.00 de \$240\.00\.$/);
+});
+
+test("presupuesto: /presupuesto es determinista y solo para quien tiene ingreso", async () => {
+  await escenario();
+  await escribir(DEMIAN, "/presupuesto");
+  const texto = (await esperarMensaje((m) => m.cuerpo.text.startsWith("Presupuesto de"), "el presupuesto"))
+    .cuerpo.text;
+  assert.match(texto, /Ingreso: \$1,200\.00/);
+  assert.match(texto, /Ahorro \(30%\): aparta \$360\.00/);
+  assert.match(texto, /Fondo personal \(20%\): \$30\.00 de \$240\.00 · quedan \$210\.00/);
+  assert.equal((await control("estado")).gemini.length, 0, "/presupuesto no usa el LLM");
+
+  await escenario();
+  await escribir(MAMA, "/presupuesto");
+  await esperarMensaje((m) => m.cuerpo.text.includes("No tengo tu ingreso mensual"), "el aviso");
+  assert.equal((await mensajes()).some((m) => m.cuerpo.reply_markup), false);
+});
+
+test("presupuesto: si el agente lo pide, sale el mismo texto y los montos no llegan al modelo", async () => {
+  await escenario();
+  await guion(salida({ accion: "presupuesto" }));
+  await escribir(DEMIAN, "¿cuánto me queda para lujos?");
+  const texto = (await esperarMensaje((m) => m.cuerpo.text.startsWith("Presupuesto de"), "el presupuesto"))
+    .cuerpo.text;
+  assert.match(texto, /Lujos \(20%\)/);
+  const { gemini } = await control("estado");
+  assert.equal(gemini.length, 1);
+  assert.doesNotMatch(JSON.stringify(gemini), /1,200|360\.00|240\.00/);
+});
