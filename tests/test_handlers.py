@@ -498,3 +498,26 @@ async def test_reporte_no_responde_a_desconocidos(servicios: Servicios) -> None:
     update = _update("/reporte", user_id=DESCONOCIDO)
     await reporte(update, _contexto(servicios))
     update.effective_message.reply_text.assert_not_awaited()
+
+
+# --- regresiones -------------------------------------------------------------
+
+
+async def test_si_guardar_falla_la_persona_se_entera_y_el_intento_cuenta(
+    engine: Engine, extracciones: RepositorioExtracciones
+) -> None:
+    """Regresión: un monto que no entra en la base (o cualquier fallo al guardar)
+    dejaba el chat sin respuesta y el intento sin registrar."""
+    enorme = "99999999999999999999"
+    servicios = _servicios_con(engine, ClienteFalso(_respuesta(monto=enorme)))
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update(f"{enorme} de algo"), contexto)
+    token = str(next(iter(contexto.user_data["pendientes"])))
+
+    callback = _callback(f"guardar:{token}")
+    await responder_confirmacion(callback, contexto)
+
+    callback.callback_query.edit_message_text.assert_awaited_once_with(mensajes.error_al_guardar())
+    assert servicios.repositorio.listar() == []
+    [intento] = extracciones.listar(_INICIO, _FIN)
+    assert intento.confirmada is False

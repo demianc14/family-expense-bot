@@ -55,6 +55,13 @@ def test_a_centavos_rechaza_montos_no_positivos(monto: str) -> None:
         a_centavos(Decimal(monto))
 
 
+def test_a_centavos_rechaza_montos_que_no_entran_en_la_base() -> None:
+    """SQLite guarda enteros de 64 bits: más allá, el insert reventaba con OverflowError."""
+    assert a_centavos(Decimal("92233720368547758.07")) == 2**63 - 1
+    with pytest.raises(ValueError, match="demasiado grande"):
+        a_centavos(Decimal("92233720368547758.08"))
+
+
 def test_ida_y_vuelta_sin_perder_centavos() -> None:
     for monto in ("0.01", "15.50", "1200.99"):
         assert a_decimal(a_centavos(Decimal(monto))) == Decimal(monto)

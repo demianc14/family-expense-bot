@@ -79,6 +79,13 @@ def descartado() -> str:
     return "Listo, no guardé nada. ¿Me lo escribes de otra forma?"
 
 
+def error_al_guardar() -> str:
+    return (
+        "⚠️ Dijiste que sí, pero no pude guardar el gasto: no quedó registrado. "
+        "Escríbemelo de nuevo; si vuelve a pasar, avísale a quien mantiene el bot."
+    )
+
+
 def error_de_extraccion() -> str:
     return "No pude entender ese mensaje. ¿Me lo escribes de otra forma?"
 

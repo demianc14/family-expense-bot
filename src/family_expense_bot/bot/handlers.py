@@ -208,11 +208,22 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         await consulta.edit_message_text(mensajes.descartado())
         return
 
-    registrado = servicios.repositorio.guardar(
-        pendiente.gasto,
-        registrado_por=update.effective_user.id,
-        corregido_manualmente=fue_corregido,
-    )
+    try:
+        registrado = servicios.repositorio.guardar(
+            pendiente.gasto,
+            registrado_por=update.effective_user.id,
+            corregido_manualmente=fue_corregido,
+        )
+    except Exception:
+        # La persona dijo que sí y no se guardó: tiene que enterarse, y el intento
+        # cuenta como no confirmado (no quedó registrado). Ej.: un monto que no
+        # entra en la base.
+        log.exception("Falló el guardado de un gasto confirmado")
+        servicios.extracciones.registrar(
+            pendiente.original, confirmada=False, corregida=fue_corregido
+        )
+        await consulta.edit_message_text(mensajes.error_al_guardar())
+        return
     servicios.extracciones.registrar(pendiente.original, confirmada=True, corregida=fue_corregido)
     await consulta.edit_message_text(mensajes.guardado(registrado, etiquetas))
 
