@@ -64,6 +64,10 @@ categorias:
     descripcion: "Gustos y regalos puntuales, fuera de lo cotidiano."
     ejemplos: ["regalo de cumpleaños", "un gustito"]
 
+  - nombre: personal
+    descripcion: "Cosas para uno mismo que salen del fondo personal: cursos, metas, proyectos propios."
+    ejemplos: ["curso", "libro", "equipo para mi proyecto"]
+
   - nombre: otros
     descripcion: "Gastos que no encajan claramente en ninguna otra categoría."
     ejemplos: []
@@ -145,3 +149,42 @@ atribuciones:
       - entre los dos
       - de todos
       - familiar
+
+# ---------------------------------------------------------------------------
+# Presupuesto: cómo se reparte el ingreso mensual
+# ---------------------------------------------------------------------------
+# Los MONTOS de ingreso no van acá (este archivo es público): viven en .env,
+# como INGRESOS_MENSUALES=persona:monto. El presupuesto solo cuenta los gastos
+# atribuidos a una persona con ingreso configurado.
+#
+# Un gasto cuenta contra el bolsillo de su categoría, salvo que el mensaje diga
+# uno de los `marcadores` de otro bolsillo ("30 de un libro, del fondo"). Como
+# con la casa, eso nunca se deduce. Las categorías que no están en ningún
+# bolsillo (otros, mesada) se muestran aparte, como "sin bolsillo".
+presupuesto:
+  bolsillos:
+    - nombre: ahorro
+      etiqueta: "Ahorro"
+      porcentaje: 30
+      se_gasta: false # se aparta: ningún gasto cuenta contra él
+
+    - nombre: necesarios
+      etiqueta: "Necesarios"
+      porcentaje: 30
+      categorias:
+        [alimentacion, transporte, educacion, mascotas, hogar, deudas_cuotas, salud, servicios]
+
+    - nombre: fondo
+      etiqueta: "Fondo personal"
+      porcentaje: 20
+      categorias: [personal]
+      marcadores:
+        - del fondo
+        - de mi fondo
+        - con mi fondo
+        - fondo personal
+
+    - nombre: lujos
+      etiqueta: "Lujos"
+      porcentaje: 20
+      categorias: [comida_fuera, entretenimiento, extras, ropa]

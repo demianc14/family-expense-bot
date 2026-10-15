@@ -237,3 +237,98 @@ def test_falla_si_un_parentesco_usa_un_remitente_que_no_existe() -> None:
     ]
     with pytest.raises(ValidationError, match="tio"):
         _taxonomia(atribuciones=con_tio)
+
+
+# --- presupuesto ------------------------------------------------------------
+
+BOLSILLOS_MINIMOS: list[dict[str, Any]] = [
+    {"nombre": "ahorro", "etiqueta": "Ahorro", "porcentaje": 50, "se_gasta": False},
+    {"nombre": "gastos", "etiqueta": "Gastos", "porcentaje": 50, "categorias": ["otros"]},
+]
+
+
+def _con_presupuesto(bolsillos: list[dict[str, Any]]) -> Taxonomia:
+    return _taxonomia(presupuesto={"bolsillos": bolsillos})
+
+
+def test_el_presupuesto_real_es_30_30_20_20() -> None:
+    assert [(b.nombre, b.porcentaje) for b in TAXONOMIA.bolsillos] == [
+        ("ahorro", 30),
+        ("necesarios", 30),
+        ("fondo", 20),
+        ("lujos", 20),
+    ]
+    assert not next(b for b in TAXONOMIA.bolsillos if b.nombre == "ahorro").se_gasta
+
+
+@pytest.mark.parametrize(
+    ("categoria", "texto", "bolsillo"),
+    [
+        ("alimentacion", "200 supermercado", "necesarios"),
+        ("ropa", "camisa 20", "lujos"),
+        ("personal", "curso 30", "fondo"),
+        ("ropa", "camisa 20, del fondo", "fondo"),  # el marcador gana a la categoría
+        ("ropa", "camisa 20 con mi FONDO", "fondo"),  # sin importar mayúsculas
+        ("ropa", "camisa 20 fondos", "lujos"),  # palabras completas
+        ("otros", "algo 5", None),  # sin bolsillo
+        ("mesada", "mesada 40", None),
+    ],
+)
+def test_bolsillo_de(categoria: str, texto: str, bolsillo: str | None) -> None:
+    assert TAXONOMIA.bolsillo_de(categoria, texto) == bolsillo
+
+
+def test_sin_presupuesto_ningun_gasto_tiene_bolsillo() -> None:
+    assert _taxonomia().bolsillo_de("otros", "del fondo") is None
+
+
+def test_marcadores_de_dos_bolsillos_a_la_vez_mandan_por_categoria() -> None:
+    taxonomia = _con_presupuesto(
+        [
+            {"nombre": "a", "etiqueta": "A", "porcentaje": 50, "marcadores": ["del a"]},
+            {
+                "nombre": "b",
+                "etiqueta": "B",
+                "porcentaje": 50,
+                "marcadores": ["del b"],
+                "categorias": ["otros"],
+            },
+        ]
+    )
+    assert taxonomia.bolsillo_de("otros", "5 del a y del b") == "b"
+    assert taxonomia.bolsillo_de("otros", "5 del a") == "a"
+
+
+@pytest.mark.parametrize(
+    ("cambio", "error"),
+    [
+        ({"porcentaje": 40}, "suman 90"),
+        ({"porcentaje": 0}, "positivo"),
+        ({"categorias": ["inventada"]}, "no existen"),
+        ({"se_gasta": False}, "no se gasta"),
+    ],
+)
+def test_el_presupuesto_invalido_no_carga(cambio: dict[str, Any], error: str) -> None:
+    bolsillos = [BOLSILLOS_MINIMOS[0], BOLSILLOS_MINIMOS[1] | cambio]
+    with pytest.raises(ValidationError, match=error):
+        _con_presupuesto(bolsillos)
+
+
+def test_una_categoria_no_puede_estar_en_dos_bolsillos() -> None:
+    with pytest.raises(ValidationError, match="más de un bolsillo"):
+        _con_presupuesto(
+            [
+                {"nombre": "a", "etiqueta": "A", "porcentaje": 50, "categorias": ["otros"]},
+                {"nombre": "b", "etiqueta": "B", "porcentaje": 50, "categorias": ["otros"]},
+            ]
+        )
+
+
+def test_un_marcador_no_puede_mandar_a_dos_bolsillos() -> None:
+    with pytest.raises(ValidationError, match="dos bolsillos"):
+        _con_presupuesto(
+            [
+                {"nombre": "a", "etiqueta": "A", "porcentaje": 50, "marcadores": ["del fondo"]},
+                {"nombre": "b", "etiqueta": "B", "porcentaje": 50, "marcadores": ["Del Fondo"]},
+            ]
+        )

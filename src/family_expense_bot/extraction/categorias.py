@@ -36,10 +36,42 @@ class Atribucion(BaseModel):
     """Remitente → cómo se refiere a esta persona ("mi hija", "mi ñaña")."""
 
 
+def menciona_alguna(texto: str, frases: list[str]) -> bool:
+    """¿El texto contiene alguna frase, como palabras completas y sin tildes?
+
+    "común" acepta "comun", pero "casamiento" no dispara "casa".
+    """
+    normalizado = normalizar(texto)
+    return any(re.search(rf"\b{re.escape(normalizar(f))}\b", normalizado) for f in frases)
+
+
+class Bolsillo(BaseModel):
+    """Una parte del ingreso mensual: cuánto se le asigna y qué gastos cuentan contra ella."""
+
+    nombre: str
+    etiqueta: str
+    porcentaje: int
+    se_gasta: bool = True
+    """False para el ahorro: se aparta, así que ningún gasto cuenta contra él."""
+
+    categorias: list[str] = []
+    """Categorías que, por defecto, cuentan contra este bolsillo."""
+
+    marcadores: list[str] = []
+    """Frases que mandan un gasto a este bolsillo sea cual sea su categoría
+    ("del fondo"). Como con la casa, nunca se deduce: el mensaje lo tiene que decir."""
+
+
+class Presupuesto(BaseModel):
+    bolsillos: list[Bolsillo]
+
+
 class Taxonomia(BaseModel):
     categorias: list[Categoria]
     fallback: str
     atribuciones: list[Atribucion]
+    presupuesto: Presupuesto | None = None
+    """Cómo se reparte el ingreso mensual. Los montos de ingreso viven en .env."""
 
     @model_validator(mode="after")
     def _consistente(self) -> "Taxonomia":
@@ -66,7 +98,39 @@ class Taxonomia(BaseModel):
         if not self.personas:
             raise ValueError("categories.yaml no define ninguna persona en atribuciones")
         self._parentescos_consistentes()
+        if self.presupuesto is not None:
+            self._presupuesto_consistente(self.presupuesto)
         return self
+
+    def _presupuesto_consistente(self, presupuesto: Presupuesto) -> None:
+        bolsillos = presupuesto.bolsillos
+        _sin_duplicados("bolsillo", [b.nombre for b in bolsillos])
+        if any(b.porcentaje <= 0 for b in bolsillos):
+            raise ValueError("Cada bolsillo necesita un porcentaje positivo")
+        total = sum(b.porcentaje for b in bolsillos)
+        if total != 100:
+            raise ValueError(f"Los porcentajes del presupuesto suman {total}, no 100")
+
+        todas = {c.nombre for c in self.categorias}
+        asignadas: list[str] = []
+        for b in bolsillos:
+            if not b.se_gasta and (b.categorias or b.marcadores):
+                raise ValueError(
+                    f"El bolsillo {b.nombre!r} no se gasta: no puede tener categorías ni marcadores"
+                )
+            desconocidas = set(b.categorias) - todas
+            if desconocidas:
+                raise ValueError(
+                    f"El bolsillo {b.nombre!r} usa categorías que no existen: "
+                    f"{sorted(desconocidas)}"
+                )
+            asignadas += b.categorias
+        repetidas = {c for c in asignadas if asignadas.count(c) > 1}
+        if repetidas:
+            raise ValueError(f"Categorías en más de un bolsillo: {sorted(repetidas)}")
+        marcadores = [normalizar(m) for b in bolsillos for m in b.marcadores]
+        if len(set(marcadores)) != len(marcadores):
+            raise ValueError("Un mismo marcador no puede mandar a dos bolsillos")
 
     def _parentescos_consistentes(self) -> None:
         for a in self.atribuciones:
@@ -140,16 +204,25 @@ class Taxonomia(BaseModel):
         return nombre is not None and nombre.strip().lower() in self.nombres_atribucion
 
     def menciona_gasto_compartido(self, texto: str) -> bool:
-        """¿El mensaje dice explícitamente que el gasto es compartido?
+        """¿El mensaje dice explícitamente que el gasto es compartido?"""
+        return menciona_alguna(texto, self.compartida.marcadores)
 
-        Compara como palabras completas y sin tildes: "común" acepta "comun",
-        pero "casamiento" no dispara "casa".
+    # --- presupuesto -----------------------------------------------------
+
+    @property
+    def bolsillos(self) -> tuple[Bolsillo, ...]:
+        return tuple(self.presupuesto.bolsillos) if self.presupuesto else ()
+
+    def bolsillo_de(self, categoria: str, texto: str) -> str | None:
+        """Contra qué bolsillo cuenta un gasto. None si contra ninguno.
+
+        Un marcador en el mensaje ("del fondo") gana sobre la categoría, pero solo
+        si apunta a un único bolsillo; si no, manda la categoría.
         """
-        normalizado = normalizar(texto)
-        return any(
-            re.search(rf"\b{re.escape(normalizar(m))}\b", normalizado)
-            for m in self.compartida.marcadores
-        )
+        por_marcador = [b.nombre for b in self.bolsillos if menciona_alguna(texto, b.marcadores)]
+        if len(por_marcador) == 1:
+            return por_marcador[0]
+        return next((b.nombre for b in self.bolsillos if categoria in b.categorias), None)
 
     def expresiones(self, persona: str, remitente: str) -> list[str]:
         """Cómo llama `remitente` a `persona`."""

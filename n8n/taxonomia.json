@@ -115,6 +115,16 @@
       "candidata": false
     },
     {
+      "nombre": "personal",
+      "descripcion": "Cosas para uno mismo que salen del fondo personal: cursos, metas, proyectos propios.",
+      "ejemplos": [
+        "curso",
+        "libro",
+        "equipo para mi proyecto"
+      ],
+      "candidata": false
+    },
+    {
       "nombre": "otros",
       "descripcion": "Gastos que no encajan claramente en ninguna otra categoría.",
       "ejemplos": [],
@@ -242,5 +252,62 @@
       ],
       "como_lo_llaman": {}
     }
-  ]
+  ],
+  "presupuesto": {
+    "bolsillos": [
+      {
+        "nombre": "ahorro",
+        "etiqueta": "Ahorro",
+        "porcentaje": 30,
+        "se_gasta": false,
+        "categorias": [],
+        "marcadores": []
+      },
+      {
+        "nombre": "necesarios",
+        "etiqueta": "Necesarios",
+        "porcentaje": 30,
+        "se_gasta": true,
+        "categorias": [
+          "alimentacion",
+          "transporte",
+          "educacion",
+          "mascotas",
+          "hogar",
+          "deudas_cuotas",
+          "salud",
+          "servicios"
+        ],
+        "marcadores": []
+      },
+      {
+        "nombre": "fondo",
+        "etiqueta": "Fondo personal",
+        "porcentaje": 20,
+        "se_gasta": true,
+        "categorias": [
+          "personal"
+        ],
+        "marcadores": [
+          "del fondo",
+          "de mi fondo",
+          "con mi fondo",
+          "fondo personal"
+        ]
+      },
+      {
+        "nombre": "lujos",
+        "etiqueta": "Lujos",
+        "porcentaje": 20,
+        "se_gasta": true,
+        "categorias": [
+          "comida_fuera",
+          "entretenimiento",
+          "extras",
+          "ropa"
+        ],
+        "marcadores": []
+      }
+    ]
+  }
 }
