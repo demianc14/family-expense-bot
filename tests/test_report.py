@@ -25,6 +25,7 @@ def _gasto(monto: str, categoria: str = "mercado", dia: int = 5, id: int = 1) ->
         atribuido_a="casa",
         fecha=date(2026, 3, dia),
         descripcion="compra",
+        texto_original="compra",
         registrado_por=1,
         creado_en=datetime(2026, 3, dia, 12, 0, tzinfo=UTC),
         corregido_manualmente=False,

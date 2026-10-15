@@ -88,3 +88,62 @@ def test_pedir_confirmacion_pregunta_y_explica_los_botones() -> None:
     texto = mensajes.pedir_confirmacion(_gasto())
     assert "¿Lo guardo?" in texto
     assert "tócalo abajo" in texto
+
+
+# --- presupuesto ---------------------------------------------------------------
+
+
+def test_reporte_de_presupuesto() -> None:
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    from family_expense_bot.dashboard.presupuesto import resumen_presupuesto
+    from family_expense_bot.extraction.categorias import cargar_taxonomia
+    from family_expense_bot.storage.repository import GastoRegistrado
+
+    def gasto(monto: str, categoria: str, id: int) -> GastoRegistrado:
+        return GastoRegistrado(
+            id=id,
+            monto=Decimal(monto),
+            categoria=categoria,
+            atribuido_a="demian",
+            fecha=date(2026, 10, 3),
+            descripcion="x",
+            texto_original="x",
+            registrado_por=1,
+            creado_en=datetime(2026, 10, 3, tzinfo=UTC),
+            corregido_manualmente=False,
+            anulado=False,
+        )
+
+    resumen = resumen_presupuesto(
+        [
+            gasto("120.50", "alimentacion", 1),
+            gasto("250", "comida_fuera", 2),
+            gasto("15", "otros", 3),
+        ],
+        cargar_taxonomia(),
+        "demian",
+        Decimal("1200"),
+        2026,
+        10,
+    )
+    assert mensajes.presupuesto(resumen) == (
+        "Presupuesto de octubre 2026\n"
+        "Ingreso: $1,200.00\n"
+        "\n"
+        "Ahorro (30%): aparta $360.00\n"
+        "Necesarios (30%): $120.50 de $360.00 · quedan $239.50\n"
+        "Fondo personal (20%): $0.00 de $240.00 · quedan $240.00\n"
+        "Lujos (20%): $250.00 de $240.00 · ⚠️ te pasaste $10.00\n"
+        "\n"
+        "Sin bolsillo: $15.00 (otros)"
+    )
+    lujos = resumen.bolsillo("lujos")
+    assert mensajes.linea_de_bolsillo(lujos, 10) == (
+        "⚠️ Lujos de octubre: te pasaste $10.00 (llevas $250.00 de $240.00)."
+    )
+    assert mensajes.linea_de_bolsillo(resumen.bolsillo("necesarios"), 10) == (
+        "Necesarios de octubre: quedan $239.50 de $360.00."
+    )
+    assert "ningún bolsillo" in mensajes.linea_de_bolsillo(None, 10)

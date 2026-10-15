@@ -19,6 +19,7 @@ from family_expense_bot.bot.handlers import (
     _botones,
     build_application,
     obtener_identidad,
+    presupuesto,
     registrar_gasto,
     reportar_error,
     reporte,
@@ -568,3 +569,82 @@ async def test_un_no_autorizado_no_puede_tocar_los_botones(servicios: Servicios)
 
     callback.callback_query.edit_message_text.assert_not_awaited()
     assert token in contexto.user_data["pendientes"], "el gasto sigue esperando a su dueño"
+
+
+# --- presupuesto ---------------------------------------------------------------
+
+INGRESOS = {"demian": Decimal("1200")}
+
+
+async def test_la_confirmacion_dice_el_bolsillo_solo_si_hay_presupuesto(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    con, sin = _update("15 de taxi ayer", user_id=DEMIAN), _update("15 de taxi ayer")
+    await registrar_gasto(con, _contexto(servicios))
+    await registrar_gasto(sin, _contexto(servicios))
+
+    assert "Bolsillo: Necesarios" in con.espera.edit_text.await_args.args[0]
+    assert "Bolsillo" not in sin.espera.edit_text.await_args.args[0], "mamá no tiene presupuesto"
+
+
+async def test_al_guardar_dice_cuanto_queda_en_el_bolsillo(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    callback = _callback(f"guardar:{token}", user_id=DEMIAN)
+    await responder_confirmacion(callback, contexto)
+
+    texto = callback.callback_query.edit_message_text.await_args.args[0]
+    assert texto.startswith("Guardado ✅")
+    assert texto.endswith("Necesarios de marzo: quedan $345.00 de $360.00.")
+
+
+async def test_cambiar_a_quien_corresponde_actualiza_el_bolsillo(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    contexto = _contexto(servicios)
+    await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
+    token = next(iter(contexto.user_data["pendientes"]))
+    callback = _callback(f"atrib:{token}:casa", user_id=DEMIAN)
+    await responder_confirmacion(callback, contexto)
+
+    assert "Bolsillo" not in callback.callback_query.edit_message_text.await_args.args[0]
+
+
+async def test_presupuesto_del_que_escribe(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update = _update("/presupuesto", user_id=DEMIAN)
+    await presupuesto(update, _contexto(servicios))
+    texto = update.effective_message.reply_text.await_args.args[0]
+    assert texto.startswith("Presupuesto de ")
+    assert "Ingreso: $1,200.00" in texto
+
+
+async def test_presupuesto_sin_ingreso_lo_explica(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update = _update("/presupuesto", user_id=MAMA)
+    await presupuesto(update, _contexto(servicios))
+    update.effective_message.reply_text.assert_awaited_once_with(mensajes.sin_presupuesto())
+
+
+async def test_presupuesto_ignora_a_desconocidos(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update = _update("/presupuesto", user_id=DESCONOCIDO)
+    await presupuesto(update, _contexto(servicios))
+    update.effective_message.reply_text.assert_not_awaited()
+
+
+def test_ingresos_de_alguien_que_no_es_persona_no_arranca(engine: Engine) -> None:
+    with pytest.raises(ValueError, match="INGRESOS_MENSUALES"):
+        _servicios_con(engine, ingresos={"casa": Decimal("100")})
+
+
+def test_el_comando_presupuesto_esta_registrado(servicios: Servicios) -> None:
+    app = build_application("123:fake-token", servicios)
+    comandos = {
+        c
+        for g in app.handlers.values()
+        for h in g
+        if isinstance(h, CommandHandler)
+        for c in h.commands
+    }
+    assert {"start", "reporte", "presupuesto"} <= comandos

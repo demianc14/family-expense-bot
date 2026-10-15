@@ -81,6 +81,7 @@ def main() -> None:
             cliente=_cliente_gemini(settings),
             taxonomia=cargar_taxonomia(),
             usuarios=settings.usuarios,
+            ingresos=settings.ingresos,
         )
     except (ValueError, EsquemaDesactualizado) as e:
         # Errores de configuración: se explican en una línea, sin traceback.

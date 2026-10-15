@@ -1,5 +1,7 @@
 """Configuración de runtime leída del entorno / .env. Falla rápido si falta algo."""
 
+from decimal import Decimal, InvalidOperation
+
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +22,13 @@ class Settings(BaseSettings):
     Las claves son la allowlist, así que no existe "autorizado pero sin rol".
     Va en `.env` y no en `config/`, a propósito: este repo es público y los IDs
     de la familia son datos personales.
+    """
+
+    ingresos_mensuales: str = ""
+    """Ingreso mensual de cada persona para el presupuesto: `rol:monto,rol:monto`.
+
+    Va en `.env` por la misma razón que los IDs: es un dato personal y el repo
+    es público. Vacío = nadie tiene presupuesto.
     """
 
     telegram_allowed_ids: str = ""
@@ -58,3 +67,30 @@ class Settings(BaseSettings):
                 raise ValueError(f"TELEGRAM_USUARIOS: el ID {id_telegram} aparece dos veces")
             usuarios[id_telegram] = rol.strip().lower()
         return usuarios
+
+    @property
+    def ingresos(self) -> dict[str, Decimal]:
+        """Rol → ingreso mensual. Los roles se validan contra la taxonomía al arrancar."""
+        ingresos: dict[str, Decimal] = {}
+        for parte in self.ingresos_mensuales.split(","):
+            if not parte.strip():
+                continue
+            rol, sep, crudo = parte.partition(":")
+            rol = rol.strip().lower()
+            if not sep or not rol:
+                raise ValueError(
+                    f"INGRESOS_MENSUALES: {parte.strip()!r} no tiene la forma rol:monto"
+                )
+            try:
+                monto = Decimal(crudo.strip())
+            except InvalidOperation as e:
+                raise ValueError(f"INGRESOS_MENSUALES: {crudo.strip()!r} no es un monto") from e
+            if not monto.is_finite() or monto <= 0 or monto != monto.quantize(Decimal("0.01")):
+                raise ValueError(
+                    f"INGRESOS_MENSUALES: el ingreso de {rol} debe ser positivo y con "
+                    "hasta dos decimales"
+                )
+            if rol in ingresos:
+                raise ValueError(f"INGRESOS_MENSUALES: {rol} aparece dos veces")
+            ingresos[rol] = monto
+        return ingresos

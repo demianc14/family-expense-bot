@@ -9,6 +9,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
+from decimal import Decimal
 from types import MappingProxyType
 from uuid import uuid4
 
@@ -24,12 +25,17 @@ from telegram.ext import (
 )
 
 from family_expense_bot.bot import mensajes
+from family_expense_bot.dashboard.presupuesto import resumen_presupuesto
 from family_expense_bot.dashboard.report import inicio_y_fin_utc, rango_del_mes, resumen_mensual
 from family_expense_bot.extraction.categorias import Taxonomia
 from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.extraction.parser import ClienteLLM, extraer
 from family_expense_bot.extraction.schema import GastoExtraido
-from family_expense_bot.storage.repository import RepositorioExtracciones, RepositorioGastos
+from family_expense_bot.storage.repository import (
+    GastoRegistrado,
+    RepositorioExtracciones,
+    RepositorioGastos,
+)
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +63,9 @@ class Servicios:
 
     timeout_s: float = TIMEOUT_EXTRACCION_S
 
+    ingresos: Mapping[str, Decimal] = field(default_factory=lambda: MappingProxyType({}))
+    """Rol → ingreso mensual. Solo quien está acá tiene presupuesto."""
+
     def __post_init__(self) -> None:
         # Falla al arrancar, no cuando esa persona escriba por primera vez.
         invalidos = {r for r in self.usuarios.values() if r not in self.taxonomia.personas}
@@ -66,6 +75,13 @@ class Servicios:
                 f"{sorted(invalidos)}. Válidos: {list(self.taxonomia.personas)} "
                 f"({self.taxonomia.compartida.nombre!r} no escribe: es compartido)"
             )
+        sin_persona = set(self.ingresos) - set(self.taxonomia.personas)
+        if sin_persona:
+            raise ValueError(
+                f"INGRESOS_MENSUALES tiene roles que no son personas: {sorted(sin_persona)}"
+            )
+        if self.ingresos and not self.taxonomia.bolsillos:
+            raise ValueError("Hay INGRESOS_MENSUALES pero categories.yaml no define un presupuesto")
 
 
 @dataclass(frozen=True)
@@ -156,7 +172,7 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     pendiente = Pendiente(gasto=gasto, original=gasto)
     _pendientes(context)[token] = pendiente
     await espera.edit_text(
-        mensajes.pedir_confirmacion(gasto, etiquetas),
+        mensajes.pedir_confirmacion(gasto, etiquetas, bolsillo=_bolsillo(servicios, gasto)),
         reply_markup=_botones(token, pendiente, servicios.taxonomia),
     )
 
@@ -195,7 +211,12 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         )
         pendientes[token] = corregido
         await consulta.edit_message_text(
-            mensajes.pedir_confirmacion(corregido.gasto, etiquetas, corregido.corregidos),
+            mensajes.pedir_confirmacion(
+                corregido.gasto,
+                etiquetas,
+                corregido.corregidos,
+                bolsillo=_bolsillo(servicios, corregido.gasto),
+            ),
             reply_markup=_botones(token, corregido, servicios.taxonomia),
         )
         return
@@ -229,7 +250,41 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         await consulta.edit_message_text(mensajes.error_al_guardar())
         return
     servicios.extracciones.registrar(pendiente.original, confirmada=True, corregida=fue_corregido)
-    await consulta.edit_message_text(mensajes.guardado(registrado, etiquetas))
+    await consulta.edit_message_text(
+        mensajes.guardado(registrado, etiquetas, _estado_del_bolsillo(servicios, registrado))
+    )
+
+
+def _bolsillo(servicios: Servicios, gasto: GastoExtraido) -> str | None:
+    """Etiqueta del bolsillo contra el que cuenta el gasto, si quien lo asume tiene presupuesto."""
+    if gasto.atribuido_a not in servicios.ingresos:
+        return None
+    nombre = servicios.taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
+    etiquetas = {b.nombre: b.etiqueta for b in servicios.taxonomia.bolsillos}
+    return etiquetas.get(nombre or "", "ninguno")
+
+
+def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> str | None:
+    """Cómo quedó el bolsillo del mes del gasto. Un fallo acá no tapa el "Guardado"."""
+    ingreso = servicios.ingresos.get(registrado.atribuido_a)
+    if ingreso is None:
+        return None
+    try:
+        anio, mes = registrado.fecha.year, registrado.fecha.month
+        desde, hasta = rango_del_mes(anio, mes)
+        resumen = resumen_presupuesto(
+            servicios.repositorio.listar(desde=desde, hasta=hasta),
+            servicios.taxonomia,
+            registrado.atribuido_a,
+            ingreso,
+            anio,
+            mes,
+        )
+        nombre = servicios.taxonomia.bolsillo_de(registrado.categoria, registrado.texto_original)
+        return mensajes.linea_de_bolsillo(resumen.bolsillo(nombre) if nombre else None, mes)
+    except Exception:
+        log.exception("No se pudo calcular el presupuesto después de guardar")
+        return None
 
 
 async def avisar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -241,6 +296,32 @@ async def avisar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if update.effective_message is None or _rol(update, _servicios(context)) is None:
         return
     await update.effective_message.reply_text(mensajes.edicion_ignorada())
+
+
+async def presupuesto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cuánto lleva gastado quien escribe en cada bolsillo este mes."""
+    servicios = _servicios(context)
+    if update.effective_message is None:
+        return
+    remitente = _rol(update, servicios)
+    if remitente is None:
+        return
+    ingreso = servicios.ingresos.get(remitente)
+    if ingreso is None:
+        await update.effective_message.reply_text(mensajes.sin_presupuesto())
+        return
+
+    hoy = date.today()
+    desde, hasta = rango_del_mes(hoy.year, hoy.month)
+    resumen = resumen_presupuesto(
+        servicios.repositorio.listar(desde=desde, hasta=hasta),
+        servicios.taxonomia,
+        remitente,
+        ingreso,
+        hoy.year,
+        hoy.month,
+    )
+    await update.effective_message.reply_text(mensajes.presupuesto(resumen))
 
 
 async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -310,6 +391,7 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
         app.bot_data["servicios"] = servicios
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reporte", reporte))
+    app.add_handler(CommandHandler("presupuesto", presupuesto))
     app.add_handler(CallbackQueryHandler(responder_confirmacion))
     app.add_handler(
         MessageHandler(

@@ -6,6 +6,7 @@ alguien decide si guardar un gasto. Por eso lo dudoso se marca, no se esconde.
 
 from collections.abc import Collection, Mapping
 
+from family_expense_bot.dashboard.presupuesto import EstadoBolsillo, ResumenPresupuesto
 from family_expense_bot.dashboard.report import ResumenMensual
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.repository import GastoRegistrado
@@ -24,8 +25,13 @@ def resumen(
     gasto: GastoExtraido,
     etiquetas: Mapping[str, str] | None = None,
     corregidos: Collection[str] = (),
+    bolsillo: str | None = None,
 ) -> str:
-    """`corregidos`: campos que la persona ya cambió; no llevan duda ni notas."""
+    """`corregidos`: campos que la persona ya cambió; no llevan duda ni notas.
+
+    `bolsillo`: etiqueta del bolsillo contra el que cuenta, solo si quien asume
+    el gasto tiene presupuesto.
+    """
     etiquetas = etiquetas or {}
     monto = f"${gasto.monto:,.2f}" if gasto.monto is not None else "—"
     fecha = gasto.fecha.strftime("%d/%m/%Y") if gasto.fecha else "—"
@@ -38,6 +44,7 @@ def resumen(
         f"Categoría: {gasto.categoria}{_marca(gasto, 'categoria', corregidos)}",
         f"Fecha: {fecha}{_marca(gasto, 'fecha', corregidos)}",
         f"De: {quien}{_marca(gasto, 'atribuido_a', corregidos)}",
+        *([f"Bolsillo: {bolsillo}"] if bolsillo is not None else []),
         f"Descripción: {gasto.descripcion}",
     ]
     notas = [n for n in gasto.notas if n.campo not in corregidos]
@@ -50,9 +57,10 @@ def pedir_confirmacion(
     gasto: GastoExtraido,
     etiquetas: Mapping[str, str] | None = None,
     corregidos: Collection[str] = (),
+    bolsillo: str | None = None,
 ) -> str:
     return (
-        f"{resumen(gasto, etiquetas, corregidos)}\n\n"
+        f"{resumen(gasto, etiquetas, corregidos, bolsillo)}\n\n"
         "¿Lo guardo? Si no es de quien dice, tócalo abajo."
     )
 
@@ -66,13 +74,32 @@ def falta_monto(gasto: GastoExtraido, etiquetas: Mapping[str, str] | None = None
     )
 
 
-def guardado(registrado: GastoRegistrado, etiquetas: Mapping[str, str] | None = None) -> str:
+def guardado(
+    registrado: GastoRegistrado,
+    etiquetas: Mapping[str, str] | None = None,
+    presupuesto: str | None = None,
+) -> str:
+    """`presupuesto`: la línea de linea_de_bolsillo(), si quien asume el gasto tiene uno."""
     quien = (etiquetas or {}).get(registrado.atribuido_a, registrado.atribuido_a)
-    return (
+    texto = (
         f"Guardado ✅\n\n"
         f"${registrado.monto:,.2f} en {registrado.categoria}, de {quien}, "
         f"el {registrado.fecha.strftime('%d/%m/%Y')}."
     )
+    return f"{texto}\n\n{presupuesto}" if presupuesto else texto
+
+
+def linea_de_bolsillo(estado: EstadoBolsillo | None, mes: int) -> str:
+    """Cómo quedó el bolsillo después de guardar. None = el gasto no cuenta en ninguno."""
+    if estado is None:
+        return "Este gasto no cuenta en ningún bolsillo del presupuesto."
+    nombre = f"{estado.etiqueta} de {MESES[mes - 1]}"
+    if estado.excedido:
+        return (
+            f"⚠️ {nombre}: te pasaste ${-estado.disponible:,.2f} "
+            f"(llevas ${estado.gastado:,.2f} de ${estado.asignado:,.2f})."
+        )
+    return f"{nombre}: quedan ${estado.disponible:,.2f} de ${estado.asignado:,.2f}."
 
 
 def descartado() -> str:
@@ -118,7 +145,8 @@ BIENVENIDA = (
     "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, "
     'dilo: "gasolina de la casa".\n\n'
     "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n"
-    "Escribe /reporte para ver el total del mes."
+    "Escribe /reporte para ver el total del mes y /presupuesto para ver "
+    "cuánto te queda en cada bolsillo."
 )
 
 
@@ -156,3 +184,35 @@ def reporte(resumen: ResumenMensual) -> str:
             f"({calidad.tasa_acierto_directo:.0%}) los entendí bien a la primera.",
         ]
     return "\n".join(lineas)
+
+
+def presupuesto(resumen: ResumenPresupuesto) -> str:
+    lineas = [
+        f"Presupuesto de {MESES[resumen.mes - 1]} {resumen.anio}",
+        f"Ingreso: ${resumen.ingreso:,.2f}",
+        "",
+    ]
+    for b in resumen.bolsillos:
+        cabeza = f"{b.etiqueta} ({b.porcentaje}%)"
+        if not b.se_gasta:
+            lineas.append(f"{cabeza}: aparta ${b.asignado:,.2f}")
+        elif b.excedido:
+            lineas.append(
+                f"{cabeza}: ${b.gastado:,.2f} de ${b.asignado:,.2f} · "
+                f"⚠️ te pasaste ${-b.disponible:,.2f}"
+            )
+        else:
+            lineas.append(
+                f"{cabeza}: ${b.gastado:,.2f} de ${b.asignado:,.2f} · quedan ${b.disponible:,.2f}"
+            )
+    if resumen.sin_bolsillo:
+        categorias = ", ".join(resumen.categorias_sin_bolsillo)
+        lineas += ["", f"Sin bolsillo: ${resumen.sin_bolsillo:,.2f} ({categorias})"]
+    return "\n".join(lineas)
+
+
+def sin_presupuesto() -> str:
+    return (
+        "No tengo tu ingreso mensual, así que no puedo armar tu presupuesto. "
+        "Quien mantiene el bot lo configura en INGRESOS_MENSUALES."
+    )

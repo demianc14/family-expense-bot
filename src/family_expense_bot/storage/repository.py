@@ -37,6 +37,7 @@ class GastoRegistrado(BaseModel):
     atribuido_a: str
     fecha: date
     descripcion: str
+    texto_original: str
     registrado_por: int
     creado_en: datetime
     corregido_manualmente: bool
@@ -51,6 +52,7 @@ class GastoRegistrado(BaseModel):
             atribuido_a=fila.atribuido_a,
             fecha=fila.fecha,
             descripcion=fila.descripcion,
+            texto_original=fila.texto_original,
             registrado_por=fila.registrado_por,
             creado_en=_como_utc(fila.creado_en),
             corregido_manualmente=fila.corregido_manualmente,

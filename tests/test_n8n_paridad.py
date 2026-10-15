@@ -512,6 +512,7 @@ def _registrado(fila: dict[str, Any]) -> GastoRegistrado:
         atribuido_a=fila["atribuido_a"],
         fecha=date.fromisoformat(fila["fecha"]),
         descripcion="x",
+        texto_original="x",
         registrado_por=1,
         creado_en=datetime(2026, 3, 1, tzinfo=UTC),
         corregido_manualmente=False,

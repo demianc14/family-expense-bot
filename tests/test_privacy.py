@@ -37,7 +37,7 @@ def test_env_example_si_se_versiona() -> None:
     assert result.returncode == 1
 
 
-SECRETOS = ("TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "TELEGRAM_USUARIOS")
+SECRETOS = ("TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "TELEGRAM_USUARIOS", "INGRESOS_MENSUALES")
 """Variables que en `.env.example` tienen que ir vacías: son secretos o IDs personales."""
 
 

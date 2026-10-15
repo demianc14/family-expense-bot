@@ -72,3 +72,41 @@ def test_la_base_vive_en_data_processed_que_esta_ignorada(
 ) -> None:
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
     assert "data/processed/" in Settings(_env_file=None).database_url  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    ("crudo", "esperado"),
+    [
+        ("", {}),
+        ("demian:1200", {"demian": "1200"}),
+        (" Demian : 1200.50 , mama:800,", {"demian": "1200.50", "mama": "800"}),
+    ],
+)
+def test_ingresos(monkeypatch: pytest.MonkeyPatch, crudo: str, esperado: dict[str, str]) -> None:
+    from decimal import Decimal
+
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
+    monkeypatch.setenv("INGRESOS_MENSUALES", crudo)
+    ingresos = Settings(_env_file=None).ingresos  # type: ignore[call-arg]
+    assert ingresos == {rol: Decimal(m) for rol, m in esperado.items()}
+
+
+@pytest.mark.parametrize(
+    "crudo",
+    [
+        "demian",
+        "demian:",
+        "demian:mil",
+        "demian:-5",
+        "demian:0",
+        "demian:1.005",
+        "demian:NaN",
+        "demian:1,demian:2",
+        ":100",
+    ],
+)
+def test_ingresos_mal_escritos_fallan_rapido(monkeypatch: pytest.MonkeyPatch, crudo: str) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:x")
+    monkeypatch.setenv("INGRESOS_MENSUALES", crudo)
+    with pytest.raises(ValueError, match="INGRESOS_MENSUALES"):
+        _ = Settings(_env_file=None).ingresos  # type: ignore[call-arg]
