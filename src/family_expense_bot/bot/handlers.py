@@ -165,6 +165,10 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
     consulta = update.callback_query
     if consulta is None or consulta.data is None or update.effective_user is None:
         return
+    if _rol(update, _servicios(context)) is None:
+        # Misma allowlist que para los mensajes: en un grupo, alguien de afuera
+        # no puede confirmar ni descartar el gasto de otro.
+        return
     await consulta.answer()
 
     accion, _, resto = consulta.data.partition(":")

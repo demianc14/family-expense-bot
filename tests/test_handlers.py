@@ -555,3 +555,16 @@ async def test_si_guardar_falla_la_persona_se_entera_y_el_intento_cuenta(
     assert servicios.repositorio.listar() == []
     [intento] = extracciones.listar(_INICIO, _FIN)
     assert intento.confirmada is False
+
+
+async def test_un_no_autorizado_no_puede_tocar_los_botones(servicios: Servicios) -> None:
+    """Regresión: en un grupo, alguien fuera de la allowlist que tocaba un botón
+    reescribía la confirmación ajena como "descartado"."""
+    contexto = _contexto(servicios)
+    token = await _extraer_pendiente(contexto)
+
+    callback = _callback(f"descartar:{token}", user_id=DESCONOCIDO)
+    await responder_confirmacion(callback, contexto)
+
+    callback.callback_query.edit_message_text.assert_not_awaited()
+    assert token in contexto.user_data["pendientes"], "el gasto sigue esperando a su dueño"
