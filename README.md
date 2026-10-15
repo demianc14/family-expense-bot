@@ -109,7 +109,9 @@ family-expense-bot --exportar   # CSV para Power BI (queda fuera de git)
 family-expense-bot           # levanta el bot (modo polling)
 ```
 
-En Telegram, `/reporte` devuelve el total del mes por categoría.
+En Telegram, `/reporte` devuelve el total del mes por categoría y
+`/presupuesto`, cuánto te queda en cada bolsillo (ver
+[Presupuesto](#presupuesto-30302020)).
 
 El token vive solo en `.env`. Si alguna vez se filtra (por ejemplo, pegado en
 un chat o en una captura), revócalo con `/revoke` en @BotFather: quien lo
@@ -143,7 +145,15 @@ node --test n8n/e2e/e2e.test.mjs   # ~2 min: n8n real + Telegram y Gemini falsos
    corresponde el gasto. Cambiarlo no guarda: vuelve a mostrar el resumen,
    con ✏️ en lo corregido, y espera el sí.
 5. **Solo al tocar "Sí, guardar" se escribe en la base.** Si dice que no, se
-   descarta y se le pide reescribirlo.
+   descarta y se le pide reescribirlo. Si guardar falla después del sí (por
+   ejemplo, un monto que no entra en la base), se avisa y el intento cuenta
+   como no confirmado: nunca un "sí" sin respuesta.
+6. **Editar un mensaje no crea otro gasto.** Telegram entrega las ediciones
+   como mensajes; antes, corregir un typo pedía confirmar de nuevo y podía
+   duplicar el gasto. Ahora el bot avisa que no cambia nada por ediciones.
+
+Los botones obedecen la misma allowlist que los mensajes: en un grupo, nadie
+de afuera puede confirmar ni descartar el gasto de otro.
 
 Las extracciones sin confirmar viven en memoria, nunca en disco. Si el bot se
 reinicia, un botón viejo ya no guarda nada: responde como descartado.
@@ -189,6 +199,50 @@ Tres métricas salen de ahí:
 - **Tasa de confirmación:** cuántos se guardaron, con o sin corrección.
 - **Tasa sin dudas:** cuántas extracciones salieron con los cuatro campos en
   confianza alta.
+
+## Presupuesto (30/30/20/20)
+
+Con un ingreso mensual configurado, el bot reparte ese ingreso en cuatro
+bolsillos y lleva la cuenta de cuánto se ha gastado en cada uno:
+
+| Bolsillo | % | Qué cuenta contra él |
+|---|---|---|
+| Ahorro | 30 | Nada: se aparta, no se gasta. El bot dice cuánto apartar. |
+| Necesarios | 30 | alimentación, transporte, educación, mascotas, hogar, deudas/cuotas |
+| Fondo personal | 20 | la categoría `personal` (cursos, metas), o cualquier gasto que diga "del fondo" |
+| Lujos | 20 | comida fuera, entretenimiento, extras, ropa |
+
+```bash
+# .env (nunca en el repo): rol:monto, separados por coma
+INGRESOS_MENSUALES=demian:1200
+```
+
+- **El reparto es config.** Los bolsillos, sus porcentajes y qué categorías
+  caen en cada uno viven en `config/categories.yaml`. Al cargar se valida que
+  los porcentajes sumen 100, que ninguna categoría esté en dos bolsillos y que
+  ningún marcador apunte a dos. El monto del ingreso no va ahí, porque el
+  archivo es público.
+- **"Del fondo" se dice, no se deduce.** Un gasto cuenta contra el bolsillo de
+  su categoría, salvo que el mensaje traiga un marcador de otro bolsillo ("30
+  de un libro, del fondo"). Es la misma regla que para la casa: el código busca
+  la frase en el texto, el LLM no decide.
+- **Solo cuentan tus gastos:** los atribuidos a la persona con ingreso. Un gasto
+  de la casa o de otra persona no toca tu presupuesto aunque lo registres tú.
+- **Dónde se ve:** la confirmación dice contra qué bolsillo cuenta el gasto; el
+  aviso de guardado dice cuánto queda en ese bolsillo del mes (o cuánto te
+  pasaste); `/presupuesto` muestra los cuatro.
+- **Sin cambios en la base.** El bolsillo se calcula al leer, a partir de la
+  categoría y del texto ya guardados. Una base existente funciona sin migrar;
+  la contracara es que si cambias el reparto en el yaml, los meses pasados se
+  recalculan con el reparto nuevo.
+- **Centavos exactos.** El reparto se hace en centavos enteros y los centavos
+  que sobran del redondeo van a los primeros bolsillos: 1000.01 repartido en
+  30/30/20/20 suma exactamente 1000.01.
+
+Limitaciones: el ingreso es fijo (si un mes cobras distinto, hay que cambiar
+`.env`), el ahorro no se registra (el bot no sabe si de verdad lo apartaste),
+y las categorías que no están en ningún bolsillo (`otros`, `mesada`) se
+muestran aparte como "sin bolsillo" en vez de repartirse.
 
 ## Privacidad
 
@@ -281,7 +335,7 @@ flowchart LR
 ```
 
 El agente decide **qué hacer** con el mensaje: `proponer` un gasto,
-`preguntar` lo que falta, pedir el `reporte` o `responder`. No decide **qué
+`preguntar` lo que falta, pedir el `reporte` o el `presupuesto`, o `responder`. No decide **qué
 se guarda**: eso lo deciden una compuerta de código y una persona.
 
 - **La compuerta re-verifica desde cero.** En un agente, lo que devuelve una
@@ -309,6 +363,8 @@ se guarda**: eso lo deciden una compuerta de código y una persona.
   que los totales de la familia nunca lleguen a Gemini. El agente solo pide
   `accion: "reporte"` y el workflow manda el mismo reporte determinista de
   `/reporte`. El E2E verifica que los montos no aparezcan en ningún request.
+  El presupuesto sigue la misma regla: `accion: "presupuesto"` lleva a la
+  misma rama determinista que `/presupuesto`, con paridad contra Python.
 
 ### Decisiones de implementación
 
@@ -353,7 +409,7 @@ Tres capas, todas sin tokens reales:
    cada resultado registrado, Markdown escapado, cada tipo de nodo existente
    en n8n 2.40.7. Se comprobó metiendo una conexión prohibida a mano: el test
    la detecta.
-3. **E2E en n8n real** (`n8n/e2e/`): 17 escenarios contra n8n 2.40.7 en
+3. **E2E en n8n real** (`n8n/e2e/`): 20 escenarios contra n8n 2.40.7 en
    Docker. `falsos.mjs` imita la API de Telegram (incluida su validación de
    Markdown) y la de Gemini con un guion por escenario; las credenciales de
    n8n apuntan ahí.

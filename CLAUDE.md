@@ -80,6 +80,21 @@ Detalle y mediciones en el README; lo que no se debe deshacer:
   activarlas sin confirmación de Demian con su familia.
 - El mapa ID de Telegram → rol va en `.env` (`TELEGRAM_USUARIOS`), nunca en el repo.
 
+## Decisiones de presupuesto (resueltas 2026-10-15)
+
+Presupuesto 30/30/20/20 por bolsillos, en Python y en n8n con paridad. Detalle
+en el README; lo que no se debe deshacer:
+
+- **El ingreso va en `.env`** (`INGRESOS_MENSUALES=rol:monto`), nunca en el repo.
+  Formato estricto (dígitos y hasta dos decimales), igual en las dos versiones.
+- **Ahorro se aparta, no se gasta**; el fondo personal sí se gasta.
+- **"Del fondo" nunca se deduce**: un marcador del yaml en el texto manda el
+  gasto al fondo; si no, decide la categoría (`personal` va al fondo).
+- **Solo cuentan los gastos atribuidos a la persona con ingreso.**
+- **El bolsillo se calcula al leer** (categoría + texto guardados): sin cambios
+  de esquema en la base real.
+- **Los montos del presupuesto no pasan por el LLM** en n8n (rama determinista).
+
 ## Arquitectura propuesta
 
 ```
