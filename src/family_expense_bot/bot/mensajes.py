@@ -86,6 +86,14 @@ def error_al_guardar() -> str:
     )
 
 
+def edicion_ignorada() -> str:
+    """Editar no cambia un gasto ya enviado: corregir es decir que no y reescribir."""
+    return (
+        "Vi que editaste un mensaje, pero no cambio gastos por ediciones. "
+        "Si el gasto quedó mal, toca No en su confirmación y escríbemelo de nuevo."
+    )
+
+
 def error_de_extraccion() -> str:
     return "No pude entender ese mensaje. ¿Me lo escribes de otra forma?"
 

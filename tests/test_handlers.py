@@ -503,6 +503,40 @@ async def test_reporte_no_responde_a_desconocidos(servicios: Servicios) -> None:
 # --- regresiones -------------------------------------------------------------
 
 
+def _manejador_de(app: Any, update: Any) -> Any:
+    """El handler que PTB elegiría para este update (el primero que lo acepta)."""
+    for grupo in app.handlers.values():
+        for handler in grupo:
+            if handler.check_update(update):
+                return handler
+    return None
+
+
+def _update_real(edited: bool, texto: str = "200 supermercado") -> Any:
+    from telegram import Chat, Message, Update, User
+
+    mensaje = Message(
+        1, datetime.now(UTC), Chat(MAMA, "private"), from_user=User(MAMA, "M", False), text=texto
+    )
+    return Update(1, edited_message=mensaje) if edited else Update(1, message=mensaje)
+
+
+def test_editar_un_mensaje_no_lo_procesa_como_un_gasto_nuevo(servicios: Servicios) -> None:
+    """Regresión: editar un typo generaba otra confirmación y, si se aceptaban
+    las dos, un gasto duplicado."""
+    app = build_application("123:fake-token", servicios)
+    assert _manejador_de(app, _update_real(edited=False)).callback is registrar_gasto
+    assert _manejador_de(app, _update_real(edited=True)).callback is not registrar_gasto
+
+
+async def test_editar_un_mensaje_avisa_que_no_cambia_nada(servicios: Servicios) -> None:
+    from family_expense_bot.bot.handlers import avisar_edicion
+
+    update = _update("200 supermercado (editado)")
+    await avisar_edicion(update, _contexto(servicios))
+    update.effective_message.reply_text.assert_awaited_once_with(mensajes.edicion_ignorada())
+
+
 async def test_si_guardar_falla_la_persona_se_entera_y_el_intento_cuenta(
     engine: Engine, extracciones: RepositorioExtracciones
 ) -> None:

@@ -228,6 +228,17 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
     await consulta.edit_message_text(mensajes.guardado(registrado, etiquetas))
 
 
+async def avisar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Editar un mensaje no cambia un gasto ya enviado ni crea otro.
+
+    Antes, una edición se procesaba como mensaje nuevo: otra confirmación y, si
+    se aceptaban las dos, un gasto duplicado.
+    """
+    if update.effective_message is None or _rol(update, _servicios(context)) is None:
+        return
+    await update.effective_message.reply_text(mensajes.edicion_ignorada())
+
+
 async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Total del mes en curso, por categoría, ahí mismo en el chat."""
     servicios = _servicios(context)
@@ -296,6 +307,13 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reporte", reporte))
     app.add_handler(CallbackQueryHandler(responder_confirmacion))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registrar_gasto))
+    app.add_handler(
+        MessageHandler(
+            filters.UpdateType.MESSAGE & filters.TEXT & ~filters.COMMAND, registrar_gasto
+        )
+    )
+    app.add_handler(
+        MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.TEXT, avisar_edicion)
+    )
     app.add_error_handler(reportar_error)
     return app
