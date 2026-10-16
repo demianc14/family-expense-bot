@@ -15,6 +15,12 @@ const taxonomia = v.crearTaxonomia(
   JSON.parse(fs.readFileSync(path.join(__dirname, "..", "taxonomia.json"), "utf8")),
 );
 
+/** "30" → 3000, "12.5" → 1250. */
+function aCentavosDe(monto) {
+  const [entero, decimales = ""] = monto.split(".");
+  return Number(entero) * 100 + Number(decimales.padEnd(2, "0"));
+}
+
 const FUNCIONES = {
   parsear_monto: (texto) => v.parsearMonto(texto),
   // Centavos como texto: el Set de BigInt no cruza JSON.
@@ -55,6 +61,12 @@ const FUNCIONES = {
   resumen_con_bolsillo: (respuesta, texto, remitente, hoy, ingresos) => {
     const gasto = v.verificarGasto({ respuesta, texto, remitente, hoy, taxonomia });
     return m.resumen(gasto, taxonomia.etiquetas, op.bolsilloVisible(taxonomia, ingresos, gasto));
+  },
+  consulta: (filas, persona, ingreso, monto, categoria, texto, hoy, dudosa) => {
+    const [anio, mes] = hoy.split("-").map(Number);
+    const r = op.resumenPresupuesto(filas, taxonomia, persona, ingreso, anio, mes);
+    const c = op.evaluarGasto(r, taxonomia, taxonomia.bolsilloDe(categoria, texto), aCentavosDe(monto), hoy);
+    return m.respuestaConsulta(c, categoria, dudosa);
   },
   reporte: (filas, extracciones, anio, mes) =>
     m.reporte(op.reporteMes(filas, anio, mes), op.calcularCalidad(extracciones)),

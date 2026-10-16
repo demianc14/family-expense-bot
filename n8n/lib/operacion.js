@@ -397,6 +397,59 @@ function resumenPresupuesto(filas, taxonomia, persona, ingreso, anio, mes) {
   };
 }
 
+/**
+ * ¿Conviene este gasto? Regla del ritmo del mes (presupuesto.py: evaluar_gasto).
+ * Determinista: el LLM no ve estos números. `montoCentavos` es un entero.
+ *
+ * "no" si el bolsillo se pasa (y sugiere un bolsillo con marcadores donde sí
+ * quepa); "difiere" si cabe pero deja menos de lo que le toca al bolsillo para
+ * los días que faltan; "si" en otro caso.
+ */
+function evaluarGasto(resumen, taxonomia, bolsillo, montoCentavos, hoy) {
+  const [anio, mes, dia] = hoy.split("-").map(Number);
+  const diasDelMes = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  const diasRestantes = diasDelMes - dia;
+  const estado = bolsillo ? resumen.bolsillos.find((b) => b.nombre === bolsillo) : undefined;
+  const base = {
+    monto_centavos: montoCentavos,
+    dias_restantes: diasRestantes,
+    alternativa: null,
+    marcador_alternativa: null,
+  };
+  if (!estado || !estado.se_gasta) {
+    return { ...base, veredicto: "sin_bolsillo", bolsillo: null, disponible_despues_centavos: null, reserva_centavos: null };
+  }
+
+  const disponible = estado.asignado_centavos - estado.gastado_centavos;
+  const despues = disponible - montoCentavos;
+  // Redondeo al centavo, la mitad hacia arriba, como quantize(ROUND_HALF_UP).
+  const reserva = Math.floor((2 * estado.asignado_centavos * diasRestantes + diasDelMes) / (2 * diasDelMes));
+  const veredicto = despues < 0 ? "no" : despues < reserva ? "difiere" : "si";
+
+  let alternativa = null;
+  let marcador = null;
+  if (veredicto === "no") {
+    for (const b of taxonomia.bolsillos) {
+      const otro = resumen.bolsillos.find((x) => x.nombre === b.nombre);
+      const cabe = otro && otro.asignado_centavos - otro.gastado_centavos >= montoCentavos;
+      if (b.marcadores.length && b.nombre !== estado.nombre && cabe) {
+        alternativa = otro;
+        marcador = b.marcadores[0];
+        break;
+      }
+    }
+  }
+  return {
+    ...base,
+    veredicto,
+    bolsillo: estado,
+    disponible_despues_centavos: despues,
+    reserva_centavos: reserva,
+    alternativa,
+    marcador_alternativa: marcador,
+  };
+}
+
 /** Etiqueta del bolsillo de un gasto, si quien lo asume tiene presupuesto (handlers._bolsillo). */
 function bolsilloVisible(taxonomia, ingresos, gasto) {
   if (!(gasto.atribuido_a in ingresos)) return null;
@@ -420,6 +473,7 @@ module.exports = {
   calcularCalidad,
   cerrarHilo,
   clasificarFallo,
+  evaluarGasto,
   filaExtraccion,
   filaGasto,
   parsearIngresos,

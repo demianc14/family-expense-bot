@@ -1,6 +1,6 @@
 // Texto que ve la persona: port de bot/mensajes.py. Lo dudoso se marca, no se
 // esconde. `resumen`, `faltaMonto`, `guardado`, `descartado`, `reporte`,
-// `presupuesto` y `lineaDeBolsillo` dan el mismo texto que Python
+// `presupuesto`, `lineaDeBolsillo` y `respuestaConsulta` dan el mismo texto que Python
 // (tests/test_n8n_paridad.py); el resto es propio de n8n.
 
 "use strict";
@@ -95,8 +95,9 @@ const BIENVENIDA =
   "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, " +
   'dilo: "gasolina de la casa".\n\n' +
   "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n" +
-  "Escribe /reporte para ver el total del mes y /presupuesto para ver " +
-  "cuánto te queda en cada bolsillo.";
+  "Escribe /reporte para ver el total del mes, /presupuesto para ver " +
+  "cuánto te queda en cada bolsillo y /puedo 30 concierto para saber si te " +
+  "conviene un gasto.";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -187,9 +188,64 @@ function sinPresupuesto() {
   );
 }
 
+// --- ¿Puedo gastar esto? -----------------------------------------------------------
+
+function ritmo(c) {
+  if (c.dias_restantes === 0) return "";
+  const reserva = formatoCentavos(c.reserva_centavos);
+  if (c.dias_restantes === 1) return `, y al día que falta del mes le tocan $${reserva}`;
+  return `, y a los ${c.dias_restantes} días que faltan del mes les tocan $${reserva}`;
+}
+
+/** `c` es el resultado de evaluarGasto(). El veredicto lo decide el código, no el LLM. */
+function respuestaConsulta(c, categoria, categoriaDudosa) {
+  const b = c.bolsillo;
+  let lineas;
+  if (c.veredicto === "sin_bolsillo" || b === null) {
+    lineas = [
+      `Un gasto de ${categoria} no cuenta en ningún bolsillo de tu presupuesto, ` +
+        "así que no tengo con qué compararlo.",
+    ];
+  } else if (c.veredicto === "no") {
+    lineas = [
+      `❌ No te lo recomiendo: en ${b.etiqueta} te quedan $${formatoCentavos(disponible(b))} y el gasto ` +
+        `es de $${formatoCentavos(c.monto_centavos)}; te pasarías por $${formatoCentavos(-c.disponible_despues_centavos)}.`,
+    ];
+    if (c.alternativa !== null) {
+      lineas.push(
+        `En tu ${c.alternativa.etiqueta} sí te alcanza (te quedan ` +
+          `$${formatoCentavos(disponible(c.alternativa))}): si lo sacas de ahí, di ` +
+          `"${c.marcador_alternativa}" al registrarlo.`,
+      );
+    }
+  } else if (c.veredicto === "difiere") {
+    lineas = [
+      `⏸️ Mejor difiérelo. Te alcanza, pero en ${b.etiqueta} quedarías con ` +
+        `$${formatoCentavos(c.disponible_despues_centavos)}${ritmo(c)}.`,
+    ];
+  } else {
+    lineas = [
+      `✅ Sí, te alcanza. En ${b.etiqueta} te quedan $${formatoCentavos(disponible(b))} de ` +
+        `$${formatoCentavos(b.asignado_centavos)}; con este gasto quedarías con ` +
+        `$${formatoCentavos(c.disponible_despues_centavos)}${ritmo(c)}.`,
+    ];
+  }
+  if (categoriaDudosa) lineas.push(`${DUDOSO} Lo tomé como ${categoria}; si es otra cosa, la respuesta cambia.`);
+  lineas.push("No guardé nada. Si decides hacerlo, escríbemelo como gasto.");
+  return lineas.join("\n\n");
+}
+
+function consultaSinMonto() {
+  return (
+    "No encontré cuánto sería el gasto en tu mensaje. " +
+    "Escríbemelo con el monto, por ejemplo: /puedo 30 concierto"
+  );
+}
+
 // <solo-tests>
 module.exports = {
   BIENVENIDA,
+  consultaSinMonto,
   descartado,
   errorAlGuardar,
   expirado,
@@ -202,6 +258,7 @@ module.exports = {
   presupuesto,
   porcentaje,
   reporte,
+  respuestaConsulta,
   resumen,
   sinPresupuesto,
 };

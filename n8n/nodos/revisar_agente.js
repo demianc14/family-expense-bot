@@ -1,7 +1,7 @@
 // Qué decidió el agente, revisado por código. No se confía en que el agente
 // cuente sus propios problemas: las tools que llamó se auditan acá.
 const preparar = $("Preparar").first().json;
-const ACCIONES = ["proponer", "preguntar", "reporte", "presupuesto", "responder"];
+const ACCIONES = ["proponer", "preguntar", "reporte", "presupuesto", "consultar", "responder"];
 
 let salida = $json.output;
 if (typeof salida === "string") {
@@ -29,21 +29,22 @@ if (!salida || typeof salida !== "object" || !ACCIONES.includes(salida.accion)) 
 const texto = typeof salida.mensaje === "string" ? strip(salida.mensaje) : "";
 const vacioANull = (v) => (typeof v === "string" && strip(v) ? v : null);
 
+// Solo lo que el agente afirma. Quién escribe, el texto y la fecha de hoy los
+// pone el código desde el workflow, nunca desde el LLM.
+const afirmado = () => ({
+  monto: vacioANull(salida.monto),
+  categoria: vacioANull(salida.categoria),
+  fecha: vacioANull(salida.fecha),
+  quien_paga: vacioANull(salida.quien_paga),
+  descripcion: typeof salida.descripcion === "string" ? salida.descripcion : "",
+  confianza_monto: salida.confianza_monto,
+  confianza_categoria: salida.confianza_categoria,
+  confianza_fecha: salida.confianza_fecha,
+  confianza_quien_paga: salida.confianza_quien_paga,
+});
+
 if (salida.accion === "proponer") {
-  // Solo lo que el agente afirma. Quién escribe, el texto y la fecha de hoy
-  // los pone la compuerta desde el workflow, nunca desde el LLM.
-  const respuesta = {
-    monto: vacioANull(salida.monto),
-    categoria: vacioANull(salida.categoria),
-    fecha: vacioANull(salida.fecha),
-    quien_paga: vacioANull(salida.quien_paga),
-    descripcion: typeof salida.descripcion === "string" ? salida.descripcion : "",
-    confianza_monto: salida.confianza_monto,
-    confianza_categoria: salida.confianza_categoria,
-    confianza_fecha: salida.confianza_fecha,
-    confianza_quien_paga: salida.confianza_quien_paga,
-  };
-  return [{ json: { ruta: "proponer", respuesta, aviso, problemas } }];
+  return [{ json: { ruta: "proponer", respuesta: afirmado(), aviso, problemas } }];
 }
 
 if (salida.accion === "preguntar" && texto) {
@@ -52,6 +53,9 @@ if (salida.accion === "preguntar" && texto) {
 }
 
 cerrar();
+if (salida.accion === "consultar") {
+  return [{ json: { ruta: "consultar", respuesta: afirmado(), aviso, problemas } }];
+}
 if (salida.accion === "presupuesto") {
   return [{ json: { ruta: "presupuesto", aviso, problemas } }];
 }

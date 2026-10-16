@@ -230,6 +230,7 @@ Decide qué hacer con cada mensaje y entrega tu decisión con format_final_json_
 - "preguntar": falta el monto, no se entiende, o trae varios gastos. Pregunta en \`mensaje\`, corto y amable; si son varios gastos, pide que los mande uno por uno.
 - "reporte": la persona quiere ver cuánto se ha gastado. Si nombra un mes, ponlo en \`mes\` como YYYY-MM.
 - "presupuesto": la persona pregunta cuánto le queda o cómo va su presupuesto o algún bolsillo (necesarios, fondo, lujos, ahorro).
+- "consultar": la persona pregunta si puede o le conviene hacer un gasto que todavía no hizo ("¿puedo gastar 30 en un concierto?"). Llena los campos del gasto igual que en "proponer"; no se guarda nada y la respuesta la calcula el sistema con su presupuesto.
 - "responder": saludos o cosas que no son gastos. Responde corto en \`mensaje\`.
 
 Si dudas del monto o de quién paga, puedes llamar a verificar_gasto con los campos que propondrías: te dice qué entendería el verificador. Si el monto no aparece en lo que escribió la persona, no lo inventes: pregunta.
@@ -253,7 +254,7 @@ const ESQUEMA_SALIDA = {
   properties: {
     accion: {
       type: "string",
-      enum: ["proponer", "preguntar", "reporte", "presupuesto", "responder"],
+      enum: ["proponer", "preguntar", "reporte", "presupuesto", "consultar", "responder"],
     },
     mensaje: { type: "string", description: "Texto para la persona. Vacío en proponer y reporte." },
     monto: { type: "string", description: "Solo el número, tal como aparece en el mensaje." },
@@ -333,8 +334,9 @@ telegramTexto(
     "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, " +
     'dilo: "gasolina de la casa".\n\n' +
     "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n" +
-    "Escribe /reporte para ver el total del mes y /presupuesto para ver " +
-    "cuánto te queda en cada bolsillo.",
+    "Escribe /reporte para ver el total del mes, /presupuesto para ver " +
+    "cuánto te queda en cada bolsillo, y pregúntame si te conviene un gasto: " +
+    '"¿puedo gastar 30 en un concierto?".',
   ),
 );
 conectar("Ruta", "Bienvenida", { salida: 0 });
@@ -439,7 +441,15 @@ conectar("Clasificar fallo", "Avisar fallo");
 code("Revisar agente", [X(7), Y(2)], "revisar_agente");
 conectar("Agente", "Revisar agente", { salida: 0 });
 
-const RUTAS_AGENTE = ["proponer", "enviar", "reporte", "no_propuesto", "fallo", "presupuesto"];
+const RUTAS_AGENTE = [
+  "proponer",
+  "enviar",
+  "reporte",
+  "no_propuesto",
+  "fallo",
+  "presupuesto",
+  "consultar",
+];
 ruta("Según la acción", [X(8), Y(2)], RUTAS_AGENTE.length,
   `={{ ${JSON.stringify(RUTAS_AGENTE)}.indexOf($json.ruta) }}`);
 conectar("Revisar agente", "Según la acción");
@@ -452,6 +462,15 @@ conectar("Según la acción", "Leer gastos", { salida: 2 });
 // salida 3 (no_propuesto) va al embudo, más abajo
 conectar("Según la acción", "Avisar fallo", { salida: 4 });
 conectar("Según la acción", "Leer gastos del presupuesto", { salida: 5 });
+
+// ¿Puedo gastar esto? El agente solo extrae el gasto hipotético; el veredicto lo
+// calcula el código con el presupuesto, y nada se guarda ni cuenta como intento.
+leerTabla("Leer gastos de la consulta", [X(9), Y(-2)], TABLA_GASTOS);
+code("Evaluar consulta", [X(10), Y(-2)], "evaluar_consulta");
+telegramTexto("Enviar consulta", [X(11), Y(-2)], textoDe("$json.mensaje"));
+conectar("Según la acción", "Leer gastos de la consulta", { salida: 6 });
+conectar("Leer gastos de la consulta", "Evaluar consulta");
+conectar("Evaluar consulta", "Enviar consulta");
 
 const ESTADOS_COMPUERTA = ["ofrecer", "sin_monto", "contrato_roto"];
 ruta("¿Se puede ofrecer?", [X(10), Y(2)], ESTADOS_COMPUERTA.length,

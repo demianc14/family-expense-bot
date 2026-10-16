@@ -423,3 +423,37 @@ test("presupuesto: si el agente lo pide, sale el mismo texto y los montos no lle
   assert.equal(gemini.length, 1);
   assert.doesNotMatch(JSON.stringify(gemini), /1,200|360\.00|240\.00/);
 });
+
+// --- ¿Puedo gastar esto? ---------------------------------------------------------
+// En este punto demian lleva 30 en el fondo (210 libres) y nada en lujos (240).
+
+test("consulta: si no cabe, el veredicto es NO, no se guarda nada y los montos no llegan al modelo", async () => {
+  await escenario();
+  const gastosAntes = filas("gastos").length;
+  const extraccionesAntes = filas("extracciones").length;
+  await guion(salida({ accion: "consultar", monto: "250", categoria: "entretenimiento", descripcion: "concierto" }));
+  await escribir(DEMIAN, "¿puedo gastar 250 en un concierto?");
+  const respuesta = await esperarMensaje((m) => m.cuerpo.text.startsWith("❌"), "el veredicto");
+  assert.match(respuesta.cuerpo.text, /en Lujos te quedan \$240\.00 y el gasto es de \$250\.00; te pasarías por \$10\.00/);
+  assert.doesNotMatch(respuesta.cuerpo.text, /Fondo personal sí te alcanza/, "en el fondo quedan 210: tampoco cabe");
+  assert.match(respuesta.cuerpo.text, /No guardé nada/);
+  assert.equal((await mensajes()).some(esConfirmacion), false, "una consulta no pide confirmar");
+  assert.equal(filas("gastos").length, gastosAntes);
+  assert.equal(filas("extracciones").length, extraccionesAntes, "una consulta no es un intento");
+  assert.doesNotMatch(JSON.stringify((await control("estado")).gemini), /240\.00|210\.00/);
+});
+
+test("consulta: un gasto chico cabe y el veredicto es SÍ", async () => {
+  await escenario();
+  await guion(salida({ accion: "consultar", monto: "1", categoria: "entretenimiento", descripcion: "chicle" }));
+  await escribir(DEMIAN, "¿puedo gastar 1 en un chicle?");
+  const respuesta = await esperarMensaje((m) => m.cuerpo.text.startsWith("✅"), "el veredicto");
+  assert.match(respuesta.cuerpo.text, /En Lujos te quedan \$240\.00 de \$240\.00; con este gasto quedarías con \$239\.00/);
+});
+
+test("consulta: un monto que no escribiste no se evalúa", async () => {
+  await escenario();
+  await guion(salida({ accion: "consultar", monto: "80", categoria: "entretenimiento", descripcion: "concierto" }));
+  await escribir(DEMIAN, "¿me alcanza para el concierto?");
+  await esperarMensaje((m) => m.cuerpo.text.includes("No encontré cuánto sería el gasto"), "el pedido del monto");
+});

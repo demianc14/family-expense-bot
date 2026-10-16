@@ -757,6 +757,57 @@ def test_la_confirmacion_muestra_el_mismo_bolsillo() -> None:
     comparar("resumen_con_bolsillo", entradas, py)
 
 
+def test_la_respuesta_a_una_consulta_es_la_misma() -> None:
+    from decimal import Decimal
+
+    from family_expense_bot.dashboard.presupuesto import evaluar_gasto
+
+    def py(
+        filas: Any,
+        persona: str,
+        ingreso: str,
+        monto: str,
+        categoria: str,
+        texto: str,
+        hoy: str,
+        dudosa: bool,
+    ) -> str:
+        dia = date.fromisoformat(hoy)
+        resumen = _resumen_py(filas, persona, ingreso, dia.year, dia.month)
+        bolsillo = TAXONOMIA.bolsillo_de(categoria, texto)
+        consulta = evaluar_gasto(resumen, TAXONOMIA, bolsillo, Decimal(monto), dia)
+        return mensajes.respuesta_consulta(consulta, categoria, dudosa)
+
+    rnd = random.Random(21)
+    casos = [
+        ("entretenimiento", "concierto"),
+        ("comida_fuera", "pizza"),
+        ("personal", "curso"),
+        ("alimentacion", "super"),
+        ("ropa", "camisa del fondo"),
+        ("otros", "algo"),
+    ]
+    entradas = []
+    for semilla in (7, 8, 9):
+        filas = _filas_presupuesto(semilla, 40)
+        for hoy in ("2026-10-01", "2026-10-16", "2026-10-30", "2026-10-31", "2026-09-30"):
+            for categoria, texto in casos:
+                monto = rnd.choice(["1", "30", "116.13", "123.88", "239.99", "500", "12.5"])
+                entradas.append(
+                    [
+                        filas,
+                        "demian",
+                        rnd.choice(["1200", "400", "1000.01"]),
+                        monto,
+                        categoria,
+                        texto,
+                        hoy,
+                        rnd.random() < 0.3,
+                    ]
+                )
+    comparar("consulta", entradas, py)
+
+
 # --- Tests propios del port (node --test) ---------------------------------------
 
 
