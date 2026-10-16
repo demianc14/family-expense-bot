@@ -5,6 +5,10 @@ Bot de Telegram para que una familia registre gastos en texto libre
 quién corresponde el gasto y una descripción con un LLM gratuito, pide
 confirmación y guarda el gasto para un reporte mensual.
 
+Empezó como un bot familiar y con el [presupuesto](#presupuesto-30302020) se
+volvió también una herramienta de finanzas personales: cuánto entra al mes,
+cuánto se aparta y cuánto queda para cada tipo de gasto. El nombre se quedó.
+
 > **Estado: Fase 4.** Pipeline completo: captura → extracción verificada →
 > confirmación humana → almacenamiento → reporte mensual con métrica de calidad.
 >
@@ -203,7 +207,12 @@ Tres métricas salen de ahí:
 ## Presupuesto (30/30/20/20)
 
 Con un ingreso mensual configurado, el bot reparte ese ingreso en cuatro
-bolsillos y lleva la cuenta de cuánto se ha gastado en cada uno:
+bolsillos y lleva la cuenta de cuánto se ha gastado en cada uno.
+
+**Cómo se usa en el día a día.** El día que entra el sueldo, el 30% sale
+directo a ahorro e inversión y deja de estar disponible: por eso ese bolsillo
+no registra gastos, solo dice cuánto apartar. Con lo que queda se vive el mes,
+y cada gasto que se confirma descuenta del bolsillo que le corresponde.
 
 | Bolsillo | % | Qué cuenta contra él |
 |---|---|---|
@@ -238,6 +247,25 @@ INGRESOS_MENSUALES=demian:1200
 - **Centavos exactos.** El reparto se hace en centavos enteros y los centavos
   que sobran del redondeo van a los primeros bolsillos: 1000.01 repartido en
   30/30/20/20 suma exactamente 1000.01.
+
+### De dónde sale el reparto
+
+La idea viene del video de Mark Tilbury
+[*How To Manage Your Money Like The 1%*](https://www.youtube.com/watch?v=QThz1B8SHmc),
+que propone repartir el ingreso en 25/15/50/10. El de este bot es una
+adaptación personal:
+
+| Tilbury | % | Acá | % |
+|---|---|---|---|
+| Crecimiento (inversión) | 25 | Ahorro e inversión | 30 |
+| Estabilidad (fondo de emergencia) | 15 | Fondo personal | 20 |
+| Esenciales | 50 | Necesarios | 30 |
+| Disfrute | 10 | Lujos | 20 |
+
+La diferencia más grande no es de números: en Tilbury el 15% es un colchón para
+imprevistos que normalmente no se toca, y acá el fondo personal sí se gasta, en
+cosas para uno mismo (cursos, metas). Volver al reparto original es cambiar
+cuatro porcentajes en `config/categories.yaml`; la validación exige que sumen 100.
 
 Limitaciones: el ingreso es fijo (si un mes cobras distinto, hay que cambiar
 `.env`), el ahorro no se registra (el bot no sabe si de verdad lo apartaste),
