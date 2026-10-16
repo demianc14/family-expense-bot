@@ -2,10 +2,16 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
-from family_expense_bot.dashboard.presupuesto import repartir, resumen_presupuesto
+from family_expense_bot.dashboard.presupuesto import (
+    Veredicto,
+    evaluar_gasto,
+    repartir,
+    resumen_presupuesto,
+)
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.storage.repository import GastoRegistrado
 
@@ -108,3 +114,72 @@ def test_pasarse_del_bolsillo_queda_marcado() -> None:
     assert lujos is not None
     assert lujos.excedido
     assert lujos.disponible == Decimal("-10.00")
+
+
+# --- ¿Puedo gastar esto? ---------------------------------------------------------
+
+
+# Octubre tiene 31 días: el 16 faltan 15, y a lujos (240) le tocan 240*15/31 = 116.13.
+HOY = date(2026, 10, 16)
+
+
+def _consulta(
+    monto: str,
+    categoria: str = "entretenimiento",
+    *gastos: GastoRegistrado,
+    texto: str = "x",
+    hoy: date = HOY,
+) -> Any:
+    r = resumen_presupuesto(gastos, TAXONOMIA, "demian", Decimal("1200"), hoy.year, hoy.month)
+    bolsillo = TAXONOMIA.bolsillo_de(categoria, texto)
+    return evaluar_gasto(r, TAXONOMIA, bolsillo, Decimal(monto), hoy)
+
+
+def test_si_cuando_deja_lo_que_toca_para_el_resto_del_mes() -> None:
+    c = _consulta("30")
+    assert c.veredicto is Veredicto.SI
+    assert c.dias_restantes == 15
+    assert c.reserva == Decimal("116.13")
+    assert c.disponible_despues == Decimal("210.00")
+
+
+def test_justo_en_la_reserva_todavia_es_si() -> None:
+    assert _consulta("123.87").veredicto is Veredicto.SI  # quedan 116.13 exactos
+
+
+def test_difiere_si_cabe_pero_adelanta_el_gasto_del_mes() -> None:
+    c = _consulta("123.88")
+    assert c.veredicto is Veredicto.DIFIERE
+    assert c.alternativa is None, "solo se sugiere otro bolsillo cuando no cabe"
+
+
+def test_no_si_el_bolsillo_se_pasa_y_sugiere_el_fondo() -> None:
+    c = _consulta("30", "entretenimiento", _gasto("230", "comida_fuera"))
+    assert c.veredicto is Veredicto.NO
+    assert c.disponible_despues == Decimal("-20.00")
+    assert c.alternativa is not None and c.alternativa.nombre == "fondo"
+    assert c.marcador_alternativa == "del fondo"
+
+
+def test_no_sugiere_el_fondo_si_tampoco_alcanza_ahi() -> None:
+    c = _consulta("250", "entretenimiento")
+    assert c.veredicto is Veredicto.NO
+    assert c.alternativa is None
+
+
+def test_si_el_gasto_ya_es_del_fondo_no_se_sugiere_a_si_mismo() -> None:
+    c = _consulta("300", "personal")
+    assert c.veredicto is Veredicto.NO
+    assert c.alternativa is None
+
+
+def test_el_ultimo_dia_del_mes_basta_con_que_quepa() -> None:
+    c = _consulta("239", hoy=date(2026, 10, 31))
+    assert c.dias_restantes == 0
+    assert c.veredicto is Veredicto.SI
+
+
+def test_una_categoria_sin_bolsillo_no_se_puede_evaluar() -> None:
+    c = _consulta("10", "otros")
+    assert c.veredicto is Veredicto.SIN_BOLSILLO
+    assert c.bolsillo is None

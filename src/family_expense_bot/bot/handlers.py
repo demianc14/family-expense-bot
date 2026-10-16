@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
+from typing import Any
 from uuid import uuid4
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -25,12 +26,12 @@ from telegram.ext import (
 )
 
 from family_expense_bot.bot import mensajes
-from family_expense_bot.dashboard.presupuesto import resumen_presupuesto
+from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_presupuesto
 from family_expense_bot.dashboard.report import inicio_y_fin_utc, rango_del_mes, resumen_mensual
 from family_expense_bot.extraction.categorias import Taxonomia
 from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.extraction.parser import ClienteLLM, extraer
-from family_expense_bot.extraction.schema import GastoExtraido
+from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.repository import (
     GastoRegistrado,
     RepositorioExtracciones,
@@ -140,25 +141,8 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     espera = await mensaje.reply_text(mensajes.PROCESANDO)
     etiquetas = servicios.taxonomia.etiquetas
-
-    try:
-        gasto = await asyncio.wait_for(
-            asyncio.to_thread(
-                extraer, mensaje.text, servicios.cliente, servicios.taxonomia, remitente
-            ),
-            timeout=servicios.timeout_s,
-        )
-    except TimeoutError:
-        log.warning("La extracción superó %s s", servicios.timeout_s)
-        await espera.edit_text(mensajes.demoro_demasiado())
-        return
-    except CuotaAgotada:
-        log.warning("Cuota del LLM agotada")
-        await espera.edit_text(mensajes.cuota_agotada())
-        return
-    except Exception:  # el bot nunca debe morir por una respuesta rara del LLM
-        log.exception("Falló la extracción")
-        await espera.edit_text(mensajes.error_de_extraccion())
+    gasto = await _extraer_o_avisar(espera, mensaje.text, servicios, remitente)
+    if gasto is None:
         return
 
     if gasto.monto is None:
@@ -175,6 +159,27 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         mensajes.pedir_confirmacion(gasto, etiquetas, bolsillo=_bolsillo(servicios, gasto)),
         reply_markup=_botones(token, pendiente, servicios.taxonomia),
     )
+
+
+async def _extraer_o_avisar(
+    espera: Any, texto: str, servicios: Servicios, remitente: str
+) -> GastoExtraido | None:
+    """Extrae con límite de tiempo. Si falla, lo dice en `espera` y devuelve None."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(extraer, texto, servicios.cliente, servicios.taxonomia, remitente),
+            timeout=servicios.timeout_s,
+        )
+    except TimeoutError:
+        log.warning("La extracción superó %s s", servicios.timeout_s)
+        await espera.edit_text(mensajes.demoro_demasiado())
+    except CuotaAgotada:
+        log.warning("Cuota del LLM agotada")
+        await espera.edit_text(mensajes.cuota_agotada())
+    except Exception:  # el bot nunca debe morir por una respuesta rara del LLM
+        log.exception("Falló la extracción")
+        await espera.edit_text(mensajes.error_de_extraccion())
+    return None
 
 
 async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -324,6 +329,56 @@ async def presupuesto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.effective_message.reply_text(mensajes.presupuesto(resumen))
 
 
+async def consultar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/puedo 30 concierto: ¿conviene este gasto, según el presupuesto del mes?
+
+    No guarda nada ni cuenta como intento para el reporte de calidad: no es un
+    registro. El monto pasa por la misma verificación que un gasto real (tiene
+    que estar escrito en el mensaje) y el veredicto lo calcula el código.
+    """
+    servicios = _servicios(context)
+    mensaje = update.effective_message
+    if mensaje is None:
+        return
+    remitente = _rol(update, servicios)
+    if remitente is None:
+        return
+    ingreso = servicios.ingresos.get(remitente)
+    if ingreso is None:
+        await mensaje.reply_text(mensajes.sin_presupuesto())
+        return
+    texto = " ".join(context.args or [])
+    if not texto.strip():
+        await mensaje.reply_text(mensajes.consulta_sin_monto())
+        return
+
+    espera = await mensaje.reply_text(mensajes.PROCESANDO)
+    gasto = await _extraer_o_avisar(espera, texto, servicios, remitente)
+    if gasto is None:
+        return
+    if gasto.monto is None or gasto.confianza_monto is Confianza.BAJA:
+        await espera.edit_text(mensajes.consulta_sin_monto())
+        return
+
+    hoy = date.today()
+    desde, hasta = rango_del_mes(hoy.year, hoy.month)
+    resumen = resumen_presupuesto(
+        servicios.repositorio.listar(desde=desde, hasta=hasta),
+        servicios.taxonomia,
+        remitente,
+        ingreso,
+        hoy.year,
+        hoy.month,
+    )
+    bolsillo = servicios.taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
+    consulta = evaluar_gasto(resumen, servicios.taxonomia, bolsillo, gasto.monto, hoy)
+    await espera.edit_text(
+        mensajes.respuesta_consulta(
+            consulta, gasto.categoria, gasto.confianza_categoria is not Confianza.ALTA
+        )
+    )
+
+
 async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Total del mes en curso, por categoría, ahí mismo en el chat."""
     servicios = _servicios(context)
@@ -392,6 +447,7 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reporte", reporte))
     app.add_handler(CommandHandler("presupuesto", presupuesto))
+    app.add_handler(CommandHandler("puedo", consultar))
     app.add_handler(CallbackQueryHandler(responder_confirmacion))
     app.add_handler(
         MessageHandler(

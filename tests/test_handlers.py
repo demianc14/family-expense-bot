@@ -18,6 +18,7 @@ from family_expense_bot.bot.handlers import (
     Servicios,
     _botones,
     build_application,
+    consultar,
     obtener_identidad,
     presupuesto,
     registrar_gasto,
@@ -648,3 +649,83 @@ def test_el_comando_presupuesto_esta_registrado(servicios: Servicios) -> None:
         for c in h.commands
     }
     assert {"start", "reporte", "presupuesto"} <= comandos
+
+
+# --- /puedo -----------------------------------------------------------------------
+
+
+class _Hoy16DeOctubre(date):
+    @classmethod
+    def today(cls) -> "_Hoy16DeOctubre":
+        return cls(2026, 10, 16)
+
+
+def _consulta(servicios: Servicios, args: list[str], user_id: int = DEMIAN) -> Any:
+    update = _update("/puedo " + " ".join(args), user_id=user_id)
+    contexto = _contexto(servicios)
+    contexto.args = args
+    return update, contexto
+
+
+async def test_puedo_responde_con_el_veredicto_y_no_guarda_nada(
+    engine: Engine, extracciones: RepositorioExtracciones, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("family_expense_bot.bot.handlers.date", _Hoy16DeOctubre)
+    cliente = ClienteFalso(_respuesta(monto="30", categoria="entretenimiento", fecha=None))
+    servicios = _servicios_con(engine, cliente, ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, ["30", "concierto"])
+    await consultar(update, contexto)
+
+    texto = update.espera.edit_text.await_args.args[0]
+    assert texto.startswith("✅ Sí, te alcanza. En Lujos te quedan $240.00 de $240.00")
+    assert "No guardé nada" in texto
+    assert servicios.repositorio.listar() == []
+    assert extracciones.listar(_INICIO, _FIN) == [], "una consulta no es un intento de registro"
+    assert contexto.user_data == {}, "no queda nada pendiente de confirmar"
+
+
+async def test_puedo_no_opina_sobre_un_monto_que_no_escribiste(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ClienteFalso(_respuesta(monto="50")), ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, ["el", "concierto"])
+    await consultar(update, contexto)
+    update.espera.edit_text.assert_awaited_once_with(mensajes.consulta_sin_monto())
+
+
+async def test_puedo_sin_texto_explica_como_usarlo(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, [])
+    await consultar(update, contexto)
+    update.effective_message.reply_text.assert_awaited_once_with(mensajes.consulta_sin_monto())
+
+
+async def test_puedo_sin_ingreso_lo_explica(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, ["30", "concierto"], user_id=MAMA)
+    await consultar(update, contexto)
+    update.effective_message.reply_text.assert_awaited_once_with(mensajes.sin_presupuesto())
+
+
+async def test_puedo_ignora_a_desconocidos(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, ["30", "concierto"], user_id=DESCONOCIDO)
+    await consultar(update, contexto)
+    update.effective_message.reply_text.assert_not_awaited()
+
+
+async def test_puedo_avisa_si_se_agota_la_cuota(engine: Engine) -> None:
+    servicios = _servicios_con(engine, ClienteSinCuota(), ingresos=INGRESOS)
+    update, contexto = _consulta(servicios, ["30", "concierto"])
+    await consultar(update, contexto)
+    update.espera.edit_text.assert_awaited_once_with(mensajes.cuota_agotada())
+
+
+def test_el_comando_puedo_esta_registrado(servicios: Servicios) -> None:
+    app = build_application("123:fake-token", servicios)
+    comandos = {
+        c
+        for g in app.handlers.values()
+        for h in g
+        if isinstance(h, CommandHandler)
+        for c in h.commands
+    }
+    assert "puedo" in comandos

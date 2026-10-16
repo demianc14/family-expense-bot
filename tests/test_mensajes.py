@@ -147,3 +147,71 @@ def test_reporte_de_presupuesto() -> None:
         "Necesarios de octubre: quedan $239.50 de $360.00."
     )
     assert "ningún bolsillo" in mensajes.linea_de_bolsillo(None, 10)
+
+
+def test_respuestas_a_una_consulta() -> None:
+    from datetime import date
+    from decimal import Decimal
+
+    from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_presupuesto
+    from family_expense_bot.extraction.categorias import cargar_taxonomia
+
+    taxonomia = cargar_taxonomia()
+    vacio = resumen_presupuesto([], taxonomia, "demian", Decimal("1200"), 2026, 10)
+
+    def texto(monto: str, bolsillo: str | None, dia: int, dudosa: bool = False) -> str:
+        consulta = evaluar_gasto(vacio, taxonomia, bolsillo, Decimal(monto), date(2026, 10, dia))
+        return mensajes.respuesta_consulta(consulta, "entretenimiento", dudosa)
+
+    pie = "No guardé nada. Si decides hacerlo, escríbemelo como gasto."
+    assert texto("30", "lujos", 16) == (
+        "✅ Sí, te alcanza. En Lujos te quedan $240.00 de $240.00; con este gasto quedarías "
+        "con $210.00, y a los 15 días que faltan del mes les tocan $116.13.\n\n" + pie
+    )
+    assert texto("235", "lujos", 30) == (
+        "⏸️ Mejor difiérelo. Te alcanza, pero en Lujos quedarías con $5.00, y al día que "
+        "falta del mes le tocan $7.74.\n\n" + pie
+    )
+    assert texto("239", "lujos", 31) == (
+        "✅ Sí, te alcanza. En Lujos te quedan $240.00 de $240.00; con este gasto quedarías "
+        "con $1.00.\n\n" + pie
+    )
+    assert texto("241", "lujos", 16) == (
+        "❌ No te lo recomiendo: en Lujos te quedan $240.00 y el gasto es de $241.00; te "
+        "pasarías por $1.00.\n\n" + pie
+    )
+    assert texto("10", None, 16, dudosa=True) == (
+        "Un gasto de entretenimiento no cuenta en ningún bolsillo de tu presupuesto, así que "
+        "no tengo con qué compararlo.\n\n"
+        "❓ Lo tomé como entretenimiento; si es otra cosa, la respuesta cambia.\n\n" + pie
+    )
+
+
+def test_la_consulta_sugiere_el_fondo_cuando_no_cabe() -> None:
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_presupuesto
+    from family_expense_bot.extraction.categorias import cargar_taxonomia
+    from family_expense_bot.storage.repository import GastoRegistrado
+
+    taxonomia = cargar_taxonomia()
+    lujo = GastoRegistrado(
+        id=1,
+        monto=Decimal("230"),
+        categoria="comida_fuera",
+        atribuido_a="demian",
+        fecha=date(2026, 10, 2),
+        descripcion="x",
+        texto_original="x",
+        registrado_por=1,
+        creado_en=datetime(2026, 10, 2, tzinfo=UTC),
+        corregido_manualmente=False,
+        anulado=False,
+    )
+    r = resumen_presupuesto([lujo], taxonomia, "demian", Decimal("1200"), 2026, 10)
+    consulta = evaluar_gasto(r, taxonomia, "lujos", Decimal("30"), date(2026, 10, 16))
+    assert (
+        "En tu Fondo personal sí te alcanza (te quedan $240.00): si lo sacas de ahí, di "
+        '"del fondo" al registrarlo.'
+    ) in mensajes.respuesta_consulta(consulta, "entretenimiento", False)

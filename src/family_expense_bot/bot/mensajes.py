@@ -6,7 +6,12 @@ alguien decide si guardar un gasto. Por eso lo dudoso se marca, no se esconde.
 
 from collections.abc import Collection, Mapping
 
-from family_expense_bot.dashboard.presupuesto import EstadoBolsillo, ResumenPresupuesto
+from family_expense_bot.dashboard.presupuesto import (
+    Consulta,
+    EstadoBolsillo,
+    ResumenPresupuesto,
+    Veredicto,
+)
 from family_expense_bot.dashboard.report import ResumenMensual
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.repository import GastoRegistrado
@@ -145,8 +150,9 @@ BIENVENIDA = (
     "Si no dices de quién es, asumo que es tuyo. Para gastos compartidos, "
     'dilo: "gasolina de la casa".\n\n'
     "Te muestro lo que entendí y solo guardo si me dices que sí.\n\n"
-    "Escribe /reporte para ver el total del mes y /presupuesto para ver "
-    "cuánto te queda en cada bolsillo."
+    "Escribe /reporte para ver el total del mes, /presupuesto para ver "
+    "cuánto te queda en cada bolsillo y /puedo 30 concierto para saber si te "
+    "conviene un gasto."
 )
 
 
@@ -215,4 +221,58 @@ def sin_presupuesto() -> str:
     return (
         "No tengo tu ingreso mensual, así que no puedo armar tu presupuesto. "
         "Quien mantiene el bot lo configura en INGRESOS_MENSUALES."
+    )
+
+
+def _ritmo(consulta: Consulta) -> str:
+    """Lo que le toca al bolsillo para lo que queda del mes. Vacío el último día."""
+    n = consulta.dias_restantes
+    if n == 0:
+        return ""
+    if n == 1:
+        return f", y al día que falta del mes le tocan ${consulta.reserva:,.2f}"
+    return f", y a los {n} días que faltan del mes les tocan ${consulta.reserva:,.2f}"
+
+
+def respuesta_consulta(consulta: Consulta, categoria: str, categoria_dudosa: bool) -> str:
+    """¿Puedo gastar esto? El veredicto lo calcula evaluar_gasto(), no el LLM."""
+    b = consulta.bolsillo
+    if consulta.veredicto is Veredicto.SIN_BOLSILLO or b is None:
+        lineas = [
+            f"Un gasto de {categoria} no cuenta en ningún bolsillo de tu presupuesto, "
+            "así que no tengo con qué compararlo."
+        ]
+    elif consulta.veredicto is Veredicto.NO:
+        assert consulta.disponible_despues is not None
+        lineas = [
+            f"❌ No te lo recomiendo: en {b.etiqueta} te quedan ${b.disponible:,.2f} y el gasto "
+            f"es de ${consulta.monto:,.2f}; te pasarías por ${-consulta.disponible_despues:,.2f}."
+        ]
+        if consulta.alternativa is not None:
+            lineas.append(
+                f"En tu {consulta.alternativa.etiqueta} sí te alcanza (te quedan "
+                f"${consulta.alternativa.disponible:,.2f}): si lo sacas de ahí, di "
+                f'"{consulta.marcador_alternativa}" al registrarlo.'
+            )
+    elif consulta.veredicto is Veredicto.DIFIERE:
+        lineas = [
+            f"⏸️ Mejor difiérelo. Te alcanza, pero en {b.etiqueta} quedarías con "
+            f"${consulta.disponible_despues:,.2f}{_ritmo(consulta)}."
+        ]
+    else:
+        lineas = [
+            f"✅ Sí, te alcanza. En {b.etiqueta} te quedan ${b.disponible:,.2f} de "
+            f"${b.asignado:,.2f}; con este gasto quedarías con "
+            f"${consulta.disponible_despues:,.2f}{_ritmo(consulta)}."
+        ]
+    if categoria_dudosa:
+        lineas.append(f"{DUDOSO} Lo tomé como {categoria}; si es otra cosa, la respuesta cambia.")
+    lineas.append("No guardé nada. Si decides hacerlo, escríbemelo como gasto.")
+    return "\n\n".join(lineas)
+
+
+def consulta_sin_monto() -> str:
+    return (
+        "No encontré cuánto sería el gasto en tu mensaje. "
+        "Escríbemelo con el monto, por ejemplo: /puedo 30 concierto"
     )
