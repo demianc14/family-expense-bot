@@ -113,9 +113,9 @@ family-expense-bot --exportar   # CSV para Power BI (queda fuera de git)
 family-expense-bot           # levanta el bot (modo polling)
 ```
 
-En Telegram, `/reporte` devuelve el total del mes por categoría y
-`/presupuesto`, cuánto te queda en cada bolsillo (ver
-[Presupuesto](#presupuesto-30302020)).
+En Telegram, `/reporte` devuelve el total del mes por categoría,
+`/presupuesto` cuánto te queda en cada bolsillo, y `/puedo 30 concierto` si te
+conviene un gasto (ver [Presupuesto](#presupuesto-30302020)).
 
 El token vive solo en `.env`. Si alguna vez se filtra (por ejemplo, pegado en
 un chat o en una captura), revócalo con `/revoke` en @BotFather: quien lo
@@ -247,6 +247,30 @@ INGRESOS_MENSUALES=demian:1200
 - **Centavos exactos.** El reparto se hace en centavos enteros y los centavos
   que sobran del redondeo van a los primeros bolsillos: 1000.01 repartido en
   30/30/20/20 suma exactamente 1000.01.
+
+### ¿Puedo gastar esto?
+
+Antes de gastar se le puede preguntar al bot: `/puedo 30 concierto` en Python,
+o "¿puedo gastar 30 en un concierto?" en lenguaje natural en n8n. El LLM solo
+extrae el gasto, con el monto tal como está escrito (si no está, no opina), y
+la respuesta la calcula el código con el presupuesto del mes, por el **ritmo**
+del bolsillo:
+
+| Veredicto | Cuándo |
+|---|---|
+| ❌ No | El bolsillo se pasaría. Si en el fondo personal sí cabe, lo sugiere ("di 'del fondo' al registrarlo"). |
+| ⏸️ Difiérelo | Cabe, pero deja el bolsillo con menos de lo que le toca a los días que faltan del mes (asignado × días restantes ÷ días del mes). |
+| ✅ Sí | Cabe y deja al menos eso. |
+
+> *"⏸️ Mejor difiérelo. Te alcanza, pero en Lujos quedarías con $15.00, y a
+> los 14 días que faltan del mes les tocan $37.33."* (datos sintéticos)
+
+Una consulta no guarda nada, no pide confirmación ni cuenta como intento en
+el reporte de calidad. Es aritmética sobre el presupuesto que uno mismo
+definió, no asesoría financiera. La regla del ritmo es estricta a principio de
+mes: el día 2 casi cualquier gasto grande sale "difiérelo", porque todavía
+faltan casi todos los días. Es a propósito (gastar parejo), pero conviene
+saberlo.
 
 ### De dónde sale el reparto
 
@@ -392,7 +416,10 @@ se guarda**: eso lo deciden una compuerta de código y una persona.
   `accion: "reporte"` y el workflow manda el mismo reporte determinista de
   `/reporte`. El E2E verifica que los montos no aparezcan en ningún request.
   El presupuesto sigue la misma regla: `accion: "presupuesto"` lleva a la
-  misma rama determinista que `/presupuesto`, con paridad contra Python.
+  misma rama determinista que `/presupuesto`, con paridad contra Python. Y la
+  consulta igual: `accion: "consultar"` solo extrae el gasto hipotético; el
+  veredicto lo calcula el código y el E2E verifica que los saldos no aparezcan
+  en ningún request.
 
 ### Decisiones de implementación
 
@@ -437,7 +464,7 @@ Tres capas, todas sin tokens reales:
    cada resultado registrado, Markdown escapado, cada tipo de nodo existente
    en n8n 2.40.7. Se comprobó metiendo una conexión prohibida a mano: el test
    la detecta.
-3. **E2E en n8n real** (`n8n/e2e/`): 20 escenarios contra n8n 2.40.7 en
+3. **E2E en n8n real** (`n8n/e2e/`): 23 escenarios contra n8n 2.40.7 en
    Docker. `falsos.mjs` imita la API de Telegram (incluida su validación de
    Markdown) y la de Gemini con un guion por escenario; las credenciales de
    n8n apuntan ahí.

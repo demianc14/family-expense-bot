@@ -94,6 +94,11 @@ en el README; lo que no se debe deshacer:
 - **El bolsillo se calcula al leer** (categoría + texto guardados): sin cambios
   de esquema en la base real.
 - **Los montos del presupuesto no pasan por el LLM** en n8n (rama determinista).
+- **"¿Puedo gastar esto?" lo decide el código, no el LLM** (resuelto 2026-10-16):
+  regla del ritmo del mes (NO si se pasa; DIFIERE si deja menos de lo que le toca
+  a los días restantes; SÍ si no). Si no cabe pero sí en el fondo, se sugiere.
+  El LLM solo extrae el gasto; el monto tiene que estar escrito. Una consulta no
+  guarda nada ni cuenta como intento. `/puedo` en Python, lenguaje natural en n8n.
 
 ## Arquitectura propuesta
 
