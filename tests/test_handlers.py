@@ -146,7 +146,7 @@ def _callback(data: str, user_id: int = MAMA) -> MagicMock:
 async def _extraer_pendiente(contexto: MagicMock, texto: str = "15 de taxi ayer") -> str:
     """Manda un mensaje y devuelve el token del gasto que queda esperando el sí."""
     await registrar_gasto(_update(texto), contexto)
-    return str(next(iter(contexto.user_data["pendientes"])))
+    return str(next(iter(contexto.bot_data["pendientes"])))
 
 
 # --- el principio no negociable -------------------------------------------
@@ -179,7 +179,7 @@ async def test_rechazar_descarta_y_no_guarda(servicios: Servicios, repo: Reposit
 
     assert repo.listar() == []
     callback.callback_query.edit_message_text.assert_awaited_once_with(mensajes.descartado())
-    assert contexto.user_data["pendientes"] == {}
+    assert contexto.bot_data["pendientes"] == {}
 
 
 async def test_no_se_puede_confirmar_dos_veces(
@@ -203,7 +203,7 @@ async def test_por_defecto_el_gasto_es_de_quien_escribe(
 ) -> None:
     contexto = _contexto(servicios)
     await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = next(iter(contexto.bot_data["pendientes"]))
     await responder_confirmacion(_callback(f"guardar:{token}", user_id=DEMIAN), contexto)
 
     assert repo.listar()[0].atribuido_a == "demian"
@@ -228,7 +228,7 @@ async def test_el_boton_cambia_la_atribucion_sin_guardar(
     await responder_confirmacion(callback, contexto)
 
     assert repo.listar() == []
-    pendiente: Pendiente = contexto.user_data["pendientes"][token]
+    pendiente: Pendiente = contexto.bot_data["pendientes"][token]
     assert pendiente.gasto.atribuido_a == "casa"
     texto = callback.callback_query.edit_message_text.await_args.args[0]
     assert f"De: Casa {mensajes.CORREGIDO}" in texto
@@ -270,7 +270,7 @@ async def test_un_boton_de_atribucion_con_valor_desconocido_se_ignora(
     token = await _extraer_pendiente(contexto)
     await responder_confirmacion(_callback(f"atrib:{token}:tia"), contexto)
 
-    pendiente: Pendiente = contexto.user_data["pendientes"][token]
+    pendiente: Pendiente = contexto.bot_data["pendientes"][token]
     assert pendiente.gasto.atribuido_a == "mama"
     assert not pendiente.corregidos
 
@@ -279,7 +279,7 @@ def test_los_botones_ofrecen_las_demas_atribuciones(servicios: Servicios) -> Non
     from family_expense_bot.extraction.parser import extraer
 
     gasto = extraer("15 de taxi", ClienteFalso(), TAXONOMIA, "mama", date(2026, 3, 15))
-    teclado = _botones("t" * 32, Pendiente(gasto=gasto, original=gasto), TAXONOMIA)
+    teclado = _botones("t" * 32, Pendiente(gasto=gasto, original=gasto, autor=MAMA), TAXONOMIA)
     ofrecidas = {
         str(b.callback_data).rsplit(":", 1)[1] for fila in teclado.inline_keyboard[1:] for b in fila
     }
@@ -291,7 +291,7 @@ def test_los_botones_caben_en_el_limite_de_telegram() -> None:
     from family_expense_bot.extraction.parser import extraer
 
     gasto = extraer("15 de taxi", ClienteFalso(), TAXONOMIA, "mama", date(2026, 3, 15))
-    teclado = _botones("a" * 32, Pendiente(gasto=gasto, original=gasto), TAXONOMIA)
+    teclado = _botones("a" * 32, Pendiente(gasto=gasto, original=gasto, autor=MAMA), TAXONOMIA)
     for fila in teclado.inline_keyboard:
         for boton in fila:
             assert boton.callback_data is not None
@@ -393,7 +393,7 @@ async def test_sin_monto_no_ofrece_guardar(engine: Engine) -> None:
 
     texto = update.espera.edit_text.await_args.args[0]
     assert "no puedo guardarlo" in texto
-    assert contexto.user_data.get("pendientes", {}) == {}
+    assert contexto.bot_data.get("pendientes", {}) == {}
 
 
 async def test_confirmar_algo_que_ya_no_existe_no_rompe(servicios: Servicios) -> None:
@@ -548,7 +548,7 @@ async def test_si_guardar_falla_la_persona_se_entera_y_el_intento_cuenta(
     servicios = _servicios_con(engine, ClienteFalso(_respuesta(monto=enorme)))
     contexto = _contexto(servicios)
     await registrar_gasto(_update(f"{enorme} de algo"), contexto)
-    token = str(next(iter(contexto.user_data["pendientes"])))
+    token = str(next(iter(contexto.bot_data["pendientes"])))
 
     callback = _callback(f"guardar:{token}")
     await responder_confirmacion(callback, contexto)
@@ -569,7 +569,44 @@ async def test_un_no_autorizado_no_puede_tocar_los_botones(servicios: Servicios)
     await responder_confirmacion(callback, contexto)
 
     callback.callback_query.edit_message_text.assert_not_awaited()
-    assert token in contexto.user_data["pendientes"], "el gasto sigue esperando a su dueño"
+    assert token in contexto.bot_data["pendientes"], "el gasto sigue esperando a su dueño"
+
+
+def _token_del_boton(update: MagicMock) -> str:
+    """El token tal como lo ve Telegram: el del botón "Sí, guardar"."""
+    teclado = update.espera.edit_text.await_args.kwargs["reply_markup"].inline_keyboard
+    return str(teclado[0][0].callback_data.partition(":")[2])
+
+
+async def test_en_un_grupo_solo_quien_escribio_confirma_su_gasto(
+    servicios: Servicios, repo: RepositorioGastos, extracciones: RepositorioExtracciones
+) -> None:
+    """Regresión: python-telegram-bot da un `user_data` distinto a cada persona.
+    Con los pendientes ahí, el clic de otro familiar no encontraba el gasto y
+    reescribía la confirmación ajena como "descartado", sin registrar el intento
+    y dejando a quien lo escribió sin botones."""
+    bot_data: dict[str, Any] = {"servicios": servicios}
+    de_mama = MagicMock(bot_data=bot_data, user_data={})
+    de_demian = MagicMock(bot_data=bot_data, user_data={})
+    mensaje = _update("15 de taxi ayer")
+    await registrar_gasto(mensaje, de_mama)
+    token = _token_del_boton(mensaje)
+
+    for accion in ("guardar", "descartar", "atrib:" + token + ":casa"):
+        data = accion if accion.startswith("atrib") else f"{accion}:{token}"
+        ajeno = _callback(data, user_id=DEMIAN)
+        await responder_confirmacion(ajeno, de_demian)
+        ajeno.callback_query.edit_message_text.assert_not_awaited()
+        ajeno.callback_query.answer.assert_awaited_once_with(
+            mensajes.solo_quien_lo_escribio(), show_alert=True
+        )
+    assert repo.listar() == []
+    assert extracciones.listar(_INICIO, _FIN) == [], "un clic ajeno no es un intento"
+
+    await responder_confirmacion(_callback(f"guardar:{token}"), de_mama)
+    [guardado] = repo.listar()
+    assert guardado.registrado_por == MAMA
+    assert guardado.atribuido_a == "mama", "el clic ajeno en 'casa' no cambió nada"
 
 
 # --- presupuesto ---------------------------------------------------------------
@@ -591,7 +628,7 @@ async def test_al_guardar_dice_cuanto_queda_en_el_bolsillo(engine: Engine) -> No
     servicios = _servicios_con(engine, ingresos=INGRESOS)
     contexto = _contexto(servicios)
     await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = next(iter(contexto.bot_data["pendientes"]))
     callback = _callback(f"guardar:{token}", user_id=DEMIAN)
     await responder_confirmacion(callback, contexto)
 
@@ -604,7 +641,7 @@ async def test_cambiar_a_quien_corresponde_actualiza_el_bolsillo(engine: Engine)
     servicios = _servicios_con(engine, ingresos=INGRESOS)
     contexto = _contexto(servicios)
     await registrar_gasto(_update("15 de taxi ayer", user_id=DEMIAN), contexto)
-    token = next(iter(contexto.user_data["pendientes"]))
+    token = next(iter(contexto.bot_data["pendientes"]))
     callback = _callback(f"atrib:{token}:casa", user_id=DEMIAN)
     await responder_confirmacion(callback, contexto)
 
@@ -681,7 +718,7 @@ async def test_puedo_responde_con_el_veredicto_y_no_guarda_nada(
     assert "No guardé nada" in texto
     assert servicios.repositorio.listar() == []
     assert extracciones.listar(_INICIO, _FIN) == [], "una consulta no es un intento de registro"
-    assert contexto.user_data == {}, "no queda nada pendiente de confirmar"
+    assert contexto.bot_data.get("pendientes", {}) == {}, "no queda nada pendiente de confirmar"
 
 
 async def test_puedo_no_opina_sobre_un_monto_que_no_escribiste(engine: Engine) -> None:

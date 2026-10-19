@@ -95,6 +95,9 @@ class Pendiente:
     original: GastoExtraido
     """Lo que extrajo el LLM. De acá salen las confianzas del reporte de calidad."""
 
+    autor: int
+    """ID de Telegram de quien lo escribió: el único que puede confirmarlo."""
+
     corregidos: frozenset[str] = frozenset()
 
 
@@ -136,7 +139,7 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if mensaje is None or mensaje.text is None:
         return
     remitente = _rol(update, servicios)
-    if remitente is None:
+    if remitente is None or update.effective_user is None:
         return
 
     espera = await mensaje.reply_text(mensajes.PROCESANDO)
@@ -153,7 +156,7 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     token = uuid4().hex
-    pendiente = Pendiente(gasto=gasto, original=gasto)
+    pendiente = Pendiente(gasto=gasto, original=gasto, autor=update.effective_user.id)
     _pendientes(context)[token] = pendiente
     await espera.edit_text(
         mensajes.pedir_confirmacion(gasto, etiquetas, bolsillo=_bolsillo(servicios, gasto)),
@@ -190,12 +193,17 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         # Misma allowlist que para los mensajes: en un grupo, alguien de afuera
         # no puede confirmar ni descartar el gasto de otro.
         return
-    await consulta.answer()
 
     accion, _, resto = consulta.data.partition(":")
     token, _, valor = resto.partition(":")
     pendientes = _pendientes(context)
     pendiente = pendientes.get(token)
+    if pendiente is not None and pendiente.autor != update.effective_user.id:
+        # En un grupo, otro familiar ve los mismos botones. No toca nada: ni el
+        # mensaje ni el pendiente; solo se le avisa a él.
+        await consulta.answer(mensajes.solo_quien_lo_escribio(), show_alert=True)
+        return
+    await consulta.answer()
     if pendiente is None:
         # El bot se reinició o ya se respondió: las extracciones viven en memoria.
         await consulta.edit_message_text(mensajes.descartado())
@@ -414,10 +422,13 @@ async def reportar_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 def _pendientes(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Pendiente]:
-    """Extracciones esperando confirmación. En memoria: no se persisten nunca."""
-    if context.user_data is None:
-        return {}
-    return context.user_data.setdefault("pendientes", {})  # type: ignore[no-any-return]
+    """Extracciones esperando confirmación. En memoria: no se persisten nunca.
+
+    En `bot_data` y no en `user_data`: python-telegram-bot da un `user_data` por
+    persona, así que el clic de otro familiar en un grupo no encontraba el gasto
+    y lo daba por descartado. Acá se encuentra, y `Pendiente.autor` decide.
+    """
+    return context.bot_data.setdefault("pendientes", {})  # type: ignore[no-any-return]
 
 
 def _botones(token: str, pendiente: Pendiente, taxonomia: Taxonomia) -> InlineKeyboardMarkup:

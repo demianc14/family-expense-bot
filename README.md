@@ -157,7 +157,10 @@ node --test n8n/e2e/e2e.test.mjs   # ~2 min: n8n real + Telegram y Gemini falsos
    duplicar el gasto. Ahora el bot avisa que no cambia nada por ediciones.
 
 Los botones obedecen la misma allowlist que los mensajes: en un grupo, nadie
-de afuera puede confirmar ni descartar el gasto de otro.
+de afuera puede confirmar ni descartar el gasto de otro. Y dentro de la
+familia, cada gasto lo confirma solo quien lo escribió: si otro toca los
+botones, le sale un aviso y la confirmación sigue intacta esperando a su
+dueño. (Antes, ese clic la reescribía como "descartado".)
 
 Las extracciones sin confirmar viven en memoria, nunca en disco. Si el bot se
 reinicia, un botón viejo ya no guarda nada: responde como descartado.

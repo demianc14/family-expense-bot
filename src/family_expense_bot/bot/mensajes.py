@@ -111,6 +111,11 @@ def descartado() -> str:
     return "Listo, no guardé nada. ¿Me lo escribes de otra forma?"
 
 
+def solo_quien_lo_escribio() -> str:
+    """Alerta para quien toca los botones del gasto de otro (máx. 200 caracteres)."""
+    return "Este gasto lo confirma quien lo escribió. Si es tuyo, escríbelo tú."
+
+
 def error_al_guardar() -> str:
     return (
         "⚠️ Dijiste que sí, pero no pude guardar el gasto: no quedó registrado. "
