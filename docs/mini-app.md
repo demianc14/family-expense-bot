@@ -12,8 +12,8 @@ Capturas generadas con `scripts/capturas.py`: la app real, sobre una base tempor
 
 ## Qué es
 
-**Diseño: un libro de cuentas.** Papel cálido y tinta, nombres en serif (Instrument
-Serif) y montos en monoespaciada (Geist Mono) para que las cifras se lean en
+**Diseño: un libro de cuentas.** Papel cálido y tinta, títulos en Gloock, texto en Schibsted
+Grotesk y montos en Azeret Mono para que las cifras se lean en
 columna. Hay un solo color de acento. Cada barra de bolsillo lleva una **marca con
 el día de hoy**: si lo gastado la pasa, la barra se pone ámbar, porque vas más rápido
 que el mes. Es el mismo umbral de la regla del ritmo de "¿puedo?", no un adorno. El
