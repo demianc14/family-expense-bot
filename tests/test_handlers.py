@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import Engine
+from telegram import MenuButtonDefault, MenuButtonWebApp
 from telegram.error import Conflict
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
@@ -17,6 +18,7 @@ from family_expense_bot.bot.handlers import (
     Pendiente,
     Servicios,
     _botones,
+    _registrar_menu,
     build_application,
     consultar,
     obtener_identidad,
@@ -766,3 +768,27 @@ def test_el_comando_puedo_esta_registrado(servicios: Servicios) -> None:
         for c in h.commands
     }
     assert "puedo" in comandos
+
+
+# --- Mini App ---------------------------------------------------------------------
+
+
+async def test_con_app_url_el_menu_abre_la_mini_app() -> None:
+    bot = AsyncMock()
+    await _registrar_menu(bot, "https://app.example")
+    boton = bot.set_chat_menu_button.await_args.kwargs["menu_button"]
+    assert isinstance(boton, MenuButtonWebApp)
+    assert boton.web_app.url == "https://app.example"
+
+
+async def test_sin_app_url_el_menu_vuelve_al_normal() -> None:
+    """Si antes hubo una URL, el botón no puede quedar apuntando a un túnel muerto."""
+    bot = AsyncMock()
+    await _registrar_menu(bot, "")
+    assert isinstance(bot.set_chat_menu_button.await_args.kwargs["menu_button"], MenuButtonDefault)
+
+
+async def test_si_falla_registrar_el_menu_el_bot_sigue() -> None:
+    bot = AsyncMock()
+    bot.set_chat_menu_button.side_effect = RuntimeError("sin red")
+    await _registrar_menu(bot, "https://app.example")  # no lanza

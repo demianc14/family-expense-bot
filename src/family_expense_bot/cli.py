@@ -1,10 +1,13 @@
-"""Punto de entrada: `family-expense-bot` levanta el bot en modo polling."""
+"""Punto de entrada: `family-expense-bot` levanta el bot en modo polling; `--app`, la Mini App."""
 
 import argparse
 import asyncio
 import logging
 from pathlib import Path
 
+import uvicorn
+
+from family_expense_bot.app.api import ServiciosApp, crear_app
 from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
 from family_expense_bot.config import Settings
 from family_expense_bot.dashboard.report import exportar_csv
@@ -16,6 +19,7 @@ from family_expense_bot.storage.repository import (
     RepositorioExtracciones,
     RepositorioGastos,
     crear_engine,
+    migrar,
 )
 
 
@@ -53,6 +57,18 @@ def main() -> None:
         metavar="ROL",
         help="Con --extraer: el rol de quien escribe (papa, mama, hermana, demian).",
     )
+    parser.add_argument(
+        "--app",
+        action="store_true",
+        help="Levanta la Mini App en 127.0.0.1 (exponla con cloudflared y pon la URL en "
+        "APP_URL). Corre aparte del bot; comparten la base.",
+    )
+    parser.add_argument("--puerto", type=int, default=8080, help="Con --app: puerto local (8080).")
+    parser.add_argument(
+        "--migrar",
+        action="store_true",
+        help="Agrega a una base existente las columnas nuevas del esquema. Respáldala antes.",
+    )
     args = parser.parse_args()
 
     _configurar_logging()
@@ -66,6 +82,15 @@ def main() -> None:
 
     if args.exportar:
         _exportar(Path(args.exportar), settings)
+        return
+
+    if args.migrar:
+        agregadas = migrar(settings.database_url)
+        print(f"Agregadas: {', '.join(agregadas)}" if agregadas else "La base ya estaba al día")
+        return
+
+    if args.app:
+        _levantar_app(settings, token, args.puerto)
         return
 
     if args.extraer:
@@ -95,7 +120,22 @@ def main() -> None:
             "Escríbele a @userinfobot para saber tu ID y agrégalo en .env como id:rol"
         )
 
-    build_application(token, servicios).run_polling()
+    build_application(token, servicios, settings.app_url).run_polling()
+
+
+def _levantar_app(settings: Settings, token: str, puerto: int) -> None:
+    try:
+        servicios = ServiciosApp(
+            repositorio=RepositorioGastos(crear_engine(settings.database_url)),
+            taxonomia=cargar_taxonomia(),
+            bot_token=token,
+            usuarios=settings.usuarios,
+            ingresos=settings.ingresos,
+        )
+    except (ValueError, EsquemaDesactualizado) as e:
+        raise SystemExit(f"No arranco: {e}") from e
+    # Solo local: lo que llega de afuera entra por el túnel, que termina el https.
+    uvicorn.run(crear_app(servicios), host="127.0.0.1", port=puerto)
 
 
 def _exportar(ruta: Path, settings: Settings) -> None:

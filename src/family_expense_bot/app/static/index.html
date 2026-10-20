@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi presupuesto</title>
+<!-- Telegram exige cargar su SDK desde telegram.org. Define las variables --tg-theme-*. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f6);
+    --texto: var(--tg-theme-text-color, #1c1c1e);
+    --tenue: var(--tg-theme-hint-color, #6c6c70);
+    --acento: var(--tg-theme-button-color, #2f7de1);
+    --sobre-acento: var(--tg-theme-button-text-color, #ffffff);
+    --peligro: var(--tg-theme-destructive-text-color, #c0392b);
+    --bien: #1f7a44;
+    --alerta: #9a6700;
+    --radio: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.tg) {
+      --bg: #1c1c1e; --bg2: #2c2c2e; --texto: #f2f2f7; --tenue: #a1a1a8;
+      --bien: #4cc27a; --alerta: #e0a93a; --peligro: #ff6b5e;
+    }
+  }
+  /* Dentro de Telegram el tema lo decide su colorScheme, no el del sistema. */
+  :root.tg[data-esquema="dark"] { --bien: #4cc27a; --alerta: #e0a93a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg2); color: var(--texto); }
+  body {
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+    max-width: 560px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--tenue); font-size: 14px; margin: 0 0 12px; }
+  nav { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: var(--radio); margin-bottom: 14px; }
+  nav button { flex: 1; border: 0; background: none; color: var(--texto); padding: 9px 4px; border-radius: 10px; font: inherit; font-size: 15px; }
+  nav button[aria-selected="true"] { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+  .tarjeta { background: var(--bg); border-radius: var(--radio); padding: 14px; margin-bottom: 10px; }
+  .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .nombre { font-weight: 600; }
+  .pct { color: var(--tenue); font-size: 13px; }
+  .barra { height: 8px; background: var(--bg2); border-radius: 4px; margin: 10px 0 6px; overflow: hidden; }
+  .barra > i { display: block; height: 100%; background: var(--acento); border-radius: 4px; }
+  .barra.pasado > i { background: var(--peligro); }
+  .detalle { color: var(--tenue); font-size: 14px; }
+  .monto { font-variant-numeric: tabular-nums; }
+  .pasado-txt { color: var(--peligro); }
+  label { display: block; font-size: 14px; color: var(--tenue); margin: 12px 0 6px; }
+  input, select {
+    width: 100%; font: inherit; color: var(--texto); background: var(--bg2);
+    border: 1px solid transparent; border-radius: 10px; padding: 11px 12px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--acento); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips button {
+    border: 1px solid var(--tenue); background: none; color: var(--texto);
+    border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 15px;
+  }
+  .chips button[aria-pressed="true"] { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
+  .interruptor { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: var(--texto); font-size: 15px; }
+  .interruptor input { width: 20px; height: 20px; accent-color: var(--acento); }
+  .principal {
+    width: 100%; border: 0; border-radius: 12px; padding: 13px; margin-top: 16px;
+    background: var(--acento); color: var(--sobre-acento); font: inherit; font-weight: 600;
+  }
+  .secundario { width: 100%; border: 0; background: none; color: var(--acento); font: inherit; padding: 12px; }
+  .principal:disabled { opacity: .5; }
+  .veredicto { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .si { color: var(--bien); } .difiere { color: var(--alerta); } .no { color: var(--peligro); }
+  .error { color: var(--peligro); font-size: 14px; margin-top: 10px; }
+  .resumen dt { color: var(--tenue); font-size: 13px; margin-top: 8px; }
+  .resumen dd { margin: 2px 0 0; }
+  .aviso { text-align: center; color: var(--tenue); padding: 40px 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <h1>Mi presupuesto</h1>
+  <p class="sub" id="periodo">&nbsp;</p>
+
+  <div class="aviso" id="fuera" hidden>Esta app se abre desde el botón de menú del bot en Telegram.</div>
+  <div class="aviso" id="cargando">Cargando…</div>
+
+  <main id="app" hidden>
+    <nav role="tablist">
+      <button role="tab" data-tab="bolsillos" aria-selected="true">Bolsillos</button>
+      <button role="tab" data-tab="puedo" aria-selected="false">¿Puedo?</button>
+      <button role="tab" data-tab="registrar" aria-selected="false">Registrar</button>
+    </nav>
+
+    <section id="tab-bolsillos" role="tabpanel"></section>
+
+    <section id="tab-puedo" role="tabpanel" hidden>
+      <form class="tarjeta" id="form-puedo" novalidate>
+        <label for="p-monto">¿Cuánto?</label>
+        <input id="p-monto" inputmode="decimal" placeholder="30.00" autocomplete="off" required>
+        <label for="p-categoria">¿En qué?</label>
+        <select id="p-categoria" required></select>
+        <label class="interruptor" data-fondo hidden><input type="checkbox" id="p-fondo"> <span></span></label>
+        <button class="principal" type="submit">Consultar</button>
+        <div class="error" id="p-error" hidden></div>
+      </form>
+      <div class="tarjeta" id="p-resultado" hidden></div>
+    </section>
+
+    <section id="tab-registrar" role="tabpanel" hidden>
+      <form class="tarjeta" id="form-gasto" novalidate>
+        <label for="g-monto">Monto</label>
+        <input id="g-monto" inputmode="decimal" placeholder="12.50" autocomplete="off" required>
+        <label for="g-descripcion">Descripción</label>
+        <input id="g-descripcion" maxlength="200" placeholder="almuerzo, gasolina…" autocomplete="off" required>
+        <label for="g-categoria">Categoría</label>
+        <select id="g-categoria" required></select>
+        <label for="g-fecha">Fecha</label>
+        <input id="g-fecha" type="date" required>
+        <label>¿De quién es el gasto?</label>
+        <div class="chips" id="g-de"></div>
+        <label class="interruptor" data-fondo hidden><input type="checkbox" id="g-fondo"> <span></span></label>
+        <button class="principal" type="submit">Revisar</button>
+        <div class="error" id="g-error" hidden></div>
+      </form>
+
+      <div class="tarjeta" id="g-confirmar" hidden>
+        <div class="nombre">¿Guardo este gasto?</div>
+        <dl class="resumen" id="g-resumen"></dl>
+        <button class="principal" id="g-si" type="button">Sí, guardar</button>
+        <button class="secundario" id="g-corregir" type="button">Corregir</button>
+        <div class="error" id="g-error-guardar" hidden></div>
+      </div>
+
+      <div class="tarjeta" id="g-listo" hidden>
+        <div class="veredicto si">✅ Guardado</div>
+        <div id="g-linea" class="detalle"></div>
+        <button class="secundario" id="g-otro" type="button">Registrar otro</button>
+      </div>
+    </section>
+  </main>
+
+<script>
+"use strict";
+const tg = window.Telegram && window.Telegram.WebApp;
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const $ = (id) => document.getElementById(id);
+const dinero = (s) => "$" + Number(s).toLocaleString("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+let opciones = null;
+let atribucion = null;   // Sin preselección: hay que elegirla.
+let pendiente = null;    // Los campos del gasto que se está confirmando.
+
+async function api(ruta, cuerpo) {
+  const r = await fetch(ruta, {
+    method: cuerpo ? "POST" : "GET",
+    headers: { "Authorization": "tma " + tg.initData, ...(cuerpo ? { "Content-Type": "application/json" } : {}) },
+    body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+  });
+  const datos = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = datos.detail;
+    // FastAPI devuelve una lista cuando falta un campo; acá basta con un aviso corto.
+    throw new Error(typeof d === "string" ? d : "Revisa los campos del formulario");
+  }
+  return datos;
+}
+
+function el(tag, clase, texto) {
+  const e = document.createElement(tag);
+  if (clase) e.className = clase;
+  if (texto !== undefined) e.textContent = texto;   // textContent: nada del usuario se interpreta como HTML
+  return e;
+}
+
+function mostrarError(id, e) { const n = $(id); n.textContent = e.message; n.hidden = false; }
+function ocultar(...ids) { ids.forEach((id) => { $(id).hidden = true; }); }
+
+// --- Pestañas ------------------------------------------------------------------
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
+  document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + b.dataset.tab; });
+  if (b.dataset.tab !== "registrar") tg.MainButton.hide();
+}));
+
+// --- Bolsillos -------------------------------------------------------------------
+async function cargarBolsillos() {
+  const cont = $("tab-bolsillos");
+  cont.replaceChildren();
+  if (!opciones.tiene_presupuesto) {
+    cont.append(el("div", "tarjeta detalle", "No hay un ingreso mensual configurado para ti (INGRESOS_MENSUALES en .env)."));
+    return;
+  }
+  const p = await api("/api/presupuesto");
+  const dias = p.dias_restantes === 1 ? "queda 1 día" : `quedan ${p.dias_restantes} días`;
+  $("periodo").textContent = `${MESES[p.mes - 1]} ${p.anio} · ingreso ${dinero(p.ingreso)} · ${dias}`;
+  for (const b of p.bolsillos) {
+    const t = el("div", "tarjeta");
+    const fila = el("div", "fila");
+    fila.append(el("span", "nombre", b.etiqueta), el("span", "pct", `${b.porcentaje}%`));
+    t.append(fila);
+    if (!b.se_gasta) {
+      t.append(el("div", "detalle", `Apártalo al cobrar: ${dinero(b.asignado)}`));
+    } else {
+      const usado = Number(b.asignado) > 0 ? Math.min(100, 100 * Number(b.gastado) / Number(b.asignado)) : 100;
+      const barra = el("div", "barra" + (b.excedido ? " pasado" : ""));
+      const relleno = el("i"); relleno.style.width = usado + "%"; barra.append(relleno);
+      t.append(barra);
+      t.append(b.excedido
+        ? el("div", "detalle pasado-txt", `Te pasaste ${dinero(-Number(b.disponible))} (llevas ${dinero(b.gastado)} de ${dinero(b.asignado)})`)
+        : el("div", "detalle", `Quedan ${dinero(b.disponible)} de ${dinero(b.asignado)} · ${b.cantidad} gasto(s)`));
+    }
+    cont.append(t);
+  }
+  if (Number(p.sin_bolsillo) > 0) {
+    cont.append(el("div", "tarjeta detalle", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.join(", ")})`));
+  }
+}
+
+// --- Formularios: opciones compartidas -----------------------------------------
+function llenarCategorias(select) {
+  select.append(new Option("Elige una categoría", ""));
+  for (const c of opciones.categorias) {
+    select.append(new Option(c.bolsillo ? `${c.nombre} · ${c.bolsillo}` : c.nombre, c.nombre));
+  }
+}
+
+function prepararFondo() {
+  const fondo = opciones.bolsillos_con_marcador[0];
+  document.querySelectorAll("[data-fondo]").forEach((l) => {
+    if (!fondo) return;
+    l.hidden = false;
+    l.querySelector("span").textContent = `Sacarlo de mi ${fondo.etiqueta}`;
+  });
+}
+const fondoElegido = (id) => ($(id).checked && opciones.bolsillos_con_marcador[0]) ? opciones.bolsillos_con_marcador[0].nombre : null;
+
+// --- ¿Puedo? ----------------------------------------------------------------
+const TITULO = { si: "✅ Sí, te alcanza", difiere: "⏸️ Mejor difiérelo", no: "❌ No te lo recomiendo", sin_bolsillo: "Sin bolsillo" };
+
+$("form-puedo").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  ocultar("p-error", "p-resultado");
+  try {
+    const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: $("p-categoria").value, bolsillo: fondoElegido("p-fondo") });
+    const caja = $("p-resultado");
+    caja.replaceChildren(el("div", "veredicto " + r.veredicto.replace("_", ""), TITULO[r.veredicto]));
+    const b = r.bolsillo;
+    if (!b) {
+      caja.append(el("div", "detalle", "Esa categoría no cuenta en ningún bolsillo: no hay con qué compararla."));
+    } else if (r.veredicto === "no") {
+      caja.append(el("div", "detalle", `En ${b.etiqueta} te quedan ${dinero(b.disponible)}; te pasarías por ${dinero(-Number(r.disponible_despues))}.`));
+      if (r.alternativa) {
+        caja.append(el("div", "detalle", `En tu ${r.alternativa.etiqueta} sí te alcanza (quedan ${dinero(r.alternativa.disponible)}).`));
+        const probar = el("button", "secundario", `Probar sacándolo de ${r.alternativa.etiqueta}`);
+        probar.type = "button";
+        probar.addEventListener("click", () => { $("p-fondo").checked = true; $("form-puedo").requestSubmit(); });
+        caja.append(probar);
+      }
+    } else {
+      const ritmo = r.dias_restantes > 0 ? ` A los ${r.dias_restantes} días que faltan les tocan ${dinero(r.reserva)}.` : "";
+      caja.append(el("div", "detalle", `En ${b.etiqueta} quedarías con ${dinero(r.disponible_despues)} de ${dinero(b.asignado)}.${ritmo}`));
+    }
+    caja.append(el("div", "detalle", "No se guardó nada."));
+    caja.hidden = false;
+  } catch (e) { mostrarError("p-error", e); }
+});
+
+// --- Registrar -----------------------------------------------------------------
+function prepararAtribuciones() {
+  const cont = $("g-de");
+  cont.replaceChildren();
+  for (const a of opciones.atribuciones) {
+    const b = el("button", "", a.etiqueta);
+    b.type = "button";
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => {
+      atribucion = a.nombre;
+      cont.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    });
+    cont.append(b);
+  }
+}
+
+function camposGasto() {
+  return {
+    monto: $("g-monto").value,
+    descripcion: $("g-descripcion").value,
+    categoria: $("g-categoria").value,
+    fecha: $("g-fecha").value,
+    atribuido_a: atribucion,
+    bolsillo: fondoElegido("g-fondo"),
+  };
+}
+
+function verPaso(paso) {
+  $("form-gasto").hidden = paso !== "form";
+  $("g-confirmar").hidden = paso !== "confirmar";
+  $("g-listo").hidden = paso !== "listo";
+  if (paso === "confirmar") tg.MainButton.setText("Sí, guardar").show(); else tg.MainButton.hide();
+}
+
+$("form-gasto").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  ocultar("g-error");
+  try {
+    const campos = camposGasto();
+    const r = await api("/api/gastos/previsualizar", campos);   // no guarda nada
+    pendiente = campos;
+    const dl = $("g-resumen");
+    dl.replaceChildren();
+    const filas = [["Monto", dinero(r.gasto.monto)], ["Descripción", r.gasto.descripcion], ["Categoría", r.gasto.categoria],
+                   ["Fecha", r.gasto.fecha], ["De", r.gasto.de]];
+    if (r.bolsillo) filas.push(["Cuenta contra", r.bolsillo]);
+    for (const [k, v] of filas) dl.append(el("dt", "", k), el("dd", "", v));
+    ocultar("g-error-guardar");
+    verPaso("confirmar");
+  } catch (e) { mostrarError("g-error", e); }
+});
+
+async function guardar() {
+  if (!pendiente) return;
+  $("g-si").disabled = true;
+  tg.MainButton.showProgress();
+  try {
+    const r = await api("/api/gastos", { ...pendiente, confirmado: true });
+    pendiente = null;
+    $("g-linea").textContent = r.linea || "";
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+    verPaso("listo");
+    cargarBolsillos().catch(() => {});
+  } catch (e) {
+    mostrarError("g-error-guardar", e);
+  } finally {
+    $("g-si").disabled = false;
+    tg.MainButton.hideProgress();
+  }
+}
+$("g-si").addEventListener("click", guardar);
+tg && tg.MainButton.onClick(guardar);
+$("g-corregir").addEventListener("click", () => { pendiente = null; verPaso("form"); });
+$("g-otro").addEventListener("click", () => {
+  $("form-gasto").reset();
+  $("g-fecha").value = opciones.hoy;
+  atribucion = null;
+  prepararAtribuciones();
+  verPaso("form");
+});
+
+// --- Arranque ------------------------------------------------------------------
+async function iniciar() {
+  if (!tg || !tg.initData) {        // Abierta en un navegador común: no hay identidad.
+    ocultar("cargando");
+    $("fuera").hidden = false;
+    return;
+  }
+  document.documentElement.classList.add("tg");
+  document.documentElement.dataset.esquema = tg.colorScheme;
+  tg.onEvent("themeChanged", () => { document.documentElement.dataset.esquema = tg.colorScheme; });
+  tg.ready();
+  tg.expand();
+  try {
+    opciones = await api("/api/opciones");
+    llenarCategorias($("p-categoria"));
+    llenarCategorias($("g-categoria"));
+    prepararFondo();
+    prepararAtribuciones();
+    $("g-fecha").value = opciones.hoy;
+    $("g-fecha").max = opciones.hoy;
+    await cargarBolsillos();
+    ocultar("cargando");
+    $("app").hidden = false;
+  } catch (e) {
+    $("cargando").textContent = e.message;
+  }
+}
+iniciar();
+</script>
+</body>
+</html>

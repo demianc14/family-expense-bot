@@ -12,6 +12,7 @@ from family_expense_bot.storage.repository import (
     GastoSinMonto,
     RepositorioGastos,
     crear_engine,
+    migrar,
 )
 
 
@@ -196,3 +197,25 @@ def test_una_base_con_esquema_viejo_falla_al_arrancar(tmp_path: Path) -> None:
 def test_una_base_nueva_pasa_la_verificacion(tmp_path: Path) -> None:
     crear_engine(f"sqlite:///{tmp_path / 'nueva.db'}")
     crear_engine(f"sqlite:///{tmp_path / 'nueva.db'}")  # reabrirla tampoco falla
+
+
+def test_migrar_agrega_origen_a_una_base_de_antes_de_la_app(tmp_path: Path) -> None:
+    """Una base real de antes de la Mini App: tiene gastos y no tiene `origen`."""
+    url = f"sqlite:///{tmp_path / 'gastos.db'}"
+    RepositorioGastos(engine := crear_engine(url)).guardar(_gasto(), registrado_por=1)
+    with engine.begin() as con:
+        con.exec_driver_sql("ALTER TABLE gastos DROP COLUMN origen")
+    engine.dispose()
+
+    with pytest.raises(EsquemaDesactualizado, match=r"gastos\.origen.*--migrar"):
+        crear_engine(url)
+
+    assert migrar(url) == ["gastos.origen"]
+    [viejo] = RepositorioGastos(crear_engine(url)).listar()
+    assert viejo.origen == "chat"  # todo lo anterior entró por el chat
+    assert migrar(url) == []  # idempotente
+
+
+def test_el_origen_por_defecto_es_el_chat(repo: RepositorioGastos) -> None:
+    assert repo.guardar(_gasto(), registrado_por=1).origen == "chat"
+    assert repo.guardar(_gasto(), registrado_por=1, origen="formulario").origen == "formulario"

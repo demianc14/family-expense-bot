@@ -14,7 +14,15 @@ from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    Bot,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonDefault,
+    MenuButtonWebApp,
+    Update,
+    WebAppInfo,
+)
 from telegram.error import Conflict
 from telegram.ext import (
     Application,
@@ -26,9 +34,13 @@ from telegram.ext import (
 )
 
 from family_expense_bot.bot import mensajes
-from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_presupuesto
+from family_expense_bot.dashboard.presupuesto import (
+    estado_tras_gasto,
+    evaluar_gasto,
+    resumen_presupuesto,
+)
 from family_expense_bot.dashboard.report import inicio_y_fin_utc, rango_del_mes, resumen_mensual
-from family_expense_bot.extraction.categorias import Taxonomia
+from family_expense_bot.extraction.categorias import Taxonomia, validar_roles
 from family_expense_bot.extraction.gemini import CuotaAgotada
 from family_expense_bot.extraction.parser import ClienteLLM, extraer
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
@@ -69,20 +81,7 @@ class Servicios:
 
     def __post_init__(self) -> None:
         # Falla al arrancar, no cuando esa persona escriba por primera vez.
-        invalidos = {r for r in self.usuarios.values() if r not in self.taxonomia.personas}
-        if invalidos:
-            raise ValueError(
-                f"TELEGRAM_USUARIOS tiene roles que no son personas de la taxonomía: "
-                f"{sorted(invalidos)}. Válidos: {list(self.taxonomia.personas)} "
-                f"({self.taxonomia.compartida.nombre!r} no escribe: es compartido)"
-            )
-        sin_persona = set(self.ingresos) - set(self.taxonomia.personas)
-        if sin_persona:
-            raise ValueError(
-                f"INGRESOS_MENSUALES tiene roles que no son personas: {sorted(sin_persona)}"
-            )
-        if self.ingresos and not self.taxonomia.bolsillos:
-            raise ValueError("Hay INGRESOS_MENSUALES pero categories.yaml no define un presupuesto")
+        validar_roles(self.taxonomia, self.usuarios, self.ingresos)
 
 
 @dataclass(frozen=True)
@@ -283,18 +282,14 @@ def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> s
     if ingreso is None:
         return None
     try:
-        anio, mes = registrado.fecha.year, registrado.fecha.month
-        desde, hasta = rango_del_mes(anio, mes)
-        resumen = resumen_presupuesto(
+        desde, hasta = rango_del_mes(registrado.fecha.year, registrado.fecha.month)
+        estado = estado_tras_gasto(
             servicios.repositorio.listar(desde=desde, hasta=hasta),
             servicios.taxonomia,
-            registrado.atribuido_a,
+            registrado,
             ingreso,
-            anio,
-            mes,
         )
-        nombre = servicios.taxonomia.bolsillo_de(registrado.categoria, registrado.texto_original)
-        return mensajes.linea_de_bolsillo(resumen.bolsillo(nombre) if nombre else None, mes)
+        return mensajes.linea_de_bolsillo(estado, registrado.fecha.month)
     except Exception:
         log.exception("No se pudo calcular el presupuesto después de guardar")
         return None
@@ -451,8 +446,13 @@ def _botones(token: str, pendiente: Pendiente, taxonomia: Taxonomia) -> InlineKe
     return InlineKeyboardMarkup(filas)
 
 
-def build_application(token: str, servicios: Servicios | None = None) -> Application:  # type: ignore[type-arg]
-    app = Application.builder().token(token).build()
+def build_application(
+    token: str, servicios: Servicios | None = None, app_url: str = ""
+) -> Application:  # type: ignore[type-arg]
+    async def registrar_menu(app: Application) -> None:  # type: ignore[type-arg]
+        await _registrar_menu(app.bot, app_url)
+
+    app = Application.builder().token(token).post_init(registrar_menu).build()
     if servicios is not None:
         app.bot_data["servicios"] = servicios
     app.add_handler(CommandHandler("start", start))
@@ -470,3 +470,19 @@ def build_application(token: str, servicios: Servicios | None = None) -> Applica
     )
     app.add_error_handler(reportar_error)
     return app
+
+
+TEXTO_MENU = "Mi presupuesto"
+
+
+async def _registrar_menu(bot: Bot, app_url: str) -> None:
+    """El botón de menú del chat abre la Mini App. Sin APP_URL vuelve al menú normal.
+
+    Se registra en cada arranque porque la URL del túnel rápido cambia. Si falla,
+    el bot sigue: la app es un extra, el registro de gastos no depende de ella.
+    """
+    boton = MenuButtonWebApp(TEXTO_MENU, WebAppInfo(app_url)) if app_url else MenuButtonDefault()
+    try:
+        await bot.set_chat_menu_button(menu_button=boton)
+    except Exception:
+        log.exception("No se pudo registrar el botón de la Mini App")

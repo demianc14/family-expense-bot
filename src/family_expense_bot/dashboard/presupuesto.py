@@ -119,6 +119,20 @@ def resumen_presupuesto(
     )
 
 
+def estado_tras_gasto(
+    gastos: Sequence[GastoRegistrado],
+    taxonomia: Taxonomia,
+    gasto: GastoRegistrado,
+    ingreso: Decimal,
+) -> EstadoBolsillo | None:
+    """Cómo quedó, en el mes del gasto, el bolsillo contra el que cuenta. None si en ninguno."""
+    resumen = resumen_presupuesto(
+        gastos, taxonomia, gasto.atribuido_a, ingreso, gasto.fecha.year, gasto.fecha.month
+    )
+    nombre = taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
+    return resumen.bolsillo(nombre) if nombre else None
+
+
 # --- ¿Puedo gastar esto? ---------------------------------------------------------
 
 

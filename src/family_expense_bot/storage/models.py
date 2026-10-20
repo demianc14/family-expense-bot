@@ -54,6 +54,11 @@ class Gasto(Base):
     corregido_manualmente: Mapped[bool] = mapped_column(default=False)
     """True si la persona tuvo que arreglar lo que el LLM entendió."""
 
+    origen: Mapped[str] = mapped_column(String(12), default="chat", server_default="chat")
+    """Por dónde entró: `chat` (texto libre leído por el LLM) o `formulario` (la
+    Mini App, campo por campo). Los del formulario no cuentan para el reporte de
+    calidad, porque ahí nadie leyó nada."""
+
     # Borrado lógico: nada desaparece, se marca.
     anulado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     motivo_anulacion: Mapped[str | None] = mapped_column(String(200), default=None)

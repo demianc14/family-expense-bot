@@ -113,3 +113,20 @@ def test_ingresos_mal_escritos_fallan_rapido(monkeypatch: pytest.MonkeyPatch, cr
     monkeypatch.setenv("INGRESOS_MENSUALES", crudo)
     with pytest.raises(ValueError, match="INGRESOS_MENSUALES"):
         _ = Settings(_env_file=None).ingresos  # type: ignore[call-arg]
+
+
+def test_app_url_tiene_que_ser_https(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Telegram solo abre Mini Apps por https: mejor fallar al arrancar que en el celular."""
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:secreto")
+    monkeypatch.setenv("APP_URL", "http://localhost:8080")
+    with pytest.raises(ValidationError, match="https"):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    ("crudo", "esperado"), [("", ""), (" https://x.example ", "https://x.example")]
+)
+def test_app_url_vacia_o_https(monkeypatch: pytest.MonkeyPatch, crudo: str, esperado: str) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:secreto")
+    monkeypatch.setenv("APP_URL", crudo)
+    assert Settings(_env_file=None).app_url == esperado  # type: ignore[call-arg]

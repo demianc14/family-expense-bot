@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Engine, create_engine, inspect, select
+from sqlalchemy import Engine, create_engine, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
 from family_expense_bot.extraction.schema import GastoExtraido
@@ -42,6 +42,7 @@ class GastoRegistrado(BaseModel):
     creado_en: datetime
     corregido_manualmente: bool
     anulado: bool
+    origen: str = "chat"
 
     @classmethod
     def desde_fila(cls, fila: Gasto) -> "GastoRegistrado":
@@ -57,6 +58,7 @@ class GastoRegistrado(BaseModel):
             creado_en=_como_utc(fila.creado_en),
             corregido_manualmente=fila.corregido_manualmente,
             anulado=fila.anulado_en is not None,
+            origen=fila.origen,
         )
 
 
@@ -66,6 +68,35 @@ class GastoSinMonto(ValueError):
 
 class EsquemaDesactualizado(RuntimeError):
     """La base existe pero no coincide con el modelo actual."""
+
+
+MIGRACIONES = {
+    "gastos.origen": "ALTER TABLE gastos ADD COLUMN origen VARCHAR(12) NOT NULL DEFAULT 'chat'",
+}
+"""Columnas agregadas después de que ya había bases con datos reales.
+
+Cada una tiene un default, así que las filas existentes quedan bien sin tocarlas
+(todo lo anterior a la Mini App entró por el chat).
+"""
+
+
+def migrar(url: str) -> list[str]:
+    """Agrega a una base existente las columnas de `MIGRACIONES` que le falten.
+
+    Idempotente: correrla dos veces no hace nada la segunda. Devuelve lo que agregó.
+    """
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    agregadas: list[str] = []
+    with engine.begin() as conexion:
+        for columna, sentencia in MIGRACIONES.items():
+            tabla, _, nombre = columna.partition(".")
+            if nombre not in {c["name"] for c in inspector.get_columns(tabla)}:
+                conexion.execute(text(sentencia))
+                agregadas.append(columna)
+    verificar_esquema(engine)
+    return agregadas
 
 
 def crear_engine(url: str) -> Engine:
@@ -90,7 +121,8 @@ def verificar_esquema(engine: Engine) -> None:
     if faltantes:
         raise EsquemaDesactualizado(
             f"La base en {engine.url} tiene un esquema viejo; le faltan: {', '.join(faltantes)}. "
-            "Respáldala y muévela para que se cree de nuevo, o escribe una migración."
+            "Respáldala y corre `family-expense-bot --migrar`; si alguna no tiene migración, "
+            "muévela para que se cree de nuevo."
         )
 
 
@@ -99,7 +131,11 @@ class RepositorioGastos:
         self._sesion = sessionmaker(engine, expire_on_commit=False)
 
     def guardar(
-        self, gasto: GastoExtraido, registrado_por: int, corregido_manualmente: bool = False
+        self,
+        gasto: GastoExtraido,
+        registrado_por: int,
+        corregido_manualmente: bool = False,
+        origen: str = "chat",
     ) -> GastoRegistrado:
         """Guarda un gasto **ya confirmado**. La confirmación ocurre antes, en el bot."""
         if gasto.monto is None:
@@ -118,6 +154,7 @@ class RepositorioGastos:
             confianza_fecha=gasto.confianza_fecha,
             confianza_atribuido_a=gasto.confianza_atribuido_a,
             corregido_manualmente=corregido_manualmente,
+            origen=origen,
         )
         with self._sesion.begin() as sesion:
             sesion.add(fila)

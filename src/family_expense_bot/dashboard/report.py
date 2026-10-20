@@ -144,6 +144,7 @@ COLUMNAS = (
     "descripcion",
     "registrado_por",
     "corregido_manualmente",
+    "origen",
     "creado_en",
 )
 
@@ -165,6 +166,7 @@ def exportar_csv(gastos: Sequence[GastoRegistrado], ruta: Path) -> Path:
                     g.descripcion,
                     g.registrado_por,
                     g.corregido_manualmente,
+                    g.origen,
                     g.creado_en.astimezone(UTC).isoformat(),
                 ]
             )

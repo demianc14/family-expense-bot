@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     es público. Vacío = nadie tiene presupuesto.
     """
 
+    app_url: str = ""
+    """URL https pública de la Mini App (el túnel de cloudflared). Vacía = sin app:
+    el bot funciona igual, sin botón de menú."""
+
     telegram_allowed_ids: str = ""
     """Obsoleta: reemplazada por TELEGRAM_USUARIOS. Solo se lee para avisar."""
 
@@ -41,6 +45,14 @@ class Settings(BaseSettings):
         if not v.get_secret_value().strip():
             raise ValueError("TELEGRAM_BOT_TOKEN está vacío; configúralo en .env")
         return v
+
+    @field_validator("app_url")
+    @classmethod
+    def _https(cls, v: str) -> str:
+        # Telegram solo abre Mini Apps por https; mejor fallar al arrancar que en el celular.
+        if v.strip() and not v.strip().startswith("https://"):
+            raise ValueError(f"APP_URL tiene que empezar con https:// (llegó {v.strip()!r})")
+        return v.strip()
 
     @property
     def usuarios(self) -> dict[int, str]:

@@ -2,6 +2,8 @@
 
 import re
 import unicodedata
+from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 
 import yaml
@@ -250,6 +252,26 @@ class Taxonomia(BaseModel):
         return normalizar(cita).strip() == self.compartida.nombre or self.menciona_gasto_compartido(
             cita
         )
+
+
+def validar_roles(
+    taxonomia: Taxonomia, usuarios: Mapping[int, str], ingresos: Mapping[str, Decimal]
+) -> None:
+    """TELEGRAM_USUARIOS e INGRESOS_MENSUALES solo pueden nombrar personas de la taxonomía."""
+    invalidos = {r for r in usuarios.values() if r not in taxonomia.personas}
+    if invalidos:
+        raise ValueError(
+            f"TELEGRAM_USUARIOS tiene roles que no son personas de la taxonomía: "
+            f"{sorted(invalidos)}. Válidos: {list(taxonomia.personas)} "
+            f"({taxonomia.compartida.nombre!r} no escribe: es compartido)"
+        )
+    sin_persona = set(ingresos) - set(taxonomia.personas)
+    if sin_persona:
+        raise ValueError(
+            f"INGRESOS_MENSUALES tiene roles que no son personas: {sorted(sin_persona)}"
+        )
+    if ingresos and not taxonomia.bolsillos:
+        raise ValueError("Hay INGRESOS_MENSUALES pero categories.yaml no define un presupuesto")
 
 
 def _sin_duplicados(tipo: str, nombres: list[str]) -> None:
