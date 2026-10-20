@@ -66,7 +66,7 @@ bajo un solo paquete.
 ## Decisiones de atribución (resueltas 2026-09-25)
 
 Cada gasto tiene `categoria` (en qué) y `atribuido_a` (de quién), independientes.
-Detalle y mediciones en el README; lo que no se debe deshacer:
+Detalle y mediciones en docs/decisiones.md; lo que no se debe deshacer:
 
 - **`atribuido_a` = quién asume el costo**, no quién pagó en la caja ni el
   beneficiario. Por defecto es el remitente, con confianza `media`, nunca `alta`.
@@ -83,7 +83,7 @@ Detalle y mediciones en el README; lo que no se debe deshacer:
 ## Decisiones de presupuesto (resueltas 2026-10-15)
 
 Presupuesto 30/30/20/20 por bolsillos, en Python y en n8n con paridad. Detalle
-en el README; lo que no se debe deshacer:
+en docs/presupuesto.md; lo que no se debe deshacer:
 
 - **El ingreso va en `.env`** (`INGRESOS_MENSUALES=rol:monto`), nunca en el repo.
   Formato estricto (dígitos y hasta dos decimales), igual en las dos versiones.
@@ -113,6 +113,9 @@ capa de I/O, sin lógica de negocio nueva en las rutas. Lo que no cambia:
 - La familia queda en la taxonomía y en el README como caso de uso documentado.
   No se importa Excel por ahora.
 - El repo sigue siendo el mismo, sin archivar: el tag marca el cierre.
+- El README es de una pantalla (pitch, captura, cómo correrlo, enlaces); el detalle
+  vive en `docs/` y la versión n8n en `n8n/README.md`. Las capturas se regeneran
+  con `scripts/capturas.py`, siempre con datos sintéticos.
 
 ## Arquitectura propuesta
 

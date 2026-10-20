@@ -327,7 +327,7 @@ def test_compuerta_sobre_las_fixtures() -> None:
     comparar("verificar_gasto", entradas, _extraer_py)
 
 
-# La batería del README, con la cita que devolvería un LLM que sigue el prompt.
+# La batería de docs/decisiones.md, con la cita que devolvería un LLM que sigue el prompt.
 # Lo que se prueba acá es la resolución, no al LLM.
 BATERIA_README = [
     ("mama", "mi hija pagó 45 de ropa con su plata", "45", "mi hija", "alta", "hermana", "alta"),

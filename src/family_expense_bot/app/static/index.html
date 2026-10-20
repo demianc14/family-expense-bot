@@ -145,7 +145,7 @@
 const tg = window.Telegram && window.Telegram.WebApp;
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const $ = (id) => document.getElementById(id);
-const dinero = (s) => "$" + Number(s).toLocaleString("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dinero = (s) => "$" + Number(s).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 let opciones = null;
 let atribucion = null;   // Sin preselección: hay que elegirla.
