@@ -100,6 +100,20 @@ en el README; lo que no se debe deshacer:
   El LLM solo extrae el gasto; el monto tiene que estar escrito. Una consulta no
   guarda nada ni cuenta como intento. `/puedo` en Python, lenguaje natural en n8n.
 
+## Decisión de rumbo (resuelta 2026-10-20)
+
+La etapa del bot familiar se cerró (tag `v1.0-bot-familiar`): los papás no usan
+Telegram y llevan sus finanzas en Excel con plantillas propias. **El usuario
+principal ahora es Demian**, y lo siguiente es una Telegram Mini App personal
+encima del mismo núcleo (bolsillos, "¿puedo?", formulario de gastos). Es otra
+capa de I/O, sin lógica de negocio nueva en las rutas. Lo que no cambia:
+
+- Los principios no negociables siguen igual (confirmación antes de guardar,
+  privacidad, el LLM cita y el código decide), aunque el dinero sea propio.
+- La familia queda en la taxonomía y en el README como caso de uso documentado.
+  No se importa Excel por ahora.
+- El repo sigue siendo el mismo, sin archivar: el tag marca el cierre.
+
 ## Arquitectura propuesta
 
 ```

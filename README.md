@@ -9,12 +9,43 @@ Empezó como un bot familiar y con el [presupuesto](#presupuesto-30302020) se
 volvió también una herramienta de finanzas personales: cuánto entra al mes,
 cuánto se aparta y cuánto queda para cada tipo de gasto. El nombre se quedó.
 
-> **Estado: Fase 4.** Pipeline completo: captura → extracción verificada →
-> confirmación humana → almacenamiento → reporte mensual con métrica de calidad.
+> **Estado: la etapa del bot familiar está cerrada** ([`v1.0-bot-familiar`](https://github.com/demianc14/family-expense-bot/releases/tag/v1.0-bot-familiar)).
+> El pipeline funciona completo (captura → extracción verificada → confirmación
+> humana → almacenamiento → reporte mensual con métrica de calidad), pero la
+> familia no lo adoptó: ver [Cómo cambió el proyecto](#cómo-cambió-el-proyecto).
+> Lo que sigue es una app personal sobre el mismo núcleo.
 >
 > Hay una **segunda implementación en n8n** (`n8n/`): el mismo problema
 > resuelto con un agente que decide el flujo, con las mismas reglas de
 > verificación. Ver [Segunda implementación: n8n](#segunda-implementación-n8n).
+
+## Cómo cambió el proyecto
+
+| Fecha | Etapa | Qué cambió |
+|---|---|---|
+| 21-sep | Bot familiar | La idea: que mis papás registren gastos en Telegram como ya los escriben ("200 dólares mercado"), sin aprender una herramienta nueva. Fases 0 a 4 en dos días. |
+| 25-sep | Atribución | Un gasto no es solo "en qué": también es "de quién". Aparece `atribuido_a` y la regla de que el LLM cita la frase y el código decide el parentesco. |
+| 28-sep | Segunda implementación | El mismo problema con un agente en n8n, para medir qué se gana y qué se pierde cuando el LLM decide el flujo. |
+| 15-oct | Presupuesto personal | El reparto 30/30/20/20 de mi propio ingreso. El bot deja de ser solo un registro de la familia y pasa a ser también mi herramienta de finanzas. |
+| 16-oct | ¿Puedo gastar esto? | La consulta antes de gastar, con la regla del ritmo del mes calculada por código. |
+| 20-oct | Hallazgo de adopción | Mis papás no usan Telegram, y para ellos registrar gastos así es más tedioso que lo que ya hacen: llevan sus finanzas en Excel, con plantillas propias de presupuesto y gastos. El bot no les sirve. |
+| 20-oct → | App personal | El usuario real soy yo. El núcleo (verificación, presupuesto, "¿puedo?") sigue igual, con una interfaz para el celular encima. |
+
+**Por qué se cerró la etapa familiar.** No fue un problema técnico. El brief
+del proyecto ya lo anticipaba como limitación: "el sistema depende de que
+alguien de la familia efectivamente use el bot". La fricción de instalar
+Telegram estaba documentada desde el día uno (ver [Decisiones y
+limitaciones](#decisiones-y-limitaciones)), pero el problema real era otro.
+El objetivo era "no pedirles que aprendan una herramienta nueva", y para ellos
+la herramienta conocida no es el chat, es su Excel. Un bot que reemplaza a una
+planilla que funciona es una herramienta nueva, por muy natural que sea
+escribirle.
+
+**Qué se conserva.** Todo lo de abajo sigue funcionando y con tests: la
+verificación por campo, la confirmación humana, el reporte de calidad, el
+presupuesto y la versión n8n. La taxonomía sigue teniendo a la familia,
+porque la atribución ("esto lo pagó la casa") también importa en las
+finanzas de una sola persona.
 
 ## Pipeline (objetivo)
 
@@ -328,6 +359,8 @@ fallidas se guardan a propósito, para depurarlas, y se purgan a los 7 días.
   usuarios no usan Telegram, así que instalarlo es una fricción de adopción
   real: justo lo que el proyecto busca minimizar. WhatsApp se descartó
   porque la Business API exige aprobación de Meta y no apunta a uso personal.
+  *Resultado:* la fricción terminó siendo decisiva. Ver [Cómo cambió el
+  proyecto](#cómo-cambió-el-proyecto).
 - **LLM: Gemini** (`gemini-3.5-flash-lite`), por su salida estructurada
   nativa. El modelo importa más de lo esperado. Medido con el prompt real de
   este proyecto, mismo mensaje:
