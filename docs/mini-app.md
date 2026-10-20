@@ -4,9 +4,21 @@
 
 ![Las cuatro pantallas de la Mini App, con datos sintéticos](img/mini-app.gif)
 
+En tema oscuro (lo decide Telegram):
+
+![La Mini App en tema oscuro](img/mini-app-oscuro.png)
+
 Capturas generadas con `scripts/capturas.py`: la app real, sobre una base temporal con gastos inventados.
 
 ## Qué es
+
+**Diseño: un libro de cuentas.** Papel cálido y tinta, nombres en serif (Instrument
+Serif) y montos en monoespaciada (Geist Mono) para que las cifras se lean en
+columna. Hay un solo color de acento. Cada barra de bolsillo lleva una **marca con
+el día de hoy**: si lo gastado la pasa, la barra se pone ámbar, porque vas más rápido
+que el mes. Es el mismo umbral de la regla del ritmo de "¿puedo?", no un adorno. El
+veredicto sale como un sello y la confirmación como un recibo. Telegram decide si el
+tema es claro u oscuro; la paleta es de la app.
 
 Una **Telegram Mini App**: una página que se abre desde el botón de menú del
 mismo bot. Tiene tres pestañas:

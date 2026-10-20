@@ -6,6 +6,7 @@ initData con un token de prueba. Ningún dato sale de `.env` ni de la base real.
 
     pip install pillow
     python scripts/capturas.py            # escribe docs/img/mini-app.png y .gif
+    python scripts/capturas.py --oscuro   # el tema oscuro: docs/img/mini-app-oscuro.png
 
 Requiere Google Chrome instalado (la ruta de macOS es el default; `CHROME=...` la cambia).
 """
@@ -16,6 +17,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -39,6 +41,7 @@ CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacO
 TOKEN = "123456:token-de-prueba"
 ID_DEMO = 42
 HOY = date(2026, 10, 20)
+ESQUEMA = "dark" if "--oscuro" in sys.argv else "light"
 ANCHO, ALTO = 390, 844
 
 GASTOS_SINTETICOS = [
@@ -47,7 +50,7 @@ GASTOS_SINTETICOS = [
     ("45.00", "deudas_cuotas", "cuota de la tarjeta", 10),
     ("18.50", "comida_fuera", "almuerzo", 8),
     ("35.00", "entretenimiento", "cine", 12),
-    ("60.00", "ropa", "zapatos", 15),
+    ("110.00", "ropa", "zapatos", 15),
     ("40.00", "personal", "curso de inglés", 2),
 ]
 
@@ -80,9 +83,11 @@ def _init_data() -> str:
 
 
 def _stub(escena: str) -> str:
-    return f"""<script>
+    # Sin animaciones: Chrome headless podría sacar la foto a mitad de una.
+    return f"""<style>*, *::before, *::after {{ animation: none !important; }}</style>
+<script>
 window.Telegram = {{ WebApp: {{
-  initData: {json.dumps(_init_data())}, colorScheme: "light",
+  initData: {json.dumps(_init_data())}, colorScheme: {json.dumps(ESQUEMA)},
   ready() {{}}, expand() {{}}, onEvent() {{}},
   MainButton: {{ setText() {{ return this; }}, show() {{ return this; }}, hide() {{ return this; }},
                  showProgress() {{}}, hideProgress() {{}}, onClick() {{}} }},
@@ -191,10 +196,14 @@ def main() -> None:
     mosaico = Image.new(
         "RGB",
         (len(cuadros) * (cuadros[0].width + margen) + margen, cuadros[0].height + 2 * margen),
-        "#e4e4ea",
+        "#2a2722" if ESQUEMA == "dark" else "#e4e0d6",
     )
     for i, c in enumerate(cuadros):
         mosaico.paste(c, (margen + i * (c.width + margen), margen))
+    if ESQUEMA == "dark":
+        mosaico.save(SALIDA / "mini-app-oscuro.png", optimize=True)
+        print(f"Listo: {SALIDA / 'mini-app-oscuro.png'}")
+        return
     mosaico.save(SALIDA / "mini-app.png", optimize=True)
 
     chicos = [c.resize((ANCHO, ALTO), Image.Resampling.LANCZOS) for c in cuadros]

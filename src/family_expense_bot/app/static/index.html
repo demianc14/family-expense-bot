@@ -4,86 +4,213 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mi presupuesto</title>
-<!-- Telegram exige cargar su SDK desde telegram.org. Define las variables --tg-theme-*. -->
+<!-- Telegram exige cargar su SDK desde telegram.org. -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Un libro de cuentas: papel, tinta, números en columna. Un solo color de acento. */
   :root {
-    --bg: var(--tg-theme-bg-color, #ffffff);
-    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f6);
-    --texto: var(--tg-theme-text-color, #1c1c1e);
-    --tenue: var(--tg-theme-hint-color, #6c6c70);
-    --acento: var(--tg-theme-button-color, #2f7de1);
-    --sobre-acento: var(--tg-theme-button-text-color, #ffffff);
-    --peligro: var(--tg-theme-destructive-text-color, #c0392b);
-    --bien: #1f7a44;
-    --alerta: #9a6700;
-    --radio: 14px;
+    --papel: #f4efe4;
+    --hoja: #fbf8f1;
+    --tinta: #1d1b16;
+    --tinta-2: #5b5546;
+    --linea: #ddd4c1;
+    --acento: #1f5f4a;
+    --sobre-acento: #f7f3ea;
+    --rojo: #a8322a;
+    --ambar: #8a5a00;
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: "Geist", -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+    --radio: 6px;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not(.tg) {
-      --bg: #1c1c1e; --bg2: #2c2c2e; --texto: #f2f2f7; --tenue: #a1a1a8;
-      --bien: #4cc27a; --alerta: #e0a93a; --peligro: #ff6b5e;
+    :root:not([data-esquema="light"]) {
+      --papel: #14130f; --hoja: #1e1c17; --tinta: #efe8d8; --tinta-2: #b3aa95; --linea: #3a352b;
+      --acento: #84c9a9; --sobre-acento: #0f241b; --rojo: #ff8b7b; --ambar: #e9b45a;
+      color-scheme: dark;
     }
   }
-  /* Dentro de Telegram el tema lo decide su colorScheme, no el del sistema. */
-  :root.tg[data-esquema="dark"] { --bien: #4cc27a; --alerta: #e0a93a; }
+  :root[data-esquema="dark"] {
+    --papel: #14130f; --hoja: #1e1c17; --tinta: #efe8d8; --tinta-2: #b3aa95; --linea: #3a352b;
+    --acento: #84c9a9; --sobre-acento: #0f241b; --rojo: #ff8b7b; --ambar: #e9b45a;
+    color-scheme: dark;
+  }
+
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg2); color: var(--texto); }
+  html { background: var(--papel); }
   body {
-    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
-    max-width: 560px; margin: 0 auto;
+    margin: 0 auto; max-width: 560px; min-height: 100vh;
+    padding: 0 16px calc(32px + env(safe-area-inset-bottom));
+    background: var(--papel); color: var(--tinta);
+    font: 16px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 20px; margin: 4px 0 2px; }
-  .sub { color: var(--tenue); font-size: 14px; margin: 0 0 12px; }
-  nav { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: var(--radio); margin-bottom: 14px; }
-  nav button { flex: 1; border: 0; background: none; color: var(--texto); padding: 9px 4px; border-radius: 10px; font: inherit; font-size: 15px; }
-  nav button[aria-selected="true"] { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
-  .tarjeta { background: var(--bg); border-radius: var(--radio); padding: 14px; margin-bottom: 10px; }
-  .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .nombre { font-weight: 600; }
-  .pct { color: var(--tenue); font-size: 13px; }
-  .barra { height: 8px; background: var(--bg2); border-radius: 4px; margin: 10px 0 6px; overflow: hidden; }
-  .barra > i { display: block; height: 100%; background: var(--acento); border-radius: 4px; }
-  .barra.pasado > i { background: var(--peligro); }
-  .detalle { color: var(--tenue); font-size: 14px; }
-  .monto { font-variant-numeric: tabular-nums; }
-  .pasado-txt { color: var(--peligro); }
-  label { display: block; font-size: 14px; color: var(--tenue); margin: 12px 0 6px; }
+  /* Grano de papel, apenas perceptible. Va encima de todo para que el papel sea uno solo. */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 20; opacity: .045;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .cifra { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+  /* --- Encabezado ------------------------------------------------------------ */
+  header { padding: 22px 0 14px; }
+  .periodo { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-2); }
+  h1 { font: 400 40px/1 var(--serif); margin: 10px 0 0; letter-spacing: -.01em; }
+  h1 em { font-style: italic; color: var(--acento); }
+  .ingreso { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; color: var(--tinta-2); font-size: 14px; }
+  .ingreso .cifra { color: var(--tinta); font-size: 15px; }
+  .mes { height: 3px; background: var(--linea); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+  .mes > i { display: block; height: 100%; background: var(--tinta); transform-origin: left; animation: crecer .9s cubic-bezier(.2,.7,.2,1) both; }
+
+  /* --- Pestañas: renglones de libro, no pastillas ------------------------------ */
+  nav {
+    position: sticky; top: 0; z-index: 5; display: flex; gap: 22px;
+    background: var(--papel); border-bottom: 1px solid var(--linea); margin: 0 -16px 18px; padding: 0 16px;
+  }
+  nav button {
+    border: 0; background: none; color: var(--tinta-2); font: 500 15px var(--sans);
+    padding: 14px 0 12px; min-height: 44px; position: relative; cursor: pointer;
+  }
+  nav button[aria-selected="true"] { color: var(--tinta); }
+  nav button[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--acento);
+  }
+
+  /* --- Bolsillos -------------------------------------------------------------- */
+  .tira { display: flex; height: 38px; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--tinta); margin-bottom: 6px; }
+  .tira > span {
+    display: flex; align-items: center; justify-content: center; font: 500 11px var(--mono);
+    letter-spacing: .06em; border-right: 1px solid var(--tinta); color: var(--tinta); background: var(--hoja);
+  }
+  .tira > span:last-child { border-right: 0; }
+  .tira > span.apartado { background: repeating-linear-gradient(-45deg, var(--hoja) 0 5px, var(--linea) 5px 6px); }
+  .tira-pie { display: flex; justify-content: space-between; font-size: 12px; color: var(--tinta-2); margin-bottom: 18px; }
+
+  .bolsillo { padding: 16px 0 18px; border-top: 1px solid var(--linea); animation: entrar .5s cubic-bezier(.2,.7,.2,1) both; }
+  .bolsillo:last-of-type { border-bottom: 1px solid var(--linea); }
+  .bolsillo .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .bolsillo h2 { font: 400 26px/1.1 var(--serif); margin: 0; }
+  .bolsillo .pct { font: 500 12px var(--mono); color: var(--tinta-2); }
+  .bolsillo .libre { font-size: 22px; }
+  .bolsillo .de { color: var(--tinta-2); font-size: 13px; }
+  .barra { position: relative; height: 10px; margin: 12px 0 8px; background: var(--hoja); border: 1px solid var(--linea); border-radius: 3px; }
+  .barra > i { position: absolute; inset: 0 auto 0 0; background: var(--acento); border-radius: 2px; transform-origin: left; animation: crecer .8s .15s cubic-bezier(.2,.7,.2,1) both; }
+  .barra.adelantado > i { background: var(--ambar); }
+  .barra.pasado > i { background: var(--rojo); }
+  /* La marca de hoy: si la barra la pasa, el gasto va más rápido que el mes. */
+  .barra > b { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--tinta); }
+  .bolsillo .nota { font-size: 13px; color: var(--tinta-2); }
+  .bolsillo .nota.mal { color: var(--rojo); }
+  .bolsillo .nota.ojo { color: var(--ambar); }
+  .leyenda { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--tinta-2); margin-top: 14px; }
+  .leyenda b { display: inline-block; width: 2px; height: 14px; background: var(--tinta); flex: none; }
+  .suelto { font-size: 13px; color: var(--tinta-2); margin-top: 14px; }
+
+  /* --- Formularios: líneas de llenar, como un talonario ------------------------- */
+  form { animation: entrar .4s cubic-bezier(.2,.7,.2,1) both; }
+  label { display: block; font: 500 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); margin: 22px 0 4px; }
   input, select {
-    width: 100%; font: inherit; color: var(--texto); background: var(--bg2);
-    border: 1px solid transparent; border-radius: 10px; padding: 11px 12px;
+    width: 100%; font: 400 18px var(--sans); color: var(--tinta); background: transparent;
+    border: 0; border-bottom: 1px solid var(--tinta-2); border-radius: 0; padding: 8px 0 10px; min-height: 44px;
+    -webkit-appearance: none; appearance: none;
   }
-  input:focus, select:focus { outline: none; border-color: var(--acento); }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  select {
+    background-image: linear-gradient(45deg, transparent 50%, var(--tinta-2) 50%), linear-gradient(-45deg, transparent 50%, var(--tinta-2) 50%);
+    background-position: right 6px top 50%, right 0 top 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 22px;
+  }
+  input:focus, select:focus { outline: none; border-bottom: 2px solid var(--acento); padding-bottom: 9px; }
+  input.grande { font: 400 44px/1 var(--mono); letter-spacing: -.03em; padding: 4px 0 10px; }
+  .con-signo { position: relative; }
+  .con-signo::before { content: "$"; position: absolute; left: 0; top: 10px; font: 400 26px var(--mono); color: var(--tinta-2); }
+  .con-signo input { padding-left: 22px; }
+  input[type="date"] { font-family: var(--mono); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .chips button {
-    border: 1px solid var(--tenue); background: none; color: var(--texto);
-    border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 15px;
+    border: 1px solid var(--tinta-2); background: transparent; color: var(--tinta);
+    border-radius: 999px; padding: 0 16px; min-height: 40px; font: 500 15px var(--sans); cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
   }
-  .chips button[aria-pressed="true"] { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
-  .interruptor { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: var(--texto); font-size: 15px; }
-  .interruptor input { width: 20px; height: 20px; accent-color: var(--acento); }
+  .chips button[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: var(--papel); }
+
+  .interruptor {
+    display: flex; align-items: center; gap: 12px; margin: 22px 0 0; min-height: 44px;
+    font: 400 15px var(--sans); letter-spacing: 0; text-transform: none; color: var(--tinta); cursor: pointer;
+  }
+  .interruptor input { width: 22px; height: 22px; min-height: 0; padding: 0; border: 1px solid var(--tinta-2); border-radius: 4px; flex: none; display: grid; place-content: center; }
+  .interruptor input:checked { background: var(--acento); border-color: var(--acento); }
+  .interruptor input:checked::after { content: ""; width: 10px; height: 6px; border: solid var(--sobre-acento); border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
+
   .principal {
-    width: 100%; border: 0; border-radius: 12px; padding: 13px; margin-top: 16px;
-    background: var(--acento); color: var(--sobre-acento); font: inherit; font-weight: 600;
+    width: 100%; min-height: 52px; margin-top: 28px; border: 0; border-radius: var(--radio);
+    background: var(--tinta); color: var(--papel); font: 600 16px var(--sans); letter-spacing: .01em; cursor: pointer;
+    transition: transform .1s;
   }
-  .secundario { width: 100%; border: 0; background: none; color: var(--acento); font: inherit; padding: 12px; }
-  .principal:disabled { opacity: .5; }
-  .veredicto { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
-  .si { color: var(--bien); } .difiere { color: var(--alerta); } .no { color: var(--peligro); }
-  .error { color: var(--peligro); font-size: 14px; margin-top: 10px; }
-  .resumen dt { color: var(--tenue); font-size: 13px; margin-top: 8px; }
-  .resumen dd { margin: 2px 0 0; }
-  .aviso { text-align: center; color: var(--tenue); padding: 40px 12px; }
+  .principal:active { transform: translateY(1px); }
+  .principal.verde { background: var(--acento); color: var(--sobre-acento); }
+  .principal:disabled { opacity: .55; }
+  .secundario { width: 100%; min-height: 44px; border: 0; background: none; color: var(--tinta); font: 500 15px var(--sans); text-decoration: underline; text-underline-offset: 4px; margin-top: 6px; cursor: pointer; }
+  :is(button, input, select):focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
+  .error { color: var(--rojo); font-size: 14px; margin-top: 14px; }
+
+  /* --- Veredicto: un sello de goma -------------------------------------------- */
+  .dictamen { margin-top: 26px; padding: 22px 18px; background: var(--hoja); border: 1px solid var(--linea); border-radius: var(--radio); position: relative; overflow: hidden; }
+  .sello {
+    display: inline-block; font: 400 34px/1 var(--serif); font-style: italic; padding: 8px 18px 10px;
+    border: 3px double currentColor; border-radius: 8px; transform: rotate(-4deg);
+    animation: sellar .45s cubic-bezier(.3,1.6,.5,1) both;
+  }
+  .sello.si { color: var(--acento); } .sello.difiere { color: var(--ambar); } .sello.no { color: var(--rojo); } .sello.sinbolsillo { color: var(--tinta-2); }
+  .dictamen p { margin: 16px 0 0; }
+  .dictamen .pie { font-size: 13px; color: var(--tinta-2); }
+
+  /* --- Confirmación: un recibo ----------------------------------------------- */
+  .recibo {
+    background: var(--hoja); padding: 26px 20px 30px; margin-top: 8px; position: relative;
+    filter: drop-shadow(0 1px 0 var(--linea)) drop-shadow(0 8px 18px rgb(0 0 0 / .07));
+    --diente: radial-gradient(circle at 8px 100%, transparent 7px, #000 7.5px);
+    -webkit-mask: var(--diente) 0 100% / 16px 16px repeat-x, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 15px) no-repeat;
+    mask: var(--diente) 0 100% / 16px 16px repeat-x, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 15px) no-repeat;
+    animation: imprimir .5s cubic-bezier(.2,.7,.2,1) both;
+  }
+  .recibo .titulo { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-2); text-align: center; }
+  .recibo .total { font: 400 48px/1 var(--mono); text-align: center; margin: 14px 0 20px; letter-spacing: -.03em; }
+  .resumen { margin: 0; border-top: 1px dashed var(--tinta-2); padding-top: 12px; }
+  .resumen > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; font-size: 15px; }
+  .resumen dt { color: var(--tinta-2); }
+  .resumen dd { margin: 0; text-align: right; font-weight: 500; }
+
+  .hecho { text-align: center; padding: 34px 0 10px; }
+  .hecho .sello { font-size: 30px; }
+  .hecho p { color: var(--tinta-2); margin: 20px 0 0; }
+
+  .aviso { text-align: center; color: var(--tinta-2); padding: 64px 16px; font: 400 22px/1.3 var(--serif); }
   [hidden] { display: none !important; }
+
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes crecer { from { transform: scaleX(0); } }
+  @keyframes sellar { 0% { opacity: 0; transform: rotate(-4deg) scale(1.8); } 100% { opacity: 1; transform: rotate(-4deg) scale(1); } }
+  @keyframes imprimir { from { opacity: 0; transform: translateY(-14px); } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <h1>Mi presupuesto</h1>
-  <p class="sub" id="periodo">&nbsp;</p>
+  <header>
+    <div class="periodo" id="periodo">&nbsp;</div>
+    <h1>Mi <em>presupuesto</em></h1>
+    <div id="cabecera" hidden>
+      <div class="ingreso"><span>Ingreso del mes</span><span class="cifra" id="ingreso"></span></div>
+      <div class="mes" aria-hidden="true"><i id="avance-mes"></i></div>
+      <div class="ingreso"><span id="dia"></span><span id="restan"></span></div>
+    </div>
+  </header>
 
   <div class="aviso" id="fuera" hidden>Esta app se abre desde el botón de menú del bot en Telegram.</div>
-  <div class="aviso" id="cargando">Cargando…</div>
+  <div class="aviso" id="cargando">Abriendo el libro…</div>
 
   <main id="app" hidden>
     <nav role="tablist">
@@ -95,46 +222,49 @@
     <section id="tab-bolsillos" role="tabpanel"></section>
 
     <section id="tab-puedo" role="tabpanel" hidden>
-      <form class="tarjeta" id="form-puedo" novalidate>
-        <label for="p-monto">¿Cuánto?</label>
-        <input id="p-monto" inputmode="decimal" placeholder="30.00" autocomplete="off" required>
+      <form id="form-puedo" novalidate>
+        <label for="p-monto">¿Cuánto sería?</label>
+        <div class="con-signo"><input id="p-monto" class="grande cifra" inputmode="decimal" placeholder="0.00" autocomplete="off" required></div>
         <label for="p-categoria">¿En qué?</label>
         <select id="p-categoria" required></select>
         <label class="interruptor" data-fondo hidden><input type="checkbox" id="p-fondo"> <span></span></label>
         <button class="principal" type="submit">Consultar</button>
-        <div class="error" id="p-error" hidden></div>
+        <div class="error" id="p-error" role="alert" hidden></div>
       </form>
-      <div class="tarjeta" id="p-resultado" hidden></div>
+      <div class="dictamen" id="p-resultado" aria-live="polite" hidden></div>
     </section>
 
     <section id="tab-registrar" role="tabpanel" hidden>
-      <form class="tarjeta" id="form-gasto" novalidate>
+      <form id="form-gasto" novalidate>
         <label for="g-monto">Monto</label>
-        <input id="g-monto" inputmode="decimal" placeholder="12.50" autocomplete="off" required>
+        <div class="con-signo"><input id="g-monto" class="grande cifra" inputmode="decimal" placeholder="0.00" autocomplete="off" required></div>
         <label for="g-descripcion">Descripción</label>
         <input id="g-descripcion" maxlength="200" placeholder="almuerzo, gasolina…" autocomplete="off" required>
         <label for="g-categoria">Categoría</label>
         <select id="g-categoria" required></select>
         <label for="g-fecha">Fecha</label>
         <input id="g-fecha" type="date" required>
-        <label>¿De quién es el gasto?</label>
-        <div class="chips" id="g-de"></div>
+        <label id="g-de-titulo">¿De quién es el gasto?</label>
+        <div class="chips" id="g-de" role="group" aria-labelledby="g-de-titulo"></div>
         <label class="interruptor" data-fondo hidden><input type="checkbox" id="g-fondo"> <span></span></label>
         <button class="principal" type="submit">Revisar</button>
-        <div class="error" id="g-error" hidden></div>
+        <div class="error" id="g-error" role="alert" hidden></div>
       </form>
 
-      <div class="tarjeta" id="g-confirmar" hidden>
-        <div class="nombre">¿Guardo este gasto?</div>
-        <dl class="resumen" id="g-resumen"></dl>
-        <button class="principal" id="g-si" type="button">Sí, guardar</button>
+      <div id="g-confirmar" hidden>
+        <div class="recibo">
+          <div class="titulo">¿Guardo este gasto?</div>
+          <div class="total cifra" id="g-total"></div>
+          <dl class="resumen" id="g-resumen"></dl>
+        </div>
+        <button class="principal verde" id="g-si" type="button">Sí, guardar</button>
         <button class="secundario" id="g-corregir" type="button">Corregir</button>
-        <div class="error" id="g-error-guardar" hidden></div>
+        <div class="error" id="g-error-guardar" role="alert" hidden></div>
       </div>
 
-      <div class="tarjeta" id="g-listo" hidden>
-        <div class="veredicto si">✅ Guardado</div>
-        <div id="g-linea" class="detalle"></div>
+      <div class="hecho" id="g-listo" hidden>
+        <span class="sello si">Guardado</span>
+        <p id="g-linea"></p>
         <button class="secundario" id="g-otro" type="button">Registrar otro</button>
       </div>
     </section>
@@ -145,6 +275,7 @@
 const tg = window.Telegram && window.Telegram.WebApp;
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const $ = (id) => document.getElementById(id);
+// Mismo formato que el chat (mensajes.py usa ${:,.2f}).
 const dinero = (s) => "$" + Number(s).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 let opciones = null;
@@ -175,12 +306,20 @@ function el(tag, clase, texto) {
 
 function mostrarError(id, e) { const n = $(id); n.textContent = e.message; n.hidden = false; }
 function ocultar(...ids) { ids.forEach((id) => { $(id).hidden = true; }); }
+function vibrar(tipo, valor) {
+  const h = tg.HapticFeedback;
+  if (h && h[tipo]) h[tipo](valor);
+}
 
 // --- Pestañas ------------------------------------------------------------------
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
   document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + b.dataset.tab; });
-  if (b.dataset.tab !== "registrar") tg.MainButton.hide();
+  // El ingreso y el día solo hacen falta junto a los bolsillos; en los formularios estorban.
+  $("cabecera").hidden = b.dataset.tab !== "bolsillos" || !opciones.tiene_presupuesto;
+  // El botón de Telegram solo vive mientras hay un recibo esperando el sí.
+  if (b.dataset.tab === "registrar" && !$("g-confirmar").hidden) tg.MainButton.show();
+  else tg.MainButton.hide();
 }));
 
 // --- Bolsillos -------------------------------------------------------------------
@@ -188,32 +327,78 @@ async function cargarBolsillos() {
   const cont = $("tab-bolsillos");
   cont.replaceChildren();
   if (!opciones.tiene_presupuesto) {
-    cont.append(el("div", "tarjeta detalle", "No hay un ingreso mensual configurado para ti (INGRESOS_MENSUALES en .env)."));
+    cont.append(el("p", "suelto", "No hay un ingreso mensual configurado para ti (INGRESOS_MENSUALES en .env)."));
     return;
   }
   const p = await api("/api/presupuesto");
-  const dias = p.dias_restantes === 1 ? "queda 1 día" : `quedan ${p.dias_restantes} días`;
-  $("periodo").textContent = `${MESES[p.mes - 1]} ${p.anio} · ingreso ${dinero(p.ingreso)} · ${dias}`;
+  const diasMes = new Date(p.anio, p.mes, 0).getDate();
+  const hoy = diasMes - p.dias_restantes;
+  // La marca de hoy es el mismo umbral que usa la regla del ritmo de /puedo:
+  // gastado / asignado > días transcurridos / días del mes.
+  const ritmo = hoy / diasMes;
+
+  $("periodo").textContent = `${MESES[p.mes - 1]} ${p.anio}`;
+  $("ingreso").textContent = dinero(p.ingreso);
+  $("avance-mes").style.width = (100 * ritmo) + "%";
+  $("dia").textContent = `Día ${hoy} de ${diasMes}`;
+  $("restan").textContent = p.dias_restantes === 1 ? "queda 1 día" : `quedan ${p.dias_restantes} días`;
+  $("cabecera").hidden = false;
+
+  const tira = el("div", "tira");
+  tira.setAttribute("aria-hidden", "true");
   for (const b of p.bolsillos) {
-    const t = el("div", "tarjeta");
-    const fila = el("div", "fila");
-    fila.append(el("span", "nombre", b.etiqueta), el("span", "pct", `${b.porcentaje}%`));
-    t.append(fila);
-    if (!b.se_gasta) {
-      t.append(el("div", "detalle", `Apártalo al cobrar: ${dinero(b.asignado)}`));
-    } else {
-      const usado = Number(b.asignado) > 0 ? Math.min(100, 100 * Number(b.gastado) / Number(b.asignado)) : 100;
-      const barra = el("div", "barra" + (b.excedido ? " pasado" : ""));
-      const relleno = el("i"); relleno.style.width = usado + "%"; barra.append(relleno);
-      t.append(barra);
-      t.append(b.excedido
-        ? el("div", "detalle pasado-txt", `Te pasaste ${dinero(-Number(b.disponible))} (llevas ${dinero(b.gastado)} de ${dinero(b.asignado)})`)
-        : el("div", "detalle", `Quedan ${dinero(b.disponible)} de ${dinero(b.asignado)} · ${b.cantidad} gasto(s)`));
-    }
-    cont.append(t);
+    const s = el("span", b.se_gasta ? "" : "apartado", `${b.porcentaje}%`);
+    s.style.flex = String(b.porcentaje);
+    tira.append(s);
   }
+  const pie = el("div", "tira-pie");
+  pie.append(el("span", "", "Cómo se reparte el ingreso"), el("span", "", "rayado = se aparta"));
+  cont.append(tira, pie);
+
+  p.bolsillos.forEach((b, i) => {
+    const art = el("article", "bolsillo");
+    art.style.animationDelay = (80 * i) + "ms";
+    const fila = el("div", "fila");
+    const nombre = el("div");
+    nombre.append(el("h2", "", b.etiqueta), el("span", "pct", `${b.porcentaje}% del ingreso`));
+    const monto = el("div");
+    monto.style.textAlign = "right";
+    art.append(fila);
+
+    if (!b.se_gasta) {
+      monto.append(el("div", "libre cifra", dinero(b.asignado)), el("div", "de", "para apartar"));
+      fila.append(nombre, monto);
+      art.append(el("div", "nota", "Se aparta al cobrar; no recibe gastos."));
+    } else {
+      const usado = Number(b.asignado) > 0 ? Number(b.gastado) / Number(b.asignado) : 1;
+      const estado = b.excedido ? "pasado" : (usado > ritmo ? "adelantado" : "");
+      monto.append(
+        el("div", "libre cifra", b.excedido ? "−" + dinero(-Number(b.disponible)) : dinero(b.disponible)),
+        el("div", "de cifra", `libres de ${dinero(b.asignado)}`),
+      );
+      fila.append(nombre, monto);
+      const barra = el("div", "barra " + estado);
+      barra.setAttribute("role", "img");
+      barra.setAttribute("aria-label", `Gastado ${dinero(b.gastado)} de ${dinero(b.asignado)}`);
+      const relleno = el("i"); relleno.style.width = Math.min(100, 100 * usado) + "%";
+      const marca = el("b"); marca.style.left = (100 * ritmo) + "%";
+      barra.append(relleno, marca);
+      art.append(barra);
+      const gastos = b.cantidad === 1 ? "1 gasto" : `${b.cantidad} gastos`;
+      art.append(
+        b.excedido ? el("div", "nota mal", `Te pasaste: llevas ${dinero(b.gastado)} · ${gastos}`)
+        : estado ? el("div", "nota ojo", `Vas más rápido que el mes: llevas ${dinero(b.gastado)} · ${gastos}`)
+        : el("div", "nota", `Llevas ${dinero(b.gastado)} · ${gastos}`),
+      );
+    }
+    cont.append(art);
+  });
+
+  const leyenda = el("div", "leyenda");
+  leyenda.append(el("b"), el("span", "", "La marca es hoy. Si la barra la pasa, gastas más rápido que el mes."));
+  cont.append(leyenda);
   if (Number(p.sin_bolsillo) > 0) {
-    cont.append(el("div", "tarjeta detalle", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.join(", ")})`));
+    cont.append(el("p", "suelto", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.join(", ")})`));
   }
 }
 
@@ -236,7 +421,7 @@ function prepararFondo() {
 const fondoElegido = (id) => ($(id).checked && opciones.bolsillos_con_marcador[0]) ? opciones.bolsillos_con_marcador[0].nombre : null;
 
 // --- ¿Puedo? ----------------------------------------------------------------
-const TITULO = { si: "✅ Sí, te alcanza", difiere: "⏸️ Mejor difiérelo", no: "❌ No te lo recomiendo", sin_bolsillo: "Sin bolsillo" };
+const SELLO = { si: "Sí, alcanza", difiere: "Mejor espera", no: "No", sin_bolsillo: "Sin bolsillo" };
 
 $("form-puedo").addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -244,14 +429,14 @@ $("form-puedo").addEventListener("submit", async (ev) => {
   try {
     const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: $("p-categoria").value, bolsillo: fondoElegido("p-fondo") });
     const caja = $("p-resultado");
-    caja.replaceChildren(el("div", "veredicto " + r.veredicto.replace("_", ""), TITULO[r.veredicto]));
+    caja.replaceChildren(el("span", "sello " + r.veredicto.replace("_", ""), SELLO[r.veredicto]));
     const b = r.bolsillo;
     if (!b) {
-      caja.append(el("div", "detalle", "Esa categoría no cuenta en ningún bolsillo: no hay con qué compararla."));
+      caja.append(el("p", "", "Esa categoría no cuenta en ningún bolsillo: no hay con qué compararla."));
     } else if (r.veredicto === "no") {
-      caja.append(el("div", "detalle", `En ${b.etiqueta} te quedan ${dinero(b.disponible)}; te pasarías por ${dinero(-Number(r.disponible_despues))}.`));
+      caja.append(el("p", "", `En ${b.etiqueta} te quedan ${dinero(b.disponible)}; te pasarías por ${dinero(-Number(r.disponible_despues))}.`));
       if (r.alternativa) {
-        caja.append(el("div", "detalle", `En tu ${r.alternativa.etiqueta} sí te alcanza (quedan ${dinero(r.alternativa.disponible)}).`));
+        caja.append(el("p", "", `En tu ${r.alternativa.etiqueta} sí alcanza: quedan ${dinero(r.alternativa.disponible)}.`));
         const probar = el("button", "secundario", `Probar sacándolo de ${r.alternativa.etiqueta}`);
         probar.type = "button";
         probar.addEventListener("click", () => { $("p-fondo").checked = true; $("form-puedo").requestSubmit(); });
@@ -259,10 +444,11 @@ $("form-puedo").addEventListener("submit", async (ev) => {
       }
     } else {
       const ritmo = r.dias_restantes > 0 ? ` A los ${r.dias_restantes} días que faltan les tocan ${dinero(r.reserva)}.` : "";
-      caja.append(el("div", "detalle", `En ${b.etiqueta} quedarías con ${dinero(r.disponible_despues)} de ${dinero(b.asignado)}.${ritmo}`));
+      caja.append(el("p", "", `En ${b.etiqueta} quedarías con ${dinero(r.disponible_despues)} de ${dinero(b.asignado)}.${ritmo}`));
     }
-    caja.append(el("div", "detalle", "No se guardó nada."));
+    caja.append(el("p", "pie", "Es una consulta: no se guardó nada."));
     caja.hidden = false;
+    vibrar("impactOccurred", "medium");
   } catch (e) { mostrarError("p-error", e); }
 });
 
@@ -277,6 +463,7 @@ function prepararAtribuciones() {
     b.addEventListener("click", () => {
       atribucion = a.nombre;
       cont.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+      vibrar("selectionChanged");
     });
     cont.append(b);
   }
@@ -298,6 +485,7 @@ function verPaso(paso) {
   $("g-confirmar").hidden = paso !== "confirmar";
   $("g-listo").hidden = paso !== "listo";
   if (paso === "confirmar") tg.MainButton.setText("Sí, guardar").show(); else tg.MainButton.hide();
+  window.scrollTo({ top: 0 });
 }
 
 $("form-gasto").addEventListener("submit", async (ev) => {
@@ -307,12 +495,17 @@ $("form-gasto").addEventListener("submit", async (ev) => {
     const campos = camposGasto();
     const r = await api("/api/gastos/previsualizar", campos);   // no guarda nada
     pendiente = campos;
+    $("g-total").textContent = dinero(r.gasto.monto);
     const dl = $("g-resumen");
     dl.replaceChildren();
-    const filas = [["Monto", dinero(r.gasto.monto)], ["Descripción", r.gasto.descripcion], ["Categoría", r.gasto.categoria],
+    const filas = [["Descripción", r.gasto.descripcion], ["Categoría", r.gasto.categoria],
                    ["Fecha", r.gasto.fecha], ["De", r.gasto.de]];
     if (r.bolsillo) filas.push(["Cuenta contra", r.bolsillo]);
-    for (const [k, v] of filas) dl.append(el("dt", "", k), el("dd", "", v));
+    for (const [k, v] of filas) {
+      const fila = el("div");
+      fila.append(el("dt", "", k), el("dd", "", v));
+      dl.append(fila);
+    }
     ocultar("g-error-guardar");
     verPaso("confirmar");
   } catch (e) { mostrarError("g-error", e); }
@@ -326,7 +519,7 @@ async function guardar() {
     const r = await api("/api/gastos", { ...pendiente, confirmado: true });
     pendiente = null;
     $("g-linea").textContent = r.linea || "";
-    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+    vibrar("notificationOccurred", "success");
     verPaso("listo");
     cargarBolsillos().catch(() => {});
   } catch (e) {
@@ -347,6 +540,18 @@ $("g-otro").addEventListener("click", () => {
   verPaso("form");
 });
 
+// --- Tema: Telegram decide claro u oscuro; el papel es nuestro ------------------
+function aplicarTema() {
+  document.documentElement.dataset.esquema = tg.colorScheme;
+  const css = getComputedStyle(document.documentElement);
+  const color = (v) => css.getPropertyValue(v).trim();
+  try {
+    if (tg.setHeaderColor) tg.setHeaderColor(color("--papel"));
+    if (tg.setBackgroundColor) tg.setBackgroundColor(color("--papel"));
+    if (tg.MainButton.setParams) tg.MainButton.setParams({ color: color("--acento"), text_color: color("--sobre-acento") });
+  } catch (_) { /* versiones viejas de Telegram: se queda con sus colores */ }
+}
+
 // --- Arranque ------------------------------------------------------------------
 async function iniciar() {
   if (!tg || !tg.initData) {        // Abierta en un navegador común: no hay identidad.
@@ -354,11 +559,10 @@ async function iniciar() {
     $("fuera").hidden = false;
     return;
   }
-  document.documentElement.classList.add("tg");
-  document.documentElement.dataset.esquema = tg.colorScheme;
-  tg.onEvent("themeChanged", () => { document.documentElement.dataset.esquema = tg.colorScheme; });
   tg.ready();
   tg.expand();
+  aplicarTema();
+  tg.onEvent("themeChanged", aplicarTema);
   try {
     opciones = await api("/api/opciones");
     llenarCategorias($("p-categoria"));
