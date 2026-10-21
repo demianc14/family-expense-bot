@@ -1,0 +1,24 @@
+# Bot y Mini App con un comando: docker compose up -d
+# Los valores reales viven en .env (ignorado por git), nunca acá.
+
+name: family-expense-bot
+
+x-comun: &comun
+  build: .
+  image: family-expense-bot:local
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    TZ: America/Guayaquil
+  volumes:
+    - ./data/processed:/app/data/processed # base con gastos reales: ignorada por git
+
+services:
+  bot:
+    <<: *comun
+
+  app:
+    <<: *comun
+    command: ["--app", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:8080:8080" # solo local; Telegram llega por el túnel HTTPS (APP_URL)
