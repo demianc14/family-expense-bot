@@ -4,9 +4,12 @@ No hay LLM de por medio: cada valor lo escribió o lo eligió una persona en su
 casilla. Por eso acá no se degrada la confianza como en el parser: lo que no
 cuadra se rechaza con un motivo, y lo que cuadra queda en `alta`.
 
-Lo que sí se mantiene son las reglas del chat:
-- La atribución no tiene valor por defecto: hay que elegirla. Preseleccionar a
-  quien escribe sería deducirla.
+La app es el presupuesto personal de quien la abre, así que todo gasto es suyo:
+no hay "¿de quién es?" y el formulario no acepta otra persona (un `atribuido_a`
+en el cuerpo se ignora). No es deducir la atribución como en el chat, donde el
+texto podía nombrar a otro: acá registrar en tu app es decir que es tuyo.
+
+Lo que sí se mantiene de las reglas del chat:
 - "Del fondo" se dice, no se deduce: es un interruptor explícito que agrega el
   marcador del yaml al texto, y `Taxonomia.bolsillo_de` lo resuelve al leer,
   igual que si se hubiera escrito en el chat.
@@ -41,7 +44,6 @@ class CamposFormulario(BaseModel):
     monto: str
     categoria: str
     fecha: date
-    atribuido_a: str | None
     descripcion: str
     bolsillo: str | None = None
     """Un bolsillo con marcadores ("fondo") al que la persona mandó el gasto a propósito."""
@@ -82,11 +84,6 @@ def armar_gasto(
     if hoy - campos.fecha > ANTIGUEDAD_MAXIMA:
         raise FormularioInvalido(f"La fecha {campos.fecha} tiene más de un año")
 
-    if campos.atribuido_a is None:
-        raise FormularioInvalido("Elige de quién es el gasto")
-    if not taxonomia.contiene_atribucion(campos.atribuido_a):
-        raise FormularioInvalido(f"{campos.atribuido_a!r} no es una persona de la lista")
-
     descripcion = " ".join(campos.descripcion.split())
     if not descripcion:
         raise FormularioInvalido("Escribe una descripción corta (ej. almuerzo, gasolina)")
@@ -100,7 +97,7 @@ def armar_gasto(
         monto=monto,
         categoria=categoria,
         fecha=campos.fecha,
-        atribuido_a=campos.atribuido_a.strip().lower(),
+        atribuido_a=remitente,
         descripcion=descripcion,
         texto_original=f"{descripcion}, {marcador}" if marcador else descripcion,
         remitente=remitente,
