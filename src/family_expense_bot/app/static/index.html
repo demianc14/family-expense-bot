@@ -8,267 +8,305 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Schibsted+Grotesk:wght@400;500;600&family=Azeret+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* Un libro de cuentas: papel, tinta, números en columna. Un solo color de acento. */
+  /* Impreso en risografía: tintas planas que se superponen, grano, un poco de
+     desfase en los números grandes. Cada bolsillo es un sobre de su color. */
   :root {
-    --papel: #f4efe4;
-    --hoja: #fbf8f1;
-    --tinta: #1d1b16;
-    --tinta-2: #5b5546;
-    --linea: #ddd4c1;
-    --acento: #1f5f4a;
-    --sobre-acento: #f7f3ea;
-    --rojo: #a8322a;
-    --ambar: #8a5a00;
-    --serif: "Gloock", Georgia, serif;
-    --sans: "Schibsted Grotesk", -apple-system, "Segoe UI", sans-serif;
-    --mono: "Azeret Mono", ui-monospace, "SF Mono", monospace;
-    --radio: 6px;
+    --fondo: #e6e8e1;
+    --superficie: #f3f4ef;
+    --tinta: #141613;
+    --tinta-2: #5d6159;
+    --linea: #c9ccc2;
+    --rosa: #ff4f8b;        /* la tinta del desfase y de "hoy" */
+    --mal: #d33a2c;
+    --ojo: #b97800;
+    --bien: #157a4c;
+    /* Un color por bolsillo; --s-* es el texto que va encima. */
+    --necesarios: #2a49c9; --s-necesarios: #f3f4ef;
+    --lujos: #ff6f9e;      --s-lujos: #141613;
+    --fondo-p: #f2b42f;    --s-fondo-p: #141613;
+    --ahorro: #0c7b74;     --s-ahorro: #f3f4ef;
+    --sin: #8b8f86;        --s-sin: #141613;
+    --mezcla: multiply;
+    --ancho: "wdth" 118;
+    --display: "Archivo", "Arial Narrow", sans-serif;
+    --texto: "Archivo", -apple-system, "Segoe UI", sans-serif;
+    --mono: "Martian Mono", ui-monospace, "SF Mono", monospace;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-esquema="light"]) {
-      --papel: #14130f; --hoja: #1e1c17; --tinta: #efe8d8; --tinta-2: #b3aa95; --linea: #3a352b;
-      --acento: #84c9a9; --sobre-acento: #0f241b; --rojo: #ff8b7b; --ambar: #e9b45a;
+      --fondo: #10110e; --superficie: #1a1c18; --tinta: #ecede6; --tinta-2: #9da095; --linea: #2f322b;
+      --rosa: #ff5f97; --mal: #ff7a68; --ojo: #f2b84b; --bien: #4fd08f;
+      --necesarios: #6080ff; --s-necesarios: #0d0e0c; --lujos: #ff7aa6; --s-lujos: #0d0e0c;
+      --fondo-p: #f4c04f; --s-fondo-p: #0d0e0c; --ahorro: #27a99f; --s-ahorro: #0d0e0c;
+      --sin: #6f736a; --s-sin: #0d0e0c; --mezcla: screen;
       color-scheme: dark;
     }
   }
   :root[data-esquema="dark"] {
-    --papel: #14130f; --hoja: #1e1c17; --tinta: #efe8d8; --tinta-2: #b3aa95; --linea: #3a352b;
-    --acento: #84c9a9; --sobre-acento: #0f241b; --rojo: #ff8b7b; --ambar: #e9b45a;
+    --fondo: #10110e; --superficie: #1a1c18; --tinta: #ecede6; --tinta-2: #9da095; --linea: #2f322b;
+    --rosa: #ff5f97; --mal: #ff7a68; --ojo: #f2b84b; --bien: #4fd08f;
+    --necesarios: #6080ff; --s-necesarios: #0d0e0c; --lujos: #ff7aa6; --s-lujos: #0d0e0c;
+    --fondo-p: #f4c04f; --s-fondo-p: #0d0e0c; --ahorro: #27a99f; --s-ahorro: #0d0e0c;
+    --sin: #6f736a; --s-sin: #0d0e0c; --mezcla: screen;
     color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
-  html { background: var(--papel); }
+  html { background: var(--fondo); }
   body {
-    margin: 0 auto; max-width: 560px; min-height: 100vh;
-    padding: 0 16px calc(32px + env(safe-area-inset-bottom));
-    background: var(--papel); color: var(--tinta);
-    font: 16px/1.45 var(--sans);
-    -webkit-font-smoothing: antialiased;
+    margin: 0 auto; max-width: 520px; min-height: 100vh;
+    padding: 0 16px calc(112px + env(safe-area-inset-bottom));
+    background: var(--fondo); color: var(--tinta);
+    font: 400 16px/1.45 var(--texto);
+    -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
   }
-  /* Grano de papel, apenas perceptible. Va encima de todo para que el papel sea uno solo. */
-  body::before {
-    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 20; opacity: .045;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* Grano de riso encima de todo. */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: .07;
+    mix-blend-mode: var(--mezcla);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
-  .cifra { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .cifra { font-variant-numeric: tabular-nums; }
+  .etiqueta { font: 500 11.5px/1.35 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--tinta-2); }
+  /* Número grande con la segunda tinta corrida un par de milímetros. */
+  .impreso {
+    position: relative; isolation: isolate; display: inline-block;
+    font-family: var(--display); font-weight: 850; font-variation-settings: var(--ancho);
+    letter-spacing: -.035em; line-height: .9;
+  }
+  .impreso::before {
+    content: attr(data-t); position: absolute; left: .045em; top: .035em; z-index: -1;
+    color: var(--rosa); mix-blend-mode: var(--mezcla);
+  }
+  [hidden] { display: none !important; }
+  :is(button, input, select, [tabindex]):focus-visible { outline: 2.5px solid var(--rosa); outline-offset: 3px; }
 
-  /* --- Encabezado ------------------------------------------------------------ */
-  header { padding: 22px 0 14px; }
-  .periodo { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-2); }
-  h1 { font: 400 36px/1.05 var(--serif); margin: 10px 0 0; letter-spacing: -.01em; }
-  h1 em { font-style: normal; color: var(--acento); }
-  .ingreso { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; color: var(--tinta-2); font-size: 14px; }
-  .ingreso .cifra { color: var(--tinta); font-size: 15px; }
-  .mes { height: 3px; background: var(--linea); margin-top: 8px; border-radius: 2px; overflow: hidden; }
-  .mes > i { display: block; height: 100%; background: var(--tinta); transform-origin: left; animation: crecer .9s cubic-bezier(.2,.7,.2,1) both; }
+  /* --- Cabecera: el mes como una regla de días ------------------------------- */
+  .cabecera { padding: 22px 0 6px; animation: subir .5s cubic-bezier(.2,.8,.2,1) both; }
+  .cabecera .arriba { display: flex; justify-content: space-between; align-items: baseline; }
+  .dias { display: flex; gap: 3px; height: 22px; align-items: flex-end; margin: 14px 0 22px; }
+  .dias i { flex: 1; height: 9px; background: var(--linea); border-radius: 1.5px; }
+  .dias i.paso { background: var(--tinta); }
+  .dias i.hoy { background: var(--rosa); height: 22px; }
+  .libre-total { font-size: clamp(54px, 17vw, 76px); }
+  .libre-pie { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; color: var(--tinta-2); font-size: 14px; }
+  .libre-pie b { color: var(--tinta); font-weight: 600; }
 
-  /* --- Pestañas: renglones de libro, no pastillas ------------------------------ */
-  nav {
-    position: sticky; top: 0; z-index: 5; display: flex; gap: 22px;
-    background: var(--papel); border-bottom: 1px solid var(--linea); margin: 0 -16px 18px; padding: 0 16px;
-  }
-  nav button {
-    border: 0; background: none; color: var(--tinta-2); font: 500 15px var(--sans);
-    padding: 14px 0 12px; min-height: 44px; position: relative; cursor: pointer;
-  }
-  nav button[aria-selected="true"] { color: var(--tinta); }
-  nav button[aria-selected="true"]::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--acento);
-  }
+  /* --- Reparto: una barra de cuatro tintas ---------------------------------- */
+  .reparto { display: flex; height: 12px; gap: 3px; margin: 26px 0 8px; }
+  .reparto span { border-radius: 3px; background: var(--c); transform-origin: left; animation: crecer .7s cubic-bezier(.2,.8,.2,1) both; }
+  .reparto span.apartado { background: repeating-linear-gradient(-45deg, var(--c) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1.5px var(--c); }
+  .reparto-pie { display: flex; justify-content: space-between; margin-bottom: 22px; }
 
-  /* --- Bolsillos -------------------------------------------------------------- */
-  .tira { display: flex; height: 38px; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--tinta); margin-bottom: 6px; }
-  .tira > span {
-    display: flex; align-items: center; justify-content: center; font: 500 11px var(--mono);
-    letter-spacing: .06em; border-right: 1px solid var(--tinta); color: var(--tinta); background: var(--hoja);
+  /* --- Sobres: uno por bolsillo, apilados ----------------------------------- */
+  .sobres { display: grid; }
+  .sobre {
+    --c: var(--sin); --s: var(--s-sin);
+    background: var(--c); color: var(--s); border-radius: 22px 22px 18px 18px;
+    padding: 0 18px 30px; margin-bottom: -18px; position: relative;
+    box-shadow: 0 -1px 0 rgb(0 0 0 / .06), 0 -10px 24px -14px rgb(0 0 0 / .35);
+    animation: subir .55s cubic-bezier(.2,.8,.2,1) both;
   }
-  .tira > span:last-child { border-right: 0; }
-  .tira > span.apartado { background: repeating-linear-gradient(-45deg, var(--hoja) 0 5px, var(--linea) 5px 6px); }
-  .tira-pie { display: flex; justify-content: space-between; font-size: 12px; color: var(--tinta-2); margin-bottom: 18px; }
+  .sobre:last-child { margin-bottom: 0; padding-bottom: 18px; }
+  .sobre.apartado {
+    background:
+      repeating-linear-gradient(-45deg, rgb(255 255 255 / .09) 0 2px, transparent 2px 9px),
+      var(--c);
+  }
+  .sobre-cabeza {
+    all: unset; box-sizing: border-box; display: grid; grid-template-columns: 1fr auto; align-items: end;
+    gap: 2px 12px; width: 100%; padding: 18px 0 4px; cursor: pointer; min-height: 64px;
+  }
+  .sobre-cabeza:focus-visible { outline: 2.5px solid var(--s); outline-offset: 2px; border-radius: 10px; }
+  .sobre h2 { margin: 0; font: 800 23px/1 var(--display); font-variation-settings: "wdth" 108; letter-spacing: -.02em; }
+  .sobre .pct { font: 500 11.5px var(--mono); letter-spacing: .08em; opacity: .75; grid-column: 1; }
+  .sobre .monto { grid-row: 1 / span 2; grid-column: 2; text-align: right; }
+  .sobre .monto strong { display: block; font: 850 28px/1 var(--display); font-variation-settings: var(--ancho); letter-spacing: -.03em; }
+  .sobre .monto small { font: 500 11.5px var(--mono); letter-spacing: .06em; opacity: .75; }
+  /* La barra vive dentro del sobre: lo gastado se "come" el color. */
+  .medidor { position: relative; height: 8px; margin: 14px 0 0; border-radius: 4px; background: color-mix(in srgb, var(--s) 22%, transparent); }
+  .medidor > i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--s); transform-origin: left; animation: crecer .8s .2s cubic-bezier(.2,.8,.2,1) both; }
+  .medidor > b { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--rosa); box-shadow: 0 0 0 1.5px var(--c); }
+  .sobre-cuerpo { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s cubic-bezier(.2,.8,.2,1); }
+  .sobre-cuerpo > div { overflow: hidden; }
+  .sobre.abierto .sobre-cuerpo { grid-template-rows: 1fr; }
+  .detalle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 16px; }
+  .detalle div { font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
+  .detalle strong { display: block; margin-top: 4px; font: 700 16px var(--texto); letter-spacing: 0; text-transform: none; opacity: 1; }
+  .sobre .estado { margin-top: 12px; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .sobre .estado::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+  .sobre .estado.calmo::before { opacity: .45; }
+  .notas { margin-top: 30px; display: grid; gap: 8px; color: var(--tinta-2); font-size: 13px; }
+  .notas p { margin: 0; display: flex; gap: 10px; align-items: center; }
+  .notas p > i { width: 3px; height: 14px; background: var(--rosa); border-radius: 2px; flex: none; }
 
-  .bolsillo { padding: 16px 0 18px; border-top: 1px solid var(--linea); animation: entrar .5s cubic-bezier(.2,.7,.2,1) both; }
-  .bolsillo:last-of-type { border-bottom: 1px solid var(--linea); }
-  .bolsillo .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  .bolsillo h2 { font: 400 23px/1.15 var(--serif); margin: 0; }
-  .bolsillo .pct { font: 500 12px var(--mono); color: var(--tinta-2); }
-  .bolsillo .libre { font-size: 22px; }
-  .bolsillo .de { color: var(--tinta-2); font-size: 13px; }
-  .barra { position: relative; height: 10px; margin: 12px 0 8px; background: var(--hoja); border: 1px solid var(--linea); border-radius: 3px; }
-  .barra > i { position: absolute; inset: 0 auto 0 0; background: var(--acento); border-radius: 2px; transform-origin: left; animation: crecer .8s .15s cubic-bezier(.2,.7,.2,1) both; }
-  .barra.adelantado > i { background: var(--ambar); }
-  .barra.pasado > i { background: var(--rojo); }
-  /* La marca de hoy: si la barra la pasa, el gasto va más rápido que el mes. */
-  .barra > b { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--tinta); }
-  .bolsillo .nota { font-size: 13px; color: var(--tinta-2); }
-  .bolsillo .nota.mal { color: var(--rojo); }
-  .bolsillo .nota.ojo { color: var(--ambar); }
-  .leyenda { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--tinta-2); margin-top: 14px; }
-  .leyenda b { display: inline-block; width: 2px; height: 14px; background: var(--tinta); flex: none; }
-  .suelto { font-size: 13px; color: var(--tinta-2); margin-top: 14px; }
-
-  /* --- Formularios: líneas de llenar, como un talonario ------------------------- */
-  form { animation: entrar .4s cubic-bezier(.2,.7,.2,1) both; }
-  label { display: block; font: 500 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); margin: 22px 0 4px; }
-  input, select {
-    width: 100%; font: 400 18px var(--sans); color: var(--tinta); background: transparent;
-    border: 0; border-bottom: 1px solid var(--tinta-2); border-radius: 0; padding: 8px 0 10px; min-height: 44px;
+  /* --- Formularios --------------------------------------------------------- */
+  .titulo-vista { padding: 26px 0 4px; animation: subir .45s cubic-bezier(.2,.8,.2,1) both; }
+  .titulo-vista h1 { margin: 6px 0 0; font: 850 34px/1 var(--display); font-variation-settings: var(--ancho); letter-spacing: -.03em; }
+  form { animation: subir .5s .05s cubic-bezier(.2,.8,.2,1) both; }
+  .monto-grande {
+    display: flex; align-items: baseline; justify-content: center; gap: 4px;
+    margin: 22px -16px 6px; padding: 26px 16px 22px; background: var(--superficie);
+    border-block: 1.5px solid var(--tinta);
+  }
+  .monto-grande span { font: 800 34px var(--display); font-variation-settings: var(--ancho); color: var(--tinta-2); }
+  .monto-grande input {
+    width: 6.2ch; min-width: 0; border: 0; background: none; padding: 0; color: var(--tinta); text-align: left;
+    font: 850 64px/1 var(--display); font-variation-settings: var(--ancho); letter-spacing: -.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .monto-grande input::placeholder { color: var(--linea); }
+  .monto-grande input:focus { outline: none; }
+  .monto-grande:focus-within { border-color: var(--rosa); }
+  .campo { margin-top: 22px; }
+  .campo > .etiqueta { display: block; margin-bottom: 10px; }
+  .texto {
+    width: 100%; font: 500 18px var(--texto); color: var(--tinta); background: var(--superficie);
+    border: 1.5px solid var(--linea); border-radius: 14px; padding: 13px 14px; min-height: 50px;
     -webkit-appearance: none; appearance: none;
   }
-  select {
-    background-image: linear-gradient(45deg, transparent 50%, var(--tinta-2) 50%), linear-gradient(-45deg, transparent 50%, var(--tinta-2) 50%);
-    background-position: right 6px top 50%, right 0 top 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 22px;
+  .texto:focus { outline: none; border-color: var(--tinta); }
+  .texto::placeholder { color: var(--tinta-2); opacity: .6; }
+
+  /* Categorías: fichas agrupadas por sobre, del color de su bolsillo. Nada de menús. */
+  .grupo + .grupo { margin-top: 14px; }
+  .grupo-nombre { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+  .grupo-nombre::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+  .fichas { display: flex; flex-wrap: wrap; gap: 7px; }
+  .ficha {
+    border: 1.5px solid var(--linea); background: var(--superficie); border-radius: 12px;
+    padding: 0 14px; min-height: 42px; font-weight: 600; font-size: 15px;
+    transition: background .15s, color .15s, border-color .15s, transform .1s;
   }
-  input:focus, select:focus { outline: none; border-bottom: 2px solid var(--acento); padding-bottom: 9px; }
-  input.grande { font: 400 40px/1 var(--mono); letter-spacing: -.04em; padding: 4px 0 10px; }
-  .con-signo { position: relative; }
-  .con-signo::before { content: "$"; position: absolute; left: 0; top: 10px; font: 400 26px var(--mono); color: var(--tinta-2); }
-  .con-signo input { padding-left: 22px; }
-  input[type="date"] { font-family: var(--mono); }
+  .ficha:active { transform: scale(.96); }
+  .ficha[aria-checked="true"] { background: var(--c); border-color: var(--c); color: var(--s); }
+  .segmentos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 5px; background: var(--superficie); border: 1.5px solid var(--linea); border-radius: 16px; }
+  .segmentos button { border: 0; background: none; min-height: 42px; border-radius: 11px; font-weight: 600; font-size: 15px; color: var(--tinta-2); }
+  .segmentos button[aria-checked="true"] { background: var(--tinta); color: var(--fondo); }
+  .texto[type="date"] { margin-top: 8px; font-family: var(--mono); font-size: 16px; }
 
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .chips button {
-    border: 1px solid var(--tinta-2); background: transparent; color: var(--tinta);
-    border-radius: 999px; padding: 0 16px; min-height: 40px; font: 500 15px var(--sans); cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
+  .interruptor { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding: 14px 16px; border-radius: 16px; background: var(--superficie); border: 1.5px solid var(--linea); cursor: pointer; }
+  .interruptor small { display: block; color: var(--tinta-2); font-size: 13px; }
+  .interruptor strong { font-weight: 650; }
+  .interruptor input {
+    -webkit-appearance: none; appearance: none; flex: none; width: 50px; height: 30px; margin: 0;
+    border-radius: 99px; background: var(--linea); position: relative; transition: background .2s; cursor: pointer;
   }
-  .chips button[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: var(--papel); }
+  .interruptor input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--superficie); box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform .22s cubic-bezier(.3,1.4,.5,1); }
+  .interruptor input:checked { background: var(--fondo-p); }
+  .interruptor input:checked::after { transform: translateX(20px); }
 
-  .interruptor {
-    display: flex; align-items: center; gap: 12px; margin: 22px 0 0; min-height: 44px;
-    font: 400 15px var(--sans); letter-spacing: 0; text-transform: none; color: var(--tinta); cursor: pointer;
+  .accion {
+    width: 100%; min-height: 56px; margin-top: 26px; border: 0; border-radius: 18px;
+    background: var(--tinta); color: var(--fondo); font: 800 17px var(--display); font-variation-settings: "wdth" 110; letter-spacing: .01em;
+    box-shadow: 4px 4px 0 var(--rosa); transition: transform .1s, box-shadow .1s;
   }
-  .interruptor input { width: 22px; height: 22px; min-height: 0; padding: 0; border: 1px solid var(--tinta-2); border-radius: 4px; flex: none; display: grid; place-content: center; }
-  .interruptor input:checked { background: var(--acento); border-color: var(--acento); }
-  .interruptor input:checked::after { content: ""; width: 10px; height: 6px; border: solid var(--sobre-acento); border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
+  .accion:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--rosa); }
+  .accion:disabled { opacity: .5; }
+  .suave { width: 100%; min-height: 48px; margin-top: 10px; border: 1.5px solid var(--linea); border-radius: 16px; background: none; font-weight: 600; }
+  .error { color: var(--mal); font-size: 14px; font-weight: 600; margin-top: 14px; }
 
-  .principal {
-    width: 100%; min-height: 52px; margin-top: 28px; border: 0; border-radius: var(--radio);
-    background: var(--tinta); color: var(--papel); font: 600 16px var(--sans); letter-spacing: .01em; cursor: pointer;
-    transition: transform .1s;
+  /* --- Hoja que sube desde abajo: confirmación y veredicto ------------------- */
+  .velo { position: fixed; inset: 0; z-index: 30; background: rgb(10 11 9 / .5); opacity: 0; transition: opacity .25s; }
+  .velo.visible { opacity: 1; }
+  .hoja {
+    position: fixed; z-index: 31; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 520px;
+    max-height: 88vh; overflow-y: auto; background: var(--superficie); border-radius: 28px 28px 0 0;
+    padding: 10px 20px calc(22px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .38s cubic-bezier(.2,.9,.25,1);
   }
-  .principal:active { transform: translateY(1px); }
-  .principal.verde { background: var(--acento); color: var(--sobre-acento); }
-  .principal:disabled { opacity: .55; }
-  .secundario { width: 100%; min-height: 44px; border: 0; background: none; color: var(--tinta); font: 500 15px var(--sans); text-decoration: underline; text-underline-offset: 4px; margin-top: 6px; cursor: pointer; }
-  :is(button, input, select):focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
-  .error { color: var(--rojo); font-size: 14px; margin-top: 14px; }
+  .hoja.visible { transform: none; }
+  .asa { width: 42px; height: 5px; border-radius: 3px; background: var(--linea); margin: 0 auto 14px; }
+  .ticket-total { text-align: center; margin: 16px 0 10px; }
+  .ticket-total .impreso { font-size: 58px; }
+  .ticket-bolsillo { display: flex; justify-content: center; margin-bottom: 18px; }
+  .sello-bolsillo { background: var(--c); color: var(--s); border-radius: 99px; padding: 6px 14px; font-weight: 700; font-size: 14px; }
+  .filas { margin: 0; border-top: 1.5px dashed var(--linea); }
+  .filas > div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1.5px dashed var(--linea); }
+  .filas dt { color: var(--tinta-2); }
+  .filas dd { margin: 0; font-weight: 650; text-align: right; }
+  .veredicto { margin: 0 -20px; padding: 26px 20px 24px; background: var(--c); color: var(--s); }
+  .veredicto .palabra { display: block; font: 900 72px/.85 var(--display); font-variation-settings: "wdth" 125; letter-spacing: -.045em; }
+  .veredicto p { margin: 14px 0 0; font-size: 16px; font-weight: 500; }
+  .veredicto .etiqueta { color: inherit; opacity: .75; }
+  .hoja .explicacion { margin: 18px 0 0; font-size: 16px; }
+  .hoja .pie { margin: 12px 0 0; color: var(--tinta-2); font-size: 13px; }
+  .listo { text-align: center; padding: 12px 0 4px; }
+  .listo .impreso { font-size: 56px; }
+  .listo p { color: var(--tinta-2); margin: 16px 0 0; }
 
-  /* --- Veredicto: un sello de goma -------------------------------------------- */
-  .dictamen { margin-top: 26px; padding: 22px 18px; background: var(--hoja); border: 1px solid var(--linea); border-radius: var(--radio); position: relative; overflow: hidden; }
-  .sello {
-    display: inline-block; font: 400 28px/1 var(--serif); padding: 9px 18px 10px;
-    border: 3px double currentColor; border-radius: 8px; transform: rotate(-4deg);
-    animation: sellar .45s cubic-bezier(.3,1.6,.5,1) both;
+  /* --- Navegación: una barra flotante al alcance del pulgar ------------------ */
+  nav {
+    position: fixed; z-index: 20; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 6px; border-radius: 22px; background: var(--tinta);
+    box-shadow: 0 12px 30px -10px rgb(0 0 0 / .45);
   }
-  .sello.si { color: var(--acento); } .sello.difiere { color: var(--ambar); } .sello.no { color: var(--rojo); } .sello.sinbolsillo { color: var(--tinta-2); }
-  .dictamen p { margin: 16px 0 0; }
-  .dictamen .pie { font-size: 13px; color: var(--tinta-2); }
-
-  /* --- Confirmación: un recibo ----------------------------------------------- */
-  .recibo {
-    background: var(--hoja); padding: 26px 20px 30px; margin-top: 8px; position: relative;
-    filter: drop-shadow(0 1px 0 var(--linea)) drop-shadow(0 8px 18px rgb(0 0 0 / .07));
-    --diente: radial-gradient(circle at 8px 100%, transparent 7px, #000 7.5px);
-    -webkit-mask: var(--diente) 0 100% / 16px 16px repeat-x, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 15px) no-repeat;
-    mask: var(--diente) 0 100% / 16px 16px repeat-x, linear-gradient(#000 0 0) 0 0 / 100% calc(100% - 15px) no-repeat;
-    animation: imprimir .5s cubic-bezier(.2,.7,.2,1) both;
+  nav button {
+    border: 0; background: none; color: var(--fondo); opacity: .62; min-height: 46px; padding: 0 16px;
+    border-radius: 16px; font: 700 14.5px var(--texto); white-space: nowrap; transition: opacity .15s, background .15s;
   }
-  .recibo .titulo { font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-2); text-align: center; }
-  .recibo .total { font: 400 42px/1 var(--mono); text-align: center; margin: 14px 0 20px; letter-spacing: -.04em; }
-  .resumen { margin: 0; border-top: 1px dashed var(--tinta-2); padding-top: 12px; }
-  .resumen > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; font-size: 15px; }
-  .resumen dt { color: var(--tinta-2); }
-  .resumen dd { margin: 0; text-align: right; font-weight: 500; }
+  nav button[aria-selected="true"] { opacity: 1; background: color-mix(in srgb, var(--fondo) 16%, transparent); }
+  nav button.mas { opacity: 1; background: var(--rosa); color: #141613; }
+  nav button.mas[aria-selected="true"] { box-shadow: inset 0 0 0 2px var(--fondo); }
 
-  .hecho { text-align: center; padding: 34px 0 10px; }
-  .hecho .sello { font-size: 26px; }
-  .hecho p { color: var(--tinta-2); margin: 20px 0 0; }
+  .aviso { text-align: center; color: var(--tinta-2); padding: 30vh 16px 0; font: 800 24px/1.2 var(--display); font-variation-settings: "wdth" 110; }
 
-  .aviso { text-align: center; color: var(--tinta-2); padding: 64px 16px; font: 400 22px/1.3 var(--serif); }
-  [hidden] { display: none !important; }
-
-  @keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes subir { from { opacity: 0; transform: translateY(14px); } }
   @keyframes crecer { from { transform: scaleX(0); } }
-  @keyframes sellar { 0% { opacity: 0; transform: rotate(-4deg) scale(1.8); } 100% { opacity: 1; transform: rotate(-4deg) scale(1); } }
-  @keyframes imprimir { from { opacity: 0; transform: translateY(-14px); } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <header>
-    <div class="periodo" id="periodo">&nbsp;</div>
-    <h1>Mi <em>presupuesto</em></h1>
-    <div id="cabecera" hidden>
-      <div class="ingreso"><span>Ingreso del mes</span><span class="cifra" id="ingreso"></span></div>
-      <div class="mes" aria-hidden="true"><i id="avance-mes"></i></div>
-      <div class="ingreso"><span id="dia"></span><span id="restan"></span></div>
-    </div>
-  </header>
-
   <div class="aviso" id="fuera" hidden>Esta app se abre desde el botón de menú del bot en Telegram.</div>
-  <div class="aviso" id="cargando">Abriendo el libro…</div>
+  <div class="aviso" id="cargando">Abriendo…</div>
 
   <main id="app" hidden>
-    <nav role="tablist">
-      <button role="tab" data-tab="bolsillos" aria-selected="true">Bolsillos</button>
-      <button role="tab" data-tab="puedo" aria-selected="false">¿Puedo?</button>
-      <button role="tab" data-tab="registrar" aria-selected="false">Registrar</button>
-    </nav>
-
     <section id="tab-bolsillos" role="tabpanel"></section>
 
     <section id="tab-puedo" role="tabpanel" hidden>
+      <div class="titulo-vista"><span class="etiqueta">Consulta · no guarda nada</span><h1>¿Me alcanza?</h1></div>
       <form id="form-puedo" novalidate>
-        <label for="p-monto">¿Cuánto sería?</label>
-        <div class="con-signo"><input id="p-monto" class="grande cifra" inputmode="decimal" placeholder="0.00" autocomplete="off" required></div>
-        <label for="p-categoria">¿En qué?</label>
-        <select id="p-categoria" required></select>
-        <label class="interruptor" data-fondo hidden><input type="checkbox" id="p-fondo"> <span></span></label>
-        <button class="principal" type="submit">Consultar</button>
+        <label class="monto-grande"><span>$</span><input id="p-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
+        <div class="campo"><span class="etiqueta" id="p-cat-t">¿En qué?</span><div id="p-cats" role="radiogroup" aria-labelledby="p-cat-t"></div></div>
+        <label class="interruptor" data-fondo hidden><span><strong></strong><small>Cuenta contra el fondo, no contra su bolsillo</small></span><input type="checkbox" id="p-fondo" role="switch"></label>
+        <button class="accion" type="submit">Consultar</button>
         <div class="error" id="p-error" role="alert" hidden></div>
       </form>
-      <div class="dictamen" id="p-resultado" aria-live="polite" hidden></div>
     </section>
 
     <section id="tab-registrar" role="tabpanel" hidden>
+      <div class="titulo-vista"><span class="etiqueta">Nuevo gasto</span><h1>¿Cuánto gastaste?</h1></div>
       <form id="form-gasto" novalidate>
-        <label for="g-monto">Monto</label>
-        <div class="con-signo"><input id="g-monto" class="grande cifra" inputmode="decimal" placeholder="0.00" autocomplete="off" required></div>
-        <label for="g-descripcion">Descripción</label>
-        <input id="g-descripcion" maxlength="200" placeholder="almuerzo, gasolina…" autocomplete="off" required>
-        <label for="g-categoria">Categoría</label>
-        <select id="g-categoria" required></select>
-        <label for="g-fecha">Fecha</label>
-        <input id="g-fecha" type="date" required>
-        <label id="g-de-titulo">¿De quién es el gasto?</label>
-        <div class="chips" id="g-de" role="group" aria-labelledby="g-de-titulo"></div>
-        <label class="interruptor" data-fondo hidden><input type="checkbox" id="g-fondo"> <span></span></label>
-        <button class="principal" type="submit">Revisar</button>
+        <label class="monto-grande"><span>$</span><input id="g-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
+        <div class="campo"><label class="etiqueta" for="g-descripcion">Qué fue</label>
+          <input id="g-descripcion" class="texto" maxlength="200" placeholder="almuerzo, gasolina…" autocomplete="off"></div>
+        <div class="campo"><span class="etiqueta" id="g-cat-t">Categoría</span><div id="g-cats" role="radiogroup" aria-labelledby="g-cat-t"></div></div>
+        <div class="campo"><span class="etiqueta" id="g-fecha-t">Cuándo</span>
+          <div class="segmentos" id="g-cuando" role="radiogroup" aria-labelledby="g-fecha-t">
+            <button type="button" role="radio" data-cuando="hoy" aria-checked="true">Hoy</button>
+            <button type="button" role="radio" data-cuando="ayer" aria-checked="false">Ayer</button>
+            <button type="button" role="radio" data-cuando="otro" aria-checked="false">Otro día</button>
+          </div>
+          <input id="g-fecha" class="texto" type="date" aria-label="Fecha" hidden></div>
+        <label class="interruptor" data-fondo hidden><span><strong></strong><small>Cuenta contra el fondo, no contra su bolsillo</small></span><input type="checkbox" id="g-fondo" role="switch"></label>
+        <button class="accion" type="submit">Revisar</button>
         <div class="error" id="g-error" role="alert" hidden></div>
       </form>
-
-      <div id="g-confirmar" hidden>
-        <div class="recibo">
-          <div class="titulo">¿Guardo este gasto?</div>
-          <div class="total cifra" id="g-total"></div>
-          <dl class="resumen" id="g-resumen"></dl>
-        </div>
-        <button class="principal verde" id="g-si" type="button">Sí, guardar</button>
-        <button class="secundario" id="g-corregir" type="button">Corregir</button>
-        <div class="error" id="g-error-guardar" role="alert" hidden></div>
-      </div>
-
-      <div class="hecho" id="g-listo" hidden>
-        <span class="sello si">Guardado</span>
-        <p id="g-linea"></p>
-        <button class="secundario" id="g-otro" type="button">Registrar otro</button>
-      </div>
     </section>
+
+    <nav role="tablist" aria-label="Secciones">
+      <button role="tab" data-tab="bolsillos" aria-selected="true">Bolsillos</button>
+      <button role="tab" data-tab="puedo" aria-selected="false">¿Puedo?</button>
+      <button role="tab" data-tab="registrar" class="mas" aria-selected="false">+ Gasto</button>
+    </nav>
   </main>
+
+  <div class="velo" id="velo" hidden></div>
+  <div class="hoja" id="hoja" role="dialog" aria-modal="true" aria-label="Detalle" hidden><div class="asa"></div><div id="hoja-cuerpo"></div></div>
 
 <script>
 "use strict";
@@ -277,10 +315,13 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 const $ = (id) => document.getElementById(id);
 // Mismo formato que el chat (mensajes.py usa ${:,.2f}).
 const dinero = (s) => "$" + Number(s).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Colores por nombre de bolsillo (config/categories.yaml). Uno desconocido sale gris.
+const TINTA = { necesarios: "necesarios", lujos: "lujos", fondo: "fondo-p", ahorro: "ahorro" };
+const ORDEN_GRUPOS = ["necesarios", "lujos", "fondo"];
 
 let opciones = null;
-let atribucion = null;   // Sin preselección: hay que elegirla.
 let pendiente = null;    // Los campos del gasto que se está confirmando.
+const elegida = { p: null, g: null };   // Categoría elegida en cada formulario.
 
 async function api(ruta, cuerpo) {
   const r = await fetch(ruta, {
@@ -303,111 +344,177 @@ function el(tag, clase, texto) {
   if (texto !== undefined) e.textContent = texto;   // textContent: nada del usuario se interpreta como HTML
   return e;
 }
-
+function impreso(tag, clase, texto) { const e = el(tag, "impreso " + clase, texto); e.dataset.t = texto; return e; }
+function tenir(nodo, bolsillo) {
+  const t = TINTA[bolsillo] || "sin";
+  nodo.style.setProperty("--c", `var(--${t})`);
+  nodo.style.setProperty("--s", `var(--s-${t})`);
+  return nodo;
+}
+const humano = (n) => { const s = n.replace(/_/g, " ").replace(/cion\b/g, "ción"); return s[0].toUpperCase() + s.slice(1); };
 function mostrarError(id, e) { const n = $(id); n.textContent = e.message; n.hidden = false; }
 function ocultar(...ids) { ids.forEach((id) => { $(id).hidden = true; }); }
 function vibrar(tipo, valor) {
-  const h = tg.HapticFeedback;
+  const h = tg && tg.HapticFeedback;
   if (h && h[tipo]) h[tipo](valor);
 }
+function fechaISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 
 // --- Pestañas ------------------------------------------------------------------
-document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-  document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + b.dataset.tab; });
-  // El ingreso y el día solo hacen falta junto a los bolsillos; en los formularios estorban.
-  $("cabecera").hidden = b.dataset.tab !== "bolsillos" || !opciones.tiene_presupuesto;
-  // El botón de Telegram solo vive mientras hay un recibo esperando el sí.
-  if (b.dataset.tab === "registrar" && !$("g-confirmar").hidden) tg.MainButton.show();
-  else tg.MainButton.hide();
-}));
+function irA(tab) {
+  document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o.dataset.tab === tab)));
+  document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + tab; });
+  window.scrollTo({ top: 0 });
+  vibrar("selectionChanged");
+}
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => irA(b.dataset.tab)));
 
 // --- Bolsillos -------------------------------------------------------------------
 async function cargarBolsillos() {
   const cont = $("tab-bolsillos");
-  cont.replaceChildren();
   if (!opciones.tiene_presupuesto) {
-    cont.append(el("p", "suelto", "No hay un ingreso mensual configurado para ti (INGRESOS_MENSUALES en .env)."));
+    cont.replaceChildren(el("p", "aviso", "No hay un ingreso mensual configurado para ti (INGRESOS_MENSUALES en .env)."));
     return;
   }
   const p = await api("/api/presupuesto");
+  cont.replaceChildren();
   const diasMes = new Date(p.anio, p.mes, 0).getDate();
   const hoy = diasMes - p.dias_restantes;
   // La marca de hoy es el mismo umbral que usa la regla del ritmo de /puedo:
   // gastado / asignado > días transcurridos / días del mes.
   const ritmo = hoy / diasMes;
+  const gastables = p.bolsillos.filter((b) => b.se_gasta);
+  const libre = gastables.reduce((s, b) => s + Number(b.disponible), 0);
+  const asignado = gastables.reduce((s, b) => s + Number(b.asignado), 0);
 
-  $("periodo").textContent = `${MESES[p.mes - 1]} ${p.anio}`;
-  $("ingreso").textContent = dinero(p.ingreso);
-  $("avance-mes").style.width = (100 * ritmo) + "%";
-  $("dia").textContent = `Día ${hoy} de ${diasMes}`;
-  $("restan").textContent = p.dias_restantes === 1 ? "queda 1 día" : `quedan ${p.dias_restantes} días`;
-  $("cabecera").hidden = false;
+  // Cabecera: el mes como regla de días y lo que queda libre, en grande.
+  const cab = el("header", "cabecera");
+  const arriba = el("div", "arriba");
+  arriba.append(el("span", "etiqueta", `${MESES[p.mes - 1]} ${p.anio}`), el("span", "etiqueta", `día ${hoy} de ${diasMes}`));
+  const dias = el("div", "dias");
+  dias.setAttribute("aria-hidden", "true");
+  for (let d = 1; d <= diasMes; d++) dias.append(el("i", d < hoy ? "paso" : d === hoy ? "hoy" : ""));
+  const pie = el("div", "libre-pie");
+  const restan = p.dias_restantes === 1 ? "1 día" : `${p.dias_restantes} días`;
+  const b1 = el("span"); b1.append("de ", el("b", "cifra", dinero(asignado)), " para gastar");
+  const b2 = el("span"); b2.append("quedan ", el("b", "", restan));
+  pie.append(b1, b2);
+  cab.append(arriba, dias, el("span", "etiqueta", "Libre este mes"), el("br"),
+             impreso("div", "libre-total cifra", (libre < 0 ? "−" : "") + dinero(Math.abs(libre))), pie);
 
-  const tira = el("div", "tira");
-  tira.setAttribute("aria-hidden", "true");
-  for (const b of p.bolsillos) {
-    const s = el("span", b.se_gasta ? "" : "apartado", `${b.porcentaje}%`);
-    s.style.flex = String(b.porcentaje);
-    tira.append(s);
-  }
-  const pie = el("div", "tira-pie");
-  pie.append(el("span", "", "Cómo se reparte el ingreso"), el("span", "", "rayado = se aparta"));
-  cont.append(tira, pie);
-
+  // Reparto del ingreso: cuatro tintas.
+  const reparto = el("div", "reparto");
+  reparto.setAttribute("aria-hidden", "true");
   p.bolsillos.forEach((b, i) => {
-    const art = el("article", "bolsillo");
-    art.style.animationDelay = (80 * i) + "ms";
-    const fila = el("div", "fila");
-    const nombre = el("div");
-    nombre.append(el("h2", "", b.etiqueta), el("span", "pct", `${b.porcentaje}% del ingreso`));
-    const monto = el("div");
-    monto.style.textAlign = "right";
-    art.append(fila);
+    const s = tenir(el("span", b.se_gasta ? "" : "apartado"), b.nombre);
+    s.style.flex = String(b.porcentaje);
+    s.style.animationDelay = (60 * i) + "ms";
+    reparto.append(s);
+  });
+  const repartoPie = el("div", "reparto-pie");
+  repartoPie.append(el("span", "etiqueta", `Ingreso ${dinero(p.ingreso)}`), el("span", "etiqueta", "rayado = se aparta"));
+
+  // Sobres: lo apartado primero (cerrado), después los que se gastan.
+  const sobres = el("div", "sobres");
+  const orden = [...p.bolsillos.filter((b) => !b.se_gasta), ...gastables];
+  orden.forEach((b, i) => {
+    const sobre = tenir(el("article", "sobre" + (b.se_gasta ? "" : " apartado")), b.nombre);
+    sobre.style.animationDelay = (90 + 70 * i) + "ms";
+    sobre.style.zIndex = String(i + 1);
+    const cabeza = el(b.se_gasta ? "button" : "div", "sobre-cabeza");
+    const monto = el("div", "monto");
+    cabeza.append(el("h2", "", b.etiqueta), monto, el("span", "pct", `${b.porcentaje}% del ingreso`));
+    sobre.append(cabeza);
 
     if (!b.se_gasta) {
-      monto.append(el("div", "libre cifra", dinero(b.asignado)), el("div", "de", "para apartar"));
-      fila.append(nombre, monto);
-      art.append(el("div", "nota", "Se aparta al cobrar; no recibe gastos."));
+      monto.append(el("strong", "cifra", dinero(b.asignado)), el("small", "", "APARTADO"));
+      sobre.append(el("div", "estado calmo", "Se aparta al cobrar. No recibe gastos."));
     } else {
       const usado = Number(b.asignado) > 0 ? Number(b.gastado) / Number(b.asignado) : 1;
-      const estado = b.excedido ? "pasado" : (usado > ritmo ? "adelantado" : "");
+      const adelantado = !b.excedido && usado > ritmo;
       monto.append(
-        el("div", "libre cifra", b.excedido ? "−" + dinero(-Number(b.disponible)) : dinero(b.disponible)),
-        el("div", "de cifra", `libres de ${dinero(b.asignado)}`),
+        el("strong", "cifra", b.excedido ? "−" + dinero(-Number(b.disponible)) : dinero(b.disponible)),
+        el("small", "", b.excedido ? "TE PASASTE" : "LIBRE"),
       );
-      fila.append(nombre, monto);
-      const barra = el("div", "barra " + estado);
-      barra.setAttribute("role", "img");
-      barra.setAttribute("aria-label", `Gastado ${dinero(b.gastado)} de ${dinero(b.asignado)}`);
+      const medidor = el("div", "medidor");
+      medidor.setAttribute("role", "img");
+      medidor.setAttribute("aria-label", `Gastado ${dinero(b.gastado)} de ${dinero(b.asignado)}`);
       const relleno = el("i"); relleno.style.width = Math.min(100, 100 * usado) + "%";
       const marca = el("b"); marca.style.left = (100 * ritmo) + "%";
-      barra.append(relleno, marca);
-      art.append(barra);
-      const gastos = b.cantidad === 1 ? "1 gasto" : `${b.cantidad} gastos`;
-      art.append(
-        b.excedido ? el("div", "nota mal", `Te pasaste: llevas ${dinero(b.gastado)} · ${gastos}`)
-        : estado ? el("div", "nota ojo", `Vas más rápido que el mes: llevas ${dinero(b.gastado)} · ${gastos}`)
-        : el("div", "nota", `Llevas ${dinero(b.gastado)} · ${gastos}`),
-      );
+      medidor.append(relleno, marca);
+      cabeza.append(medidor);
+      cabeza.style.gridTemplateRows = "auto auto auto";
+      medidor.style.gridColumn = "1 / -1";
+
+      const cuerpo = el("div", "sobre-cuerpo");
+      const interior = el("div");
+      const detalle = el("div", "detalle");
+      for (const [k, v] of [["Asignado", dinero(b.asignado)], ["Gastado", dinero(b.gastado)], ["Gastos", String(b.cantidad)]]) {
+        const d = el("div", "", k); d.append(el("strong", "cifra", v)); detalle.append(d);
+      }
+      const estado = b.excedido ? "Te pasaste del bolsillo."
+        : adelantado ? "Vas más rápido que el mes."
+        : "Vas al ritmo del mes.";
+      interior.append(detalle, el("div", "estado" + (b.excedido || adelantado ? "" : " calmo"), estado));
+      cuerpo.append(interior);
+      sobre.append(cuerpo);
+      cabeza.setAttribute("aria-expanded", "false");
+      cabeza.addEventListener("click", () => {
+        const abierto = sobre.classList.toggle("abierto");
+        cabeza.setAttribute("aria-expanded", String(abierto));
+        vibrar("impactOccurred", "light");
+      });
+      // Abierto de entrada si pide atención.
+      if (b.excedido || adelantado) { sobre.classList.add("abierto"); cabeza.setAttribute("aria-expanded", "true"); }
     }
-    cont.append(art);
+    sobres.append(sobre);
   });
 
-  const leyenda = el("div", "leyenda");
-  leyenda.append(el("b"), el("span", "", "La marca es hoy. Si la barra la pasa, gastas más rápido que el mes."));
-  cont.append(leyenda);
+  const notas = el("div", "notas");
+  const n1 = el("p"); n1.append(el("i"), "La marca rosa es hoy. Si la barra la pasa, gastas más rápido que el mes.");
+  notas.append(n1);
   if (Number(p.sin_bolsillo) > 0) {
-    cont.append(el("p", "suelto", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.join(", ")})`));
+    notas.append(el("p", "", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.map(humano).join(", ")})`));
   }
+  cont.append(cab, reparto, repartoPie, sobres, notas);
 }
 
-// --- Formularios: opciones compartidas -----------------------------------------
-function llenarCategorias(select) {
-  select.append(new Option("Elige una categoría", ""));
+// --- Categorías: fichas por bolsillo ---------------------------------------------
+function llenarCategorias(form) {
+  const cont = $(form + "-cats");
+  const grupos = new Map();
   for (const c of opciones.categorias) {
-    select.append(new Option(c.bolsillo ? `${c.nombre} · ${c.bolsillo}` : c.nombre, c.nombre));
+    const k = c.bolsillo_nombre || "";
+    if (!grupos.has(k)) grupos.set(k, { etiqueta: c.bolsillo || "Sin bolsillo", cats: [] });
+    grupos.get(k).cats.push(c);
   }
+  const claves = [...grupos.keys()].sort((a, b) => {
+    const ia = ORDEN_GRUPOS.indexOf(a), ib = ORDEN_GRUPOS.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  for (const k of claves) {
+    const g = grupos.get(k);
+    const grupo = tenir(el("div", "grupo"), k);
+    grupo.append(el("div", "grupo-nombre etiqueta", g.etiqueta));
+    const fichas = el("div", "fichas");
+    for (const c of g.cats) {
+      const f = el("button", "ficha", humano(c.nombre));
+      f.type = "button";
+      f.dataset.cat = c.nombre;
+      f.title = c.descripcion;
+      f.setAttribute("role", "radio");
+      f.setAttribute("aria-checked", "false");
+      f.addEventListener("click", () => elegirCategoria(form, c.nombre));
+      fichas.append(f);
+    }
+    grupo.append(fichas);
+    cont.append(grupo);
+  }
+}
+function elegirCategoria(form, nombre) {
+  elegida[form] = nombre;
+  $(form + "-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", String(f.dataset.cat === nombre)));
+  vibrar("selectionChanged");
 }
 
 function prepararFondo() {
@@ -415,140 +522,160 @@ function prepararFondo() {
   document.querySelectorAll("[data-fondo]").forEach((l) => {
     if (!fondo) return;
     l.hidden = false;
-    l.querySelector("span").textContent = `Sacarlo de mi ${fondo.etiqueta}`;
+    l.querySelector("strong").textContent = `Sacarlo de mi ${fondo.etiqueta.toLowerCase()}`;
   });
 }
 const fondoElegido = (id) => ($(id).checked && opciones.bolsillos_con_marcador[0]) ? opciones.bolsillos_con_marcador[0].nombre : null;
 
+// --- Hoja --------------------------------------------------------------------------
+let alCerrar = null;
+function abrirHoja(nodos, cerrar) {
+  $("hoja-cuerpo").replaceChildren(...nodos);
+  alCerrar = cerrar || null;
+  $("velo").hidden = false; $("hoja").hidden = false;
+  $("hoja").scrollTop = 0;
+  requestAnimationFrame(() => requestAnimationFrame(() => { $("velo").classList.add("visible"); $("hoja").classList.add("visible"); }));
+  if (tg && tg.BackButton) tg.BackButton.show();
+}
+function cerrarHoja() {
+  $("velo").classList.remove("visible"); $("hoja").classList.remove("visible");
+  setTimeout(() => { $("velo").hidden = true; $("hoja").hidden = true; }, 380);
+  if (tg && tg.BackButton) tg.BackButton.hide();
+  const f = alCerrar; alCerrar = null;
+  if (f) f();
+}
+$("velo").addEventListener("click", cerrarHoja);
+function boton(clase, texto, accion) { const b = el("button", clase, texto); b.type = "button"; b.addEventListener("click", accion); return b; }
+
 // --- ¿Puedo? ----------------------------------------------------------------
-const SELLO = { si: "Sí, alcanza", difiere: "Mejor espera", no: "No", sin_bolsillo: "Sin bolsillo" };
+const VEREDICTO = {
+  si: ["Sí", "ahorro", "Te alcanza."],
+  difiere: ["Espera", "fondo", "Alcanza, pero te deja corto para lo que queda del mes."],
+  no: ["No", "lujos", "No te alcanza."],
+  sin_bolsillo: ["—", "sin", "Esa categoría no cuenta en ningún bolsillo."],
+};
 
 $("form-puedo").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  ocultar("p-error", "p-resultado");
+  ocultar("p-error");
   try {
-    const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: $("p-categoria").value, bolsillo: fondoElegido("p-fondo") });
-    const caja = $("p-resultado");
-    caja.replaceChildren(el("span", "sello " + r.veredicto.replace("_", ""), SELLO[r.veredicto]));
+    if (!elegida.p) throw new Error("Elige en qué sería el gasto");
+    const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: elegida.p, bolsillo: fondoElegido("p-fondo") });
+    const [palabra, tinta, bajada] = VEREDICTO[r.veredicto];
+    const banda = tenir(el("div", "veredicto"), tinta);
+    banda.append(el("span", "etiqueta", `${dinero(r.monto)} en ${humano(elegida.p)}`), el("span", "palabra", palabra), el("p", "", bajada));
+    const nodos = [banda];
     const b = r.bolsillo;
-    if (!b) {
-      caja.append(el("p", "", "Esa categoría no cuenta en ningún bolsillo: no hay con qué compararla."));
-    } else if (r.veredicto === "no") {
-      caja.append(el("p", "", `En ${b.etiqueta} te quedan ${dinero(b.disponible)}; te pasarías por ${dinero(-Number(r.disponible_despues))}.`));
+    if (b && r.veredicto === "no") {
+      nodos.push(el("p", "explicacion", `En ${b.etiqueta} te quedan ${dinero(b.disponible)}; te pasarías por ${dinero(-Number(r.disponible_despues))}.`));
       if (r.alternativa) {
-        caja.append(el("p", "", `En tu ${r.alternativa.etiqueta} sí alcanza: quedan ${dinero(r.alternativa.disponible)}.`));
-        const probar = el("button", "secundario", `Probar sacándolo de ${r.alternativa.etiqueta}`);
-        probar.type = "button";
-        probar.addEventListener("click", () => { $("p-fondo").checked = true; $("form-puedo").requestSubmit(); });
-        caja.append(probar);
+        nodos.push(el("p", "explicacion", `En tu ${r.alternativa.etiqueta.toLowerCase()} sí alcanza: quedan ${dinero(r.alternativa.disponible)}.`));
+        nodos.push(boton("accion", `Probar sacándolo de ${r.alternativa.etiqueta.toLowerCase()}`, () => {
+          $("p-fondo").checked = true; cerrarHoja(); setTimeout(() => $("form-puedo").requestSubmit(), 400);
+        }));
       }
-    } else {
+    } else if (b) {
       const ritmo = r.dias_restantes > 0 ? ` A los ${r.dias_restantes} días que faltan les tocan ${dinero(r.reserva)}.` : "";
-      caja.append(el("p", "", `En ${b.etiqueta} quedarías con ${dinero(r.disponible_despues)} de ${dinero(b.asignado)}.${ritmo}`));
+      nodos.push(el("p", "explicacion", `En ${b.etiqueta} quedarías con ${dinero(r.disponible_despues)} de ${dinero(b.asignado)}.${ritmo}`));
     }
-    caja.append(el("p", "pie", "Es una consulta: no se guardó nada."));
-    caja.hidden = false;
-    vibrar("impactOccurred", "medium");
+    nodos.push(el("p", "pie", "Es una consulta: no se guardó nada."), boton("suave", "Cerrar", cerrarHoja));
+    abrirHoja(nodos);
+    vibrar("notificationOccurred", r.veredicto === "si" ? "success" : r.veredicto === "no" ? "error" : "warning");
   } catch (e) { mostrarError("p-error", e); }
 });
 
 // --- Registrar -----------------------------------------------------------------
-function prepararAtribuciones() {
-  const cont = $("g-de");
-  cont.replaceChildren();
-  for (const a of opciones.atribuciones) {
-    const b = el("button", "", a.etiqueta);
-    b.type = "button";
-    b.setAttribute("aria-pressed", "false");
-    b.addEventListener("click", () => {
-      atribucion = a.nombre;
-      cont.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
-      vibrar("selectionChanged");
-    });
-    cont.append(b);
-  }
+let cuando = "hoy";
+document.querySelectorAll("#g-cuando button").forEach((b) => b.addEventListener("click", () => {
+  cuando = b.dataset.cuando;
+  document.querySelectorAll("#g-cuando button").forEach((o) => o.setAttribute("aria-checked", String(o === b)));
+  $("g-fecha").hidden = cuando !== "otro";
+  vibrar("selectionChanged");
+}));
+function fechaElegida() {
+  const hoy = new Date(opciones.hoy + "T12:00:00");
+  if (cuando === "hoy") return opciones.hoy;
+  if (cuando === "ayer") { hoy.setDate(hoy.getDate() - 1); return fechaISO(hoy); }
+  return $("g-fecha").value;
 }
 
 function camposGasto() {
   return {
     monto: $("g-monto").value,
     descripcion: $("g-descripcion").value,
-    categoria: $("g-categoria").value,
-    fecha: $("g-fecha").value,
-    atribuido_a: atribucion,
+    categoria: elegida.g || "",
+    fecha: fechaElegida(),
     bolsillo: fondoElegido("g-fondo"),
   };
-}
-
-function verPaso(paso) {
-  $("form-gasto").hidden = paso !== "form";
-  $("g-confirmar").hidden = paso !== "confirmar";
-  $("g-listo").hidden = paso !== "listo";
-  if (paso === "confirmar") tg.MainButton.setText("Sí, guardar").show(); else tg.MainButton.hide();
-  window.scrollTo({ top: 0 });
 }
 
 $("form-gasto").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   ocultar("g-error");
   try {
+    if (!elegida.g) throw new Error("Elige una categoría");
     const campos = camposGasto();
     const r = await api("/api/gastos/previsualizar", campos);   // no guarda nada
     pendiente = campos;
-    $("g-total").textContent = dinero(r.gasto.monto);
-    const dl = $("g-resumen");
-    dl.replaceChildren();
-    const filas = [["Descripción", r.gasto.descripcion], ["Categoría", r.gasto.categoria],
-                   ["Fecha", r.gasto.fecha], ["De", r.gasto.de]];
-    if (r.bolsillo) filas.push(["Cuenta contra", r.bolsillo]);
-    for (const [k, v] of filas) {
-      const fila = el("div");
-      fila.append(el("dt", "", k), el("dd", "", v));
-      dl.append(fila);
+    const cat = opciones.categorias.find((c) => c.nombre === r.gasto.categoria);
+    const fecha = new Date(r.gasto.fecha + "T12:00:00");
+    const filas = el("dl", "filas");
+    for (const [k, v] of [["Qué", r.gasto.descripcion], ["Categoría", humano(r.gasto.categoria)],
+                          ["Fecha", `${fecha.getDate()} de ${MESES[fecha.getMonth()]}`]]) {
+      const fila = el("div"); fila.append(el("dt", "", k), el("dd", "", v)); filas.append(fila);
     }
-    ocultar("g-error-guardar");
-    verPaso("confirmar");
+    const total = el("div", "ticket-total");
+    total.append(impreso("strong", "cifra", dinero(r.gasto.monto)));
+    const nodos = [el("div", "etiqueta", "¿Guardo este gasto?"), total];
+    if (r.bolsillo) {
+      const sello = el("div", "ticket-bolsillo");
+      const nombre = campos.bolsillo || (cat && cat.bolsillo_nombre);
+      sello.append(tenir(el("span", "sello-bolsillo", `Cuenta contra ${r.bolsillo}`), nombre));
+      nodos.push(sello);
+    }
+    const error = el("div", "error"); error.id = "g-error-guardar"; error.setAttribute("role", "alert"); error.hidden = true;
+    const si = boton("accion", "Sí, guardar", guardar); si.id = "g-si";
+    nodos.push(filas, si, boton("suave", "Corregir", cerrarHoja), error);
+    abrirHoja(nodos, () => { pendiente = null; });
   } catch (e) { mostrarError("g-error", e); }
 });
 
 async function guardar() {
   if (!pendiente) return;
   $("g-si").disabled = true;
-  tg.MainButton.showProgress();
   try {
     const r = await api("/api/gastos", { ...pendiente, confirmado: true });
     pendiente = null;
-    $("g-linea").textContent = r.linea || "";
+    const listo = el("div", "listo");
+    listo.append(impreso("div", "", "Guardado"), el("p", "", r.linea || "Quedó registrado."));
     vibrar("notificationOccurred", "success");
-    verPaso("listo");
+    $("hoja-cuerpo").replaceChildren(listo,
+      boton("accion", "Registrar otro", () => { cerrarHoja(); limpiarGasto(); }),
+      boton("suave", "Ver bolsillos", () => { cerrarHoja(); limpiarGasto(); irA("bolsillos"); }));
+    alCerrar = limpiarGasto;
     cargarBolsillos().catch(() => {});
   } catch (e) {
     mostrarError("g-error-guardar", e);
-  } finally {
     $("g-si").disabled = false;
-    tg.MainButton.hideProgress();
   }
 }
-$("g-si").addEventListener("click", guardar);
-tg && tg.MainButton.onClick(guardar);
-$("g-corregir").addEventListener("click", () => { pendiente = null; verPaso("form"); });
-$("g-otro").addEventListener("click", () => {
+function limpiarGasto() {
   $("form-gasto").reset();
+  elegida.g = null;
+  $("g-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", "false"));
+  document.querySelector('#g-cuando [data-cuando="hoy"]').click();
   $("g-fecha").value = opciones.hoy;
-  atribucion = null;
-  prepararAtribuciones();
-  verPaso("form");
-});
+}
 
-// --- Tema: Telegram decide claro u oscuro; el papel es nuestro ------------------
+// --- Tema: Telegram decide claro u oscuro; las tintas son nuestras --------------
 function aplicarTema() {
   document.documentElement.dataset.esquema = tg.colorScheme;
   const css = getComputedStyle(document.documentElement);
   const color = (v) => css.getPropertyValue(v).trim();
   try {
-    if (tg.setHeaderColor) tg.setHeaderColor(color("--papel"));
-    if (tg.setBackgroundColor) tg.setBackgroundColor(color("--papel"));
-    if (tg.MainButton.setParams) tg.MainButton.setParams({ color: color("--acento"), text_color: color("--sobre-acento") });
+    if (tg.setHeaderColor) tg.setHeaderColor(color("--fondo"));
+    if (tg.setBackgroundColor) tg.setBackgroundColor(color("--fondo"));
+    if (tg.setBottomBarColor) tg.setBottomBarColor(color("--fondo"));
   } catch (_) { /* versiones viejas de Telegram: se queda con sus colores */ }
 }
 
@@ -563,12 +690,12 @@ async function iniciar() {
   tg.expand();
   aplicarTema();
   tg.onEvent("themeChanged", aplicarTema);
+  if (tg.BackButton) tg.BackButton.onClick(cerrarHoja);
   try {
     opciones = await api("/api/opciones");
-    llenarCategorias($("p-categoria"));
-    llenarCategorias($("g-categoria"));
+    llenarCategorias("p");
+    llenarCategorias("g");
     prepararFondo();
-    prepararAtribuciones();
     $("g-fecha").value = opciones.hoy;
     $("g-fecha").max = opciones.hoy;
     await cargarBolsillos();
