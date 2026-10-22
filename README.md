@@ -7,7 +7,7 @@ gratuito extrae el gasto, el código lo verifica campo por campo y **nada se
 guarda hasta que una persona lo confirma**. Encima hay un presupuesto 30/30/20/20
 y una Mini App para verlo en el celular.
 
-![Mini App: bolsillos del mes, "¿puedo gastar esto?", formulario y confirmación (datos sintéticos)](docs/img/mini-app.png)
+![Mini App: bolsillos del mes, "¿puedo gastar esto?", formulario y confirmación (datos sintéticos)](docs/img/mini-app.gif)
 
 ## Qué tiene de interesante
 
