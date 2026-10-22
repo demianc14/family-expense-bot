@@ -1,6 +1,6 @@
 # Mini App
 
-[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
+[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Evaluación](evaluacion.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
 
 ![Las cuatro pantallas de la Mini App, con datos sintéticos](img/mini-app.gif)
 

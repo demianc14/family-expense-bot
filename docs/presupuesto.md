@@ -1,6 +1,6 @@
 # Presupuesto 30/30/20/20 y “¿puedo gastar esto?”
 
-[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
+[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Evaluación](evaluacion.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
 
 El núcleo de finanzas personales: cómo se reparte el ingreso y cómo se decide si conviene un gasto.
 
