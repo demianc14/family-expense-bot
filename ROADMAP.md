@@ -18,8 +18,9 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 - **Base real migrada** (`--migrar`, agregó `gastos.origen`). Respaldo previo en
   `data/processed/gastos.respaldo-20261021-133136.db`.
 - **Corriendo con Docker:** `docker compose up -d`; la Mini App sale por un túnel rápido de
-  cloudflared, cuya URL cambia en cada arranque (actualizar `APP_URL` y
-  `docker compose restart bot`). Resolverlo es la Fase E.
+  cloudflared, cuya URL cambia en cada arranque y además vence si la Mac se duerme
+  (actualizar `APP_URL` y `docker compose up -d bot`; `restart` no relee el `.env`).
+  Resolverlo es la Fase E.
 - **Siguiente:** push + PR de `fase-b-ingenieria`, cambiar la captura del README por
   `docs/img/mini-app.gif` (ya generado) y empezar la Fase C.
 

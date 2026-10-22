@@ -68,9 +68,10 @@ Limitaciones:
 
 - **Funciona solo con la Mac prendida.** La base vive ahí a propósito: los
   datos no salen de la máquina. La contracara es que no hay app sin Mac.
-- **La URL del túnel rápido cambia en cada arranque.** Hay que actualizar
-  `APP_URL` y reiniciar el bot. Un túnel con nombre y un dominio propio lo
-  resolvería, pero no está hecho.
+- **La URL del túnel rápido cambia en cada arranque**, y vence si la Mac se
+  duerme un rato. Hay que actualizar `APP_URL` y reiniciar el bot; con Docker,
+  `docker compose up -d bot`, porque `restart` no vuelve a leer el `.env`. Un
+  túnel con nombre y un dominio propio lo resolvería, pero no está hecho.
 - **El bot y la app son dos procesos sobre el mismo SQLite.** Con una persona
   registrando a mano alcanza (SQLite serializa las escrituras), pero no es
   para muchos usuarios.
