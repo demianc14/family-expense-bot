@@ -110,3 +110,27 @@ def test_ningun_commit_del_historial_contiene_secretos() -> None:
     ).stdout.decode("utf-8", errors="ignore")
     hallazgos = [tipo for tipo, p in PATRONES_DE_SECRETOS.items() if p.search(objetos)]
     assert not hallazgos, f"El historial de git contiene: {hallazgos}"
+
+
+def test_ningun_commit_del_historial_versiono_un_archivo_ignorado() -> None:
+    """Una base o un export que se versionó y después se ignoró sigue en el historial.
+
+    Toma cada ruta que alguna vez entró a un commit y le pregunta al `.gitignore`
+    actual si la habría excluido.
+    """
+    rutas = subprocess.run(
+        ["git", "log", "--all", "--name-only", "--format="],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    ignoradas = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--stdin"],
+        cwd=ROOT,
+        input="\n".join(sorted(set(rutas.splitlines()) - {""})),
+        check=False,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert not ignoradas, f"El historial de git versionó archivos ignorados: {ignoradas}"

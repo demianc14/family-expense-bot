@@ -31,7 +31,7 @@ def _configurar_logging() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-def main() -> None:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="family-expense-bot")
     parser.add_argument(
         "--check",
@@ -65,10 +65,21 @@ def main() -> None:
     )
     parser.add_argument("--puerto", type=int, default=8080, help="Con --app: puerto local (8080).")
     parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Con --app: interfaz donde escucha (127.0.0.1). En Docker va 0.0.0.0 y el "
+        "compose publica el puerto solo en 127.0.0.1 del equipo.",
+    )
+    parser.add_argument(
         "--migrar",
         action="store_true",
         help="Agrega a una base existente las columnas nuevas del esquema. Respáldala antes.",
     )
+    return parser
+
+
+def main() -> None:
+    parser = _parser()
     args = parser.parse_args()
 
     _configurar_logging()
@@ -90,7 +101,7 @@ def main() -> None:
         return
 
     if args.app:
-        _levantar_app(settings, token, args.puerto)
+        _levantar_app(settings, token, args.host, args.puerto)
         return
 
     if args.extraer:
@@ -123,7 +134,7 @@ def main() -> None:
     build_application(token, servicios, settings.app_url).run_polling()
 
 
-def _levantar_app(settings: Settings, token: str, puerto: int) -> None:
+def _levantar_app(settings: Settings, token: str, host: str, puerto: int) -> None:
     try:
         servicios = ServiciosApp(
             repositorio=RepositorioGastos(crear_engine(settings.database_url)),
@@ -135,7 +146,7 @@ def _levantar_app(settings: Settings, token: str, puerto: int) -> None:
     except (ValueError, EsquemaDesactualizado) as e:
         raise SystemExit(f"No arranco: {e}") from e
     # Solo local: lo que llega de afuera entra por el túnel, que termina el https.
-    uvicorn.run(crear_app(servicios), host="127.0.0.1", port=puerto)
+    uvicorn.run(crear_app(servicios), host=host, port=puerto)
 
 
 def _exportar(ruta: Path, settings: Settings) -> None:

@@ -1,0 +1,17 @@
+# Nada de datos reales ni secretos dentro de la imagen.
+.env
+.env.*
+data/
+n8n/
+.git/
+.venv/
+**/__pycache__/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.impeccable/
+.DS_Store
+docs/
+tests/
+scripts/

@@ -1,5 +1,7 @@
 # family-expense-bot
 
+[![CI](https://github.com/demianc14/family-expense-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/demianc14/family-expense-bot/actions/workflows/ci.yml)
+
 Finanzas personales desde Telegram. Escribes "pagué 18 del almuerzo", un LLM
 gratuito extrae el gasto, el código lo verifica campo por campo y **nada se
 guarda hasta que una persona lo confirma**. Encima hay un presupuesto 30/30/20/20
@@ -34,6 +36,13 @@ cp .env.example .env          # token de @BotFather, API key de Gemini, tu ID y 
 family-expense-bot            # el bot (polling)
 family-expense-bot --app      # la Mini App en 127.0.0.1:8080; ver docs/mini-app.md
 pytest && ruff check . && mypy
+pre-commit install            # ruff antes de cada commit
+```
+
+O, con Docker, bot y Mini App con un comando (la base queda en `data/processed/`):
+
+```bash
+cp .env.example .env && docker compose up -d
 ```
 
 En Telegram: escribe un gasto en texto libre, `/presupuesto`, `/puedo 30 concierto`
