@@ -285,19 +285,37 @@ def _porcentaje(parte: int, total: int) -> str:
 
 
 def guardar_corrida(ruta: Path, modelo: str, hoy: date, resultados: list[Resultado]) -> None:
-    ruta.parent.mkdir(parents=True, exist_ok=True)
+    iniciar_corrida(ruta, modelo, hoy)
+    for r in resultados:
+        agregar_resultado(ruta, r)
+
+
+def iniciar_corrida(ruta: Path, modelo: str, hoy: date) -> list[Resultado]:
+    """Abre la corrida de este modelo y prompt, y devuelve lo que ya tenía.
+
+    Se escribe fila por fila: si el proceso muere a mitad de camino, lo corrido
+    queda y la próxima vez se retoma desde ahí, sin volver a gastar cuota.
+    """
     meta = {"modelo": modelo, "prompt": version_prompt(), "hoy": hoy.isoformat()}
-    with ruta.open("w") as f:
-        f.write(json.dumps({"meta": meta}, ensure_ascii=False) + "\n")
-        for r in resultados:
-            fila = {
-                "id": r.id,
-                "crudo": r.crudo,
-                "gasto": r.gasto,
-                "error": r.error,
-                "segundos": round(r.segundos, 3),
-            }
-            f.write(json.dumps(fila, ensure_ascii=False) + "\n")
+    if ruta.exists():
+        previa, resultados = leer_corrida(ruta)
+        if previa == meta:
+            return resultados
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps({"meta": meta}, ensure_ascii=False) + "\n")
+    return []
+
+
+def agregar_resultado(ruta: Path, r: Resultado) -> None:
+    fila = {
+        "id": r.id,
+        "crudo": r.crudo,
+        "gasto": r.gasto,
+        "error": r.error,
+        "segundos": round(r.segundos, 3),
+    }
+    with ruta.open("a") as f:
+        f.write(json.dumps(fila, ensure_ascii=False) + "\n")
 
 
 def leer_corrida(ruta: Path) -> tuple[dict[str, str], list[Resultado]]:

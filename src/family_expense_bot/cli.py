@@ -12,9 +12,10 @@ from family_expense_bot.bot.handlers import Servicios, build_application, obtene
 from family_expense_bot.config import Settings
 from family_expense_bot.dashboard.report import exportar_csv
 from family_expense_bot.evaluacion import (
+    agregar_resultado,
     cargar_casos,
     correr,
-    guardar_corrida,
+    iniciar_corrida,
     leer_corrida,
     resumir,
     tabla_markdown,
@@ -212,15 +213,22 @@ def _evaluar(
     taxonomia = cargar_taxonomia()
     hoy, casos = cargar_casos(banco, taxonomia)
     casos = casos[:limite] if limite else casos
+    ruta = banco.parent / "corridas" / f"{modelo}-{version_prompt()}.jsonl"
+    resultados = iniciar_corrida(ruta, modelo, hoy)
+    hechos = {r.id for r in resultados}
+    pendientes = [c for c in casos if c.id not in hechos]
+    if hechos:
+        print(f"  Retomando {ruta}: {len(hechos)} casos ya corridos, faltan {len(pendientes)}")
     cliente = _cliente_gemini(settings, modelo)
-    resultados = []
-    for r in correr(casos, cliente, taxonomia, hoy, pausa):
+    for r in correr(pendientes, cliente, taxonomia, hoy, pausa):
+        agregar_resultado(ruta, r)
         resultados.append(r)
         print(f"  {len(resultados):>3}/{len(casos)} {r.id} ({r.segundos:.1f} s)", flush=True)
-    if len(resultados) < len(casos):
-        print(f"\n  Cuota agotada: quedan {len(casos) - len(resultados)} casos sin correr.")
-    ruta = banco.parent / "corridas" / f"{modelo}-{version_prompt()}.jsonl"
-    guardar_corrida(ruta, modelo, hoy, resultados)
+    # Con --limite, la corrida puede traer casos de más: la tabla es de estos casos.
+    en_banco = {c.id for c in casos}
+    resultados = [r for r in resultados if r.id in en_banco]
+    if faltan := len(casos) - len(resultados):
+        print(f"\n  Cuota agotada: quedan {faltan} casos; vuelve a correrlo para retomar.")
     print(f"\n  Corrida guardada en {ruta}\n")
     print(tabla_markdown(resumir(casos, resultados), modelo))
 

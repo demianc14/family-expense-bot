@@ -10,9 +10,11 @@ import pytest
 from family_expense_bot.evaluacion import (
     Caso,
     Celda,
+    agregar_resultado,
     cargar_casos,
     correr,
     guardar_corrida,
+    iniciar_corrida,
     leer_corrida,
     resumir,
     tabla_markdown,
@@ -170,3 +172,21 @@ def test_banco_con_categoria_inactiva_falla(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="salud"):
         cargar_casos(banco, TAXONOMIA)
+
+
+def test_una_corrida_cortada_se_retoma(tmp_path: Path) -> None:
+    ruta = tmp_path / "corrida.jsonl"
+    casos = [caso("taxi 15", monto="15"), caso("café 3", monto="3")]
+    assert iniciar_corrida(ruta, "falso", HOY) == []
+    primero, *_ = correr(casos[:1], ClienteGuionado({"monto": "15"}), TAXONOMIA, HOY)
+    agregar_resultado(ruta, primero)
+
+    retomados = iniciar_corrida(ruta, "falso", HOY)
+    assert [r.id for r in retomados] == ["taxi 15"]
+
+
+def test_una_corrida_de_otro_dia_empieza_de_cero(tmp_path: Path) -> None:
+    ruta = tmp_path / "corrida.jsonl"
+    resultados, _ = evaluar([caso("taxi 15", monto="15")], {"monto": "15"})
+    guardar_corrida(ruta, "falso", HOY, resultados)
+    assert iniciar_corrida(ruta, "falso", date(2026, 3, 16)) == []
