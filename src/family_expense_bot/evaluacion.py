@@ -209,9 +209,12 @@ class Resumen:
     """(caso, campo, obtenido, esperado) de cada error silencioso, para leerlos uno a uno."""
     segundos: list[float] = field(default_factory=list)
 
-    @property
-    def latencia_media(self) -> float:
-        return sum(self.segundos) / len(self.segundos) if self.segundos else 0.0
+    def latencia(self, percentil: float) -> float:
+        """La media engaña: la latencia de Gemini tiene una cola larga."""
+        if not self.segundos:
+            return 0.0
+        ordenados = sorted(self.segundos)
+        return ordenados[min(int(len(ordenados) * percentil), len(ordenados) - 1)]
 
 
 def resumir(casos: list[Caso], resultados: list[Resultado]) -> Resumen:
@@ -244,7 +247,7 @@ def tabla_markdown(resumen: Resumen, modelo: str, prompt: str | None = None) -> 
     lineas = [
         f"**{modelo}** · prompt `{prompt or version_prompt()}` · {resumen.casos} casos, "
         f"{resumen.fallos_del_proveedor} sin respuesta válida · "
-        f"latencia media {resumen.latencia_media:.1f} s",
+        f"latencia p50 {resumen.latencia(0.5):.1f} s, p90 {resumen.latencia(0.9):.1f} s",
         "",
         "| Campo | Puntuados | Acierto confiado | Acierto con duda | Error atrapado "
         "| Error silencioso | Rescatados por el código |",
@@ -261,7 +264,7 @@ def tabla_markdown(resumen: Resumen, modelo: str, prompt: str | None = None) -> 
     lineas += [
         "",
         f"Dudó cuando debía: {resumen.dudo_cuando_debia} de {resumen.debio_dudar} "
-        f"({_pct(resumen.dudo_cuando_debia, resumen.debio_dudar)}) · "
+        f"({_porcentaje(resumen.dudo_cuando_debia, resumen.debio_dudar)}) · "
         f"casos con respuesta válida: {validos}",
     ]
     if resumen.silenciosos:
@@ -274,7 +277,11 @@ def tabla_markdown(resumen: Resumen, modelo: str, prompt: str | None = None) -> 
 
 
 def _pct(parte: int, total: int) -> str:
-    return f"{parte} ({parte / total:.0%})" if total else "sin casos"
+    return f"{parte} ({_porcentaje(parte, total)})" if total else "sin casos"
+
+
+def _porcentaje(parte: int, total: int) -> str:
+    return f"{parte / total:.0%}" if total else "sin casos"
 
 
 def guardar_corrida(ruta: Path, modelo: str, hoy: date, resultados: list[Resultado]) -> None:
