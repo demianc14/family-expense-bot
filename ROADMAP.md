@@ -20,7 +20,8 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
   cloudflared, cuya URL cambia en cada arranque y además vence si la Mac se duerme
   (actualizar `APP_URL` y `docker compose up -d bot`; `restart` no relee el `.env`).
   Resolverlo es la Fase E.
-- **Siguiente:** mergear el PR #2 y empezar la Fase C en la rama `fase-c-evaluacion`.
+- **Fase C en curso** (rama `fase-c-evaluacion`): banco de 84 casos, `--evaluar` y la tabla de flash-lite en `docs/evaluacion.md`. La evaluación encontró que un 429 dejaba al bot dormido horas; ya está arreglado.
+- **Siguiente:** completar flash a medida que haya cuota (20 por día) y las mejoras candidatas de `docs/evaluacion.md`, medidas antes y después.
 
 ## Fase A. Base y presentación (días 1 a 3)
 
@@ -38,9 +39,9 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 ## Fase C. Evaluación del modelo (semana 2)
 
-- [ ] Dataset etiquetado a partir de `tests/fixtures/mensajes.yaml`, ampliado con mensajes anonimizados (tamaño inicial sugerido: 60 a 100).
-- [ ] Script `eval` que mide aciertos por campo (monto, categoría, fecha, atribución; la atribución solo aplica al bot de chat, la Mini App ya no la pide) y cuántas veces el código rechazó o pidió confirmación correctamente.
-- [ ] Comparar modelos (`GEMINI_MODELO`) y versiones de prompt; resultados en `docs/evaluacion.md` y tabla en el README.
+- [x] Dataset etiquetado: 84 mensajes sintéticos en `evals/mensajes.yaml`. No hay reales anonimizados porque `extracciones` no guarda el texto.
+- [x] Script `eval` que mide aciertos por campo (monto, categoría, fecha, atribución; la atribución solo aplica al bot de chat, la Mini App ya no la pide) y cuántas veces el código rechazó o pidió confirmación correctamente.
+- [ ] Comparar modelos (`GEMINI_MODELO`) y versiones de prompt; resultados en `docs/evaluacion.md` y tabla en el README. Hecho flash-lite (84 casos en `evals/`); flash espera cuota: el plan gratuito da 20 requests por día.
 - [ ] Mejoras guiadas por esa tabla, medidas antes y después: varios gastos en un mensaje y estabilidad de la confianza.
 
 ## Fase D. Automatización (semana 3)
@@ -66,7 +67,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 - [x] Corre con un comando (Docker).
 - [ ] CI verde con badge (verde en la rama; falta que llegue a `main`).
-- [ ] Tabla de evaluación con números reales.
+- [x] Tabla de evaluación con números reales.
 - [ ] Al menos una automatización que actúa sin que se pida.
 - [ ] README de una pantalla y limitaciones honestas.
 - [x] Historial sin datos personales.

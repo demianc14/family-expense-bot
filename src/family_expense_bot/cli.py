@@ -11,6 +11,16 @@ from family_expense_bot.app.api import ServiciosApp, crear_app
 from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
 from family_expense_bot.config import Settings
 from family_expense_bot.dashboard.report import exportar_csv
+from family_expense_bot.evaluacion import (
+    agregar_resultado,
+    cargar_casos,
+    correr,
+    iniciar_corrida,
+    leer_corrida,
+    resumir,
+    tabla_markdown,
+    version_prompt,
+)
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.gemini import GeminiCliente
 from family_expense_bot.extraction.parser import extraer
@@ -58,6 +68,29 @@ def _parser() -> argparse.ArgumentParser:
         help="Con --extraer: el rol de quien escribe (papa, mama, hermana, demian).",
     )
     parser.add_argument(
+        "--evaluar",
+        metavar="BANCO",
+        nargs="?",
+        const="evals/mensajes.yaml",
+        help="Pasa el banco de mensajes etiquetados por el LLM real, guarda la corrida en "
+        "evals/corridas/ e imprime la tabla. Gasta cuota de Gemini.",
+    )
+    parser.add_argument("--modelo", help="Con --evaluar: modelo de Gemini (el de .env si no).")
+    parser.add_argument(
+        "--limite", type=int, help="Con --evaluar: solo los primeros N casos, para probar."
+    )
+    parser.add_argument(
+        "--pausa",
+        type=float,
+        default=4.0,
+        help="Con --evaluar: segundos entre llamadas (4); el plan gratuito limita por minuto.",
+    )
+    parser.add_argument(
+        "--desde-corrida",
+        metavar="JSONL",
+        help="Con --evaluar: recalcula la tabla de una corrida guardada, sin llamar al LLM.",
+    )
+    parser.add_argument(
         "--app",
         action="store_true",
         help="Levanta la Mini App en 127.0.0.1 (exponla con cloudflared y pon la URL en "
@@ -83,6 +116,11 @@ def main() -> None:
     args = parser.parse_args()
 
     _configurar_logging()
+    if args.evaluar and args.desde_corrida:
+        # Sin .env: recalcular una corrida guardada no necesita ningún secreto.
+        _recalcular_evaluacion(Path(args.evaluar), Path(args.desde_corrida))
+        return
+
     settings = Settings()  # valores vienen del entorno
     token = settings.telegram_bot_token.get_secret_value()
 
@@ -98,6 +136,11 @@ def main() -> None:
     if args.migrar:
         agregadas = migrar(settings.database_url)
         print(f"Agregadas: {', '.join(agregadas)}" if agregadas else "La base ya estaba al día")
+        return
+
+    if args.evaluar:
+        modelo = args.modelo or settings.gemini_modelo
+        _evaluar(Path(args.evaluar), modelo, args.limite, args.pausa, settings)
         return
 
     if args.app:
@@ -156,10 +199,48 @@ def _exportar(ruta: Path, settings: Settings) -> None:
     print(f"{len(gastos)} gasto(s) exportados a {ruta}")
 
 
-def _cliente_gemini(settings: Settings) -> GeminiCliente:
+def _cliente_gemini(settings: Settings, modelo: str | None = None) -> GeminiCliente:
     if settings.gemini_api_key is None:
         raise SystemExit("Falta GEMINI_API_KEY en .env")
-    return GeminiCliente(settings.gemini_api_key.get_secret_value(), modelo=settings.gemini_modelo)
+    return GeminiCliente(
+        settings.gemini_api_key.get_secret_value(), modelo=modelo or settings.gemini_modelo
+    )
+
+
+def _evaluar(
+    banco: Path, modelo: str, limite: int | None, pausa: float, settings: Settings
+) -> None:
+    taxonomia = cargar_taxonomia()
+    hoy, casos = cargar_casos(banco, taxonomia)
+    casos = casos[:limite] if limite else casos
+    ruta = banco.parent / "corridas" / f"{modelo}-{version_prompt()}.jsonl"
+    resultados = iniciar_corrida(ruta, modelo, hoy)
+    hechos = {r.id for r in resultados}
+    pendientes = [c for c in casos if c.id not in hechos]
+    if hechos:
+        print(f"  Retomando {ruta}: {len(hechos)} casos ya corridos, faltan {len(pendientes)}")
+    cliente = _cliente_gemini(settings, modelo)
+    for r in correr(pendientes, cliente, taxonomia, hoy, pausa):
+        agregar_resultado(ruta, r)
+        resultados.append(r)
+        print(f"  {len(resultados):>3}/{len(casos)} {r.id} ({r.segundos:.1f} s)", flush=True)
+    # Con --limite, la corrida puede traer casos de más: la tabla es de estos casos.
+    en_banco = {c.id for c in casos}
+    resultados = [r for r in resultados if r.id in en_banco]
+    if faltan := len(casos) - len(resultados):
+        print(f"\n  Cuota agotada: quedan {faltan} casos; vuelve a correrlo para retomar.")
+    print(f"\n  Corrida guardada en {ruta}\n")
+    print(tabla_markdown(resumir(casos, resultados), modelo))
+
+
+def _recalcular_evaluacion(banco: Path, corrida: Path) -> None:
+    _, casos = cargar_casos(banco, cargar_taxonomia())
+    meta, resultados = leer_corrida(corrida)
+    if meta["prompt"] != version_prompt():
+        print(
+            f"  Ojo: la corrida es del prompt {meta['prompt']}, el actual es {version_prompt()}\n"
+        )
+    print(tabla_markdown(resumir(casos, resultados), meta["modelo"], meta["prompt"]))
 
 
 def _mostrar_extraccion(mensaje: str, remitente: str, settings: Settings) -> None:

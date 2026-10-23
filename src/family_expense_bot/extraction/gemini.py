@@ -14,8 +14,13 @@ TIMEOUT_MS = 30_000
 """Sin esto, una llamada colgada deja al bot sin responderle a la persona."""
 
 INTENTOS = 2
-"""El SDK reintenta con backoff por defecto. Ante un 429 eso significa más de
-un minuto esperando una cuota que ya se agotó: mejor fallar y avisar."""
+"""El SDK reintenta con backoff por defecto. Con un intento extra alcanza para un
+timeout o un 5xx pasajero."""
+
+REINTENTABLES = (408, 500, 502, 503, 504)
+"""Sin 429, a propósito. Ante un 429 el SDK duerme lo que diga el `Retry-After`,
+sin tope: con la cuota diaria agotada eran horas (visto con flash, que en el plan
+gratuito da 20 requests por día y pedía esperar casi 10 h). Mejor fallar y avisar."""
 
 
 class ErrorDelLLM(Exception):
@@ -37,7 +42,9 @@ class GeminiCliente:
             api_key=api_key,
             http_options=types.HttpOptions(
                 timeout=timeout_ms,
-                retry_options=types.HttpRetryOptions(attempts=INTENTOS),
+                retry_options=types.HttpRetryOptions(
+                    attempts=INTENTOS, http_status_codes=list(REINTENTABLES)
+                ),
             ),
         )
         self._modelo = modelo

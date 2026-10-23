@@ -1,6 +1,6 @@
 # Decisiones y limitaciones
 
-[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
+[← README](../README.md) · [Decisiones](decisiones.md) · [Presupuesto](presupuesto.md) · [Calidad](calidad.md) · [Evaluación](evaluacion.md) · [Mini App](mini-app.md) · [n8n](../n8n/README.md)
 
 Cómo cambió el proyecto, cómo se decide si un gasto es confiable, cómo se guarda, y lo que no resuelve.
 

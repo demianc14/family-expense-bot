@@ -7,6 +7,7 @@ import pytest
 
 from family_expense_bot.extraction.gemini import (
     INTENTOS,
+    REINTENTABLES,
     TIMEOUT_MS,
     CuotaAgotada,
     ErrorDelLLM,
@@ -38,6 +39,14 @@ def test_limita_los_reintentos(sdk_falso: dict[str, Any]) -> None:
     """Ante un 429, reintentar con backoff solo alarga la espera de la persona."""
     GeminiCliente("fake-key")
     assert sdk_falso["kwargs"]["http_options"].retry_options.attempts == INTENTOS
+
+
+def test_no_reintenta_la_cuota_agotada(sdk_falso: dict[str, Any]) -> None:
+    """Con 429 el SDK duerme lo que diga el Retry-After, que pueden ser horas."""
+    GeminiCliente("fake-key")
+    codigos = sdk_falso["kwargs"]["http_options"].retry_options.http_status_codes
+    assert 429 not in codigos
+    assert codigos == list(REINTENTABLES)
 
 
 def test_devuelve_el_texto_de_la_respuesta(sdk_falso: dict[str, Any]) -> None:
