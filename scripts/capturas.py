@@ -58,15 +58,14 @@ GASTOS_SINTETICOS = [
 ESCENAS = {
     "bolsillos": "",
     "puedo": """
-        tab('puedo'); $('p-monto').value = '45'; $('p-categoria').value = 'entretenimiento';
+        tab('puedo'); $('p-monto').value = '45'; cat('p', 'entretenimiento');
         $('form-puedo').requestSubmit();""",
     "registrar": """
         tab('registrar'); $('g-monto').value = '12.50'; $('g-descripcion').value = 'almuerzo';
-        $('g-categoria').value = 'comida_fuera'; elegir('Demian');""",
+        cat('g', 'comida_fuera');""",
     "confirmar": """
         tab('registrar'); $('g-monto').value = '12.50'; $('g-descripcion').value = 'almuerzo';
-        $('g-categoria').value = 'comida_fuera'; elegir('Demian');
-        $('form-gasto').requestSubmit();""",
+        cat('g', 'comida_fuera'); $('form-gasto').requestSubmit();""",
 }
 
 
@@ -83,21 +82,22 @@ def _init_data() -> str:
 
 
 def _stub(escena: str) -> str:
-    # Sin animaciones: Chrome headless podría sacar la foto a mitad de una.
-    return f"""<style>*, *::before, *::after {{ animation: none !important; }}</style>
+    # Sin animaciones ni transiciones: Chrome headless podría sacar la foto a mitad de una.
+    return f"""<style>
+*, *::before, *::after {{ animation: none !important; transition: none !important; }}
+</style>
 <script>
 window.Telegram = {{ WebApp: {{
   initData: {json.dumps(_init_data())}, colorScheme: {json.dumps(ESQUEMA)},
   ready() {{}}, expand() {{}}, onEvent() {{}},
   MainButton: {{ setText() {{ return this; }}, show() {{ return this; }}, hide() {{ return this; }},
                  showProgress() {{}}, hideProgress() {{}}, onClick() {{}} }},
-  HapticFeedback: {{ notificationOccurred() {{}} }},
+  HapticFeedback: {{ notificationOccurred() {{}}, selectionChanged() {{}} }},
 }} }};
 window.addEventListener("load", () => {{
   const tab = (n) => document.querySelector(`nav [data-tab=${{n}}]`).click();
   const $ = (id) => document.getElementById(id);
-  const elegir = (t) =>
-    [...document.querySelectorAll("#g-de button")].find((b) => b.textContent === t).click();
+  const cat = (f, n) => document.querySelector(`#${{f}}-cats [data-cat=${{n}}]`).click();
   const esperar = setInterval(() => {{
     if ($("app").hidden) return;
     clearInterval(esperar);
@@ -196,7 +196,7 @@ def main() -> None:
     mosaico = Image.new(
         "RGB",
         (len(cuadros) * (cuadros[0].width + margen) + margen, cuadros[0].height + 2 * margen),
-        "#2a2722" if ESQUEMA == "dark" else "#e4e0d6",
+        "#1f211c" if ESQUEMA == "dark" else "#d5d8cf",
     )
     for i, c in enumerate(cuadros):
         mosaico.paste(c, (margen + i * (c.width + margen), margen))

@@ -109,14 +109,12 @@ def _estado(estado: EstadoBolsillo) -> dict[str, Any]:
     }
 
 
-def _gasto(gasto: GastoExtraido, taxonomia: Taxonomia) -> dict[str, Any]:
+def _gasto(gasto: GastoExtraido) -> dict[str, Any]:
     assert gasto.monto is not None and gasto.fecha is not None
     return {
         "monto": _dinero(gasto.monto),
         "categoria": gasto.categoria,
         "fecha": gasto.fecha.isoformat(),
-        "atribuido_a": gasto.atribuido_a,
-        "de": taxonomia.etiquetas[gasto.atribuido_a],
         "descripcion": gasto.descripcion,
     }
 
@@ -178,12 +176,12 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
                 {
                     "nombre": c.nombre,
                     "descripcion": c.descripcion,
-                    "bolsillo": etiquetas_bolsillo.get(taxonomia.bolsillo_de(c.nombre, "") or ""),
+                    # El nombre agrupa y colorea en la app; la etiqueta es lo que se lee.
+                    "bolsillo_nombre": (bolsillo := taxonomia.bolsillo_de(c.nombre, "")),
+                    "bolsillo": etiquetas_bolsillo.get(bolsillo or ""),
                 }
                 for c in taxonomia.activas
             ],
-            # Sin preselección: la persona elige de quién es el gasto.
-            "atribuciones": [{"nombre": n, "etiqueta": e} for n, e in taxonomia.etiquetas.items()],
             "bolsillos_con_marcador": [
                 {"nombre": b.nombre, "etiqueta": b.etiqueta}
                 for b in taxonomia.bolsillos
@@ -232,7 +230,7 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
     def previsualizar(campos: CamposFormulario, quien: Quien) -> dict[str, Any]:
         """Lo que se guardaría. No escribe nada: guardar exige el sí de la persona."""
         gasto = armar_gasto(campos, quien.rol, taxonomia, servicios.hoy())
-        return {"gasto": _gasto(gasto, taxonomia), "bolsillo": _bolsillo(gasto)}
+        return {"gasto": _gasto(gasto), "bolsillo": _bolsillo(gasto)}
 
     @app.post("/api/gastos", status_code=201)
     def guardar(campos: Guardar, quien: Quien) -> dict[str, Any]:
@@ -248,7 +246,7 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
         # No se registra en `extracciones`: no hubo lectura del LLM que medir.
         return {
             "id": registrado.id,
-            "gasto": _gasto(gasto, taxonomia),
+            "gasto": _gasto(gasto),
             "linea": _linea_de_bolsillo(registrado),
         }
 

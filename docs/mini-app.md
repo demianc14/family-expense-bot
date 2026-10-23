@@ -12,18 +12,21 @@ Capturas generadas con `scripts/capturas.py`: la app real, sobre una base tempor
 
 ## Qué es
 
-**Diseño: un libro de cuentas.** Papel cálido y tinta, títulos en Gloock, texto en Schibsted
-Grotesk y montos en Azeret Mono para que las cifras se lean en
-columna. Hay un solo color de acento. Cada barra de bolsillo lleva una **marca con
-el día de hoy**: si lo gastado la pasa, la barra se pone ámbar, porque vas más rápido
-que el mes. Es el mismo umbral de la regla del ritmo de "¿puedo?", no un adorno. El
-veredicto sale como un sello y la confirmación como un recibo. Telegram decide si el
-tema es claro u oscuro; la paleta es de la app.
+**Diseño: impreso en risografía.** Tintas planas, grano y la segunda tinta un poco
+corrida en los números grandes. Cada bolsillo es un **sobre de su color** (Ahorro,
+rayado porque se aparta; Necesarios, Fondo personal y Lujos), y las categorías del
+formulario son fichas del color de su sobre, así que se aprende contra qué bolsillo
+cuenta un gasto sin leerlo. Arriba, el mes es una regla de días con hoy en rosa, y
+la misma marca rosa va en cada barra: si lo gastado la pasa, vas más rápido que el
+mes, que es el umbral de la regla del ritmo de "¿puedo?". No hay menús desplegables:
+categoría y fecha se eligen con un toque, y la confirmación y el veredicto suben en
+una hoja desde abajo. Títulos y montos van en Archivo ancho; las etiquetas, en Martian
+Mono. Telegram decide si el tema es claro u oscuro.
 
 Una **Telegram Mini App**: una página que se abre desde el botón de menú del
 mismo bot. Tiene tres pestañas:
 
-- **Bolsillos:** los cuatro bolsillos del mes, con cuánto se asignó, cuánto se
+- **Bolsillos:** lo que queda libre en el mes y los cuatro bolsillos, con cuánto se asignó, cuánto se
   gastó y cuánto queda. Es el mismo `resumen_presupuesto` de `/presupuesto`.
 - **¿Puedo?:** monto y categoría, y el veredicto de `evaluar_gasto`, la misma
   regla del ritmo que `/puedo`. Como no hay texto libre, **no pasa por el LLM** ni
@@ -38,7 +41,7 @@ valida el formulario con las reglas del chat:
 | Regla del chat | En el formulario |
 |---|---|
 | Nada se guarda sin el sí | "Revisar" muestra el resumen y no guarda; solo "Sí, guardar" escribe. El servidor exige `confirmado: true` y vuelve a validar todo |
-| La atribución por defecto nunca es `alta` | No hay valor por defecto: hay que tocar de quién es. Elegir `casa` a mano es decirlo, no deducirlo |
+| La atribución por defecto nunca es `alta` | La app es el presupuesto personal de quien la abre: todo gasto es suyo, sin "¿de quién es?". No es deducir: registrar en tu app es decirlo. Un `atribuido_a` en el cuerpo se ignora, así que no se puede cargar un gasto a otra persona |
 | "Del fondo" se dice, no se deduce | Es un interruptor explícito, que agrega el marcador del yaml al texto guardado. `bolsillo_de` lo resuelve al leer, igual que en el chat |
 | Solo categorías activas | La lista no trae las `candidata: true`, y el servidor las rechaza |
 | Montos verificados | Formato estricto (dígitos y hasta dos decimales). Lo que no cuadra se rechaza con el motivo, no se adivina |
@@ -65,9 +68,10 @@ Limitaciones:
 
 - **Funciona solo con la Mac prendida.** La base vive ahí a propósito: los
   datos no salen de la máquina. La contracara es que no hay app sin Mac.
-- **La URL del túnel rápido cambia en cada arranque.** Hay que actualizar
-  `APP_URL` y reiniciar el bot. Un túnel con nombre y un dominio propio lo
-  resolvería, pero no está hecho.
+- **La URL del túnel rápido cambia en cada arranque**, y vence si la Mac se
+  duerme un rato. Hay que actualizar `APP_URL` y reiniciar el bot; con Docker,
+  `docker compose up -d bot`, porque `restart` no vuelve a leer el `.env`. Un
+  túnel con nombre y un dominio propio lo resolvería, pero no está hecho.
 - **El bot y la app son dos procesos sobre el mismo SQLite.** Con una persona
   registrando a mano alcanza (SQLite serializa las escrituras), pero no es
   para muchos usuarios.

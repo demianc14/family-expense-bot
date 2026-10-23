@@ -4,10 +4,28 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 > Los plazos son estimaciones, no compromisos.
 
+## Estado al 2026-10-22 (para retomar)
+
+- **Hecho:** Fase A y Fase B, y además un rediseño de la Mini App (ver abajo). El PR #1
+  entró a `main`; el resto de `fase-b-ingenieria` (rediseño, Mini App personal, docs y el
+  GIF en el README) va en el PR #2. La CI pasó en verde en la rama (3.12 y 3.14).
+- **Mini App rediseñada** (`0732ae6`): estilo risografía con sobres por bolsillo, fichas de
+  categoría del color de su bolsillo, "Hoy / Ayer / Otro día" y hojas que suben desde abajo,
+  sin menús desplegables. Probada en Telegram real. Detalle en `docs/mini-app.md`.
+- **La Mini App es solo de Demian** (`e5dc87f`): todo gasto es de quien la abre; ya no hay
+  "¿de quién es?" y el servidor ignora `atribuido_a`. El bot de chat no cambió.
+- **Base real migrada** (`--migrar`, agregó `gastos.origen`). Respaldo previo en
+  `data/processed/gastos.respaldo-20261021-133136.db`.
+- **Corriendo con Docker:** `docker compose up -d`; la Mini App sale por un túnel rápido de
+  cloudflared, cuya URL cambia en cada arranque y además vence si la Mac se duerme
+  (actualizar `APP_URL` y `docker compose up -d bot`; `restart` no relee el `.env`).
+  Resolverlo es la Fase E.
+- **Siguiente:** mergear el PR #2 y empezar la Fase C en la rama `fase-c-evaluacion`.
+
 ## Fase A. Base y presentación (días 1 a 3)
 
-- [ ] Probar la Mini App en Telegram real. (`pytest`, `ruff` y `mypy` en verde y push: hecho.)
-- [x] README corto (pitch, GIF de la Mini App, cómo correrlo, enlaces); detalle en `docs/`; la sección n8n pasa a `n8n/README.md`. Falta cambiar la captura por un GIF.
+- [x] Probar la Mini App en Telegram real; `pytest`, `ruff` y `mypy` en verde; push.
+- [x] README corto (pitch, GIF de la Mini App, cómo correrlo, enlaces); detalle en `docs/`; la sección n8n pasa a `n8n/README.md`.
 - [x] Revisar el historial de git por datos reales; confirmar que `data/processed/` y `*.egg-info/` no estén versionados. Queda como test en `tests/test_privacy.py`.
 - [x] Descripción del repo y topics (`telegram-bot`, `llm`, `fastapi`, `n8n`, `personal-finance`).
 
@@ -16,11 +34,12 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 - [x] GitHub Actions: `pytest` + `ruff` + `mypy` en cada push, con badge. Sin secrets (Gemini va mockeado en los tests).
 - [x] `Dockerfile` y `docker-compose` para levantar bot y Mini App con un comando.
 - [x] `.env.example` documentado y `pre-commit` con ruff.
+- [x] Extra: rediseño de la Mini App y presupuesto solo personal (ver Estado).
 
 ## Fase C. Evaluación del modelo (semana 2)
 
 - [ ] Dataset etiquetado a partir de `tests/fixtures/mensajes.yaml`, ampliado con mensajes anonimizados (tamaño inicial sugerido: 60 a 100).
-- [ ] Script `eval` que mide aciertos por campo (monto, categoría, fecha, atribución) y cuántas veces el código rechazó o pidió confirmación correctamente.
+- [ ] Script `eval` que mide aciertos por campo (monto, categoría, fecha, atribución; la atribución solo aplica al bot de chat, la Mini App ya no la pide) y cuántas veces el código rechazó o pidió confirmación correctamente.
 - [ ] Comparar modelos (`GEMINI_MODELO`) y versiones de prompt; resultados en `docs/evaluacion.md` y tabla en el README.
 - [ ] Mejoras guiadas por esa tabla, medidas antes y después: varios gastos en un mensaje y estabilidad de la confianza.
 
@@ -46,7 +65,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 ## Criterio de "terminado"
 
 - [x] Corre con un comando (Docker).
-- [ ] CI verde con badge.
+- [ ] CI verde con badge (verde en la rama; falta que llegue a `main`).
 - [ ] Tabla de evaluación con números reales.
 - [ ] Al menos una automatización que actúa sin que se pida.
 - [ ] README de una pantalla y limitaciones honestas.

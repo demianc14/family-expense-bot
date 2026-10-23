@@ -24,7 +24,6 @@ def _campos(**cambios: Any) -> CamposFormulario:
         "monto": "12.50",
         "categoria": "comida_fuera",
         "fecha": HOY,
-        "atribuido_a": "demian",
         "descripcion": "almuerzo",
     }
     return CamposFormulario(**(base | cambios))
@@ -55,8 +54,6 @@ def test_un_formulario_completo_queda_en_confianza_alta() -> None:
         ({"categoria": "inventada"}, "no es una categoría activa"),
         ({"fecha": HOY + timedelta(days=1)}, "futuro"),
         ({"fecha": HOY - timedelta(days=366)}, "más de un año"),
-        ({"atribuido_a": None}, "Elige de quién"),
-        ({"atribuido_a": "tia"}, "no es una persona"),
         ({"descripcion": "   "}, "descripción"),
         ({"descripcion": "x" * 201}, "muy larga"),
         ({"bolsillo": "ahorro"}, "No se puede mandar"),
@@ -68,10 +65,14 @@ def test_lo_que_no_cuadra_se_rechaza_con_motivo(cambio: dict[str, Any], motivo: 
         armar_gasto(_campos(**cambio), "demian", TAXONOMIA, HOY)
 
 
-def test_la_casa_elegida_a_mano_se_acepta() -> None:
-    """Elegirla con un toque es decirla, no deducirla."""
-    gasto = armar_gasto(_campos(atribuido_a="casa"), "demian", TAXONOMIA, HOY)
-    assert gasto.atribuido_a == "casa"
+def test_el_gasto_es_siempre_de_quien_abre_la_app() -> None:
+    """La app es un presupuesto personal: un `atribuido_a` en el cuerpo se ignora."""
+    campos = CamposFormulario.model_validate(
+        {"monto": "12.50", "categoria": "hogar", "fecha": HOY, "descripcion": "focos"}
+        | {"atribuido_a": "casa"}
+    )
+    gasto = armar_gasto(campos, "demian", TAXONOMIA, HOY)
+    assert gasto.atribuido_a == "demian"
     assert gasto.confianza_atribuido_a is Confianza.ALTA
 
 

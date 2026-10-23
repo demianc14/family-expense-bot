@@ -59,7 +59,6 @@ def _gasto(**cambios: Any) -> dict[str, Any]:
         "monto": "12.50",
         "categoria": "comida_fuera",
         "fecha": HOY.isoformat(),
-        "atribuido_a": "demian",
         "descripcion": "almuerzo",
     } | cambios
 
@@ -126,6 +125,10 @@ def test_opciones_solo_trae_categorias_activas(cliente: TestClient) -> None:
     assert datos["rol"] == "demian"
     assert datos["tiene_presupuesto"] is True
     assert [b["nombre"] for b in datos["bolsillos_con_marcador"]] == ["fondo"]
+    ropa = next(c for c in datos["categorias"] if c["nombre"] == "ropa")
+    assert (ropa["bolsillo_nombre"], ropa["bolsillo"]) == ("lujos", "Lujos")
+    otros = next(c for c in datos["categorias"] if c["nombre"] == "otros")
+    assert (otros["bolsillo_nombre"], otros["bolsillo"]) == (None, None)
 
 
 def test_presupuesto_coincide_con_resumen_presupuesto(
@@ -215,8 +218,6 @@ def test_previsualizar_no_escribe_nada(cliente: TestClient, repo: RepositorioGas
             "monto": "12.50",
             "categoria": "comida_fuera",
             "fecha": "2026-10-20",
-            "atribuido_a": "demian",
-            "de": "Demian",
             "descripcion": "almuerzo",
         },
         "bolsillo": "Lujos",
@@ -254,10 +255,19 @@ def test_guardar_revalida_todo(cliente: TestClient, repo: RepositorioGastos) -> 
     assert repo.listar() == []
 
 
-def test_un_gasto_de_otra_persona_no_dice_bolsillo(cliente: TestClient) -> None:
+def test_no_se_puede_registrar_un_gasto_de_otra_persona(
+    cliente: TestClient, repo: RepositorioGastos
+) -> None:
     r = cliente.post(
-        "/api/gastos", json=_gasto(atribuido_a="casa", confirmado=True), headers=_como(MAMA)
+        "/api/gastos", json=_gasto(atribuido_a="mama", confirmado=True), headers=_como(DEMIAN)
     )
+    assert r.status_code == 201
+    [guardado] = repo.listar()
+    assert guardado.atribuido_a == "demian"
+
+
+def test_sin_ingreso_el_gasto_se_guarda_sin_linea_de_bolsillo(cliente: TestClient) -> None:
+    r = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(MAMA))
     assert r.status_code == 201
     assert r.json()["linea"] is None
 
