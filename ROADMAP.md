@@ -4,7 +4,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 > Los plazos son estimaciones, no compromisos.
 
-## Estado al 2026-10-24 (para retomar)
+## Estado al 2026-10-26 (para retomar)
 
 - **En `main`:** Fase A, Fase B (PR #2: Mini App riso y solo personal) y la evaluación de la
   Fase C (PR #3). CI en verde. Las capturas de `docs/img/` están al día con el diseño riso
@@ -17,32 +17,15 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
   El plan gratuito da 20 requests por día; `family-expense-bot --evaluar --modelo
   gemini-3.5-flash` retoma donde quedó. Cuando esté completa, la tabla va a
   `docs/evaluacion.md`.
-- **Corriendo con Docker** (`docker compose up -d`), con la Mini App por un túnel rápido de
-  cloudflared. **Se cae cada vez que la Mac se duerme** (tres veces entre el 22 y el 23) y da
-  el error 1033. Para levantarlo:
-  1. `cloudflared tunnel --url http://localhost:8080`, y esperar a ver `Registered tunnel
-     connection` antes de copiar la URL nueva.
-  2. Ponerla en `APP_URL` del `.env` y correr `docker compose up -d bot` (`restart` no
-     relee el `.env`).
-  3. Si desde la Mac sigue dando "Could not resolve host", es el caché de DNS de macOS: el
-     celular ya la ve.
+- **Corriendo con Docker** (`docker compose up -d`), con la Mini App por Tailscale Funnel
+  (`tailscale funnel --bg 8080`): la URL es fija y vuelve sola cuando la Mac despierta. Si
+  `APP_URL` cambia, hay que correr `docker compose up -d bot` (`restart` no relee el `.env`).
 - **Base real:** respaldo previo a la migración en `data/processed/gastos.respaldo-20261021-133136.db`.
 
 ### Siguiente sesión
 
-1. **Fase E, hosting estable, adelantada.** Decidido el 2026-10-24: **sin dominio en
-   Cloudflare**, así que el túnel con nombre queda descartado. Antes de elegir hay una
-   pregunta de privacidad: hoy los datos no salen de la Mac a propósito
-   (`docs/mini-app.md`).
-   - **Si se quedan en la Mac:** un túnel con URL fija y sin dominio propio (Tailscale Funnel
-     o el dominio estático gratuito de ngrok; verificar condiciones y límites). Resuelve
-     la URL que cambia, pero no la Mac dormida.
-   - **Si se mueven:** un VPS o PaaS barato con volumen para SQLite (costo por verificar).
-     Resuelve las dos cosas, pero la base con dinero real queda en un servidor ajeno:
-     respaldos, cifrado y acceso pasan a ser problema nuestro. Hay que documentarlo en
-     `docs/decisiones.md`.
-2. Completar flash (unos 4 días de cuota) y su tabla.
-3. Mejoras candidatas de `docs/evaluacion.md`, cada una medida antes y después contra el
+1. Completar flash (unos 4 días de cuota) y su tabla.
+2. Mejoras candidatas de `docs/evaluacion.md`, cada una medida antes y después contra el
    banco: devoluciones registradas como gasto, `otros` con confianza alta, `personal` contra
    `educacion` y el timeout de 30 s.
 
@@ -76,7 +59,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 ## Fase E. Despliegue y cierre (semana 4)
 
-- [ ] Hosting estable. Sin dominio en Cloudflare: túnel con URL fija (datos en la Mac) o VPS/PaaS (datos fuera). Ver "Siguiente sesión".
+- [x] Hosting estable: Tailscale Funnel, URL fija y datos en la Mac (2026-10-26, ver `docs/decisiones.md`).
 - [ ] Logs y una métrica simple de latencia y errores.
 - [ ] Demo corta (GIF o video).
 

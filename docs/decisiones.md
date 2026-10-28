@@ -187,6 +187,33 @@ las marca como borradas; los datos siguen en la base local hasta la purga
 física, cerca de una hora después (`EXECUTIONS_DATA_HARD_DELETE_BUFFER`). Las
 fallidas se guardan a propósito, para depurarlas, y se purgan a los 7 días.
 
+## Hosting
+
+Decidido el 2026-10-26: **los datos se quedan en la Mac.** Un VPS o PaaS
+resolvería la Mac dormida, pero dejaría la base con dinero real en un servidor
+ajeno, y habría que resolver respaldos, cifrado y acceso. Para una sola persona
+no vale la pena.
+
+Lo que había que arreglar era la URL. El túnel rápido de cloudflared cambiaba
+de URL en cada arranque y moría cuando la Mac se dormía (error 1033, tres veces
+en dos días). Un túnel con nombre necesita un dominio en Cloudflare, y no hay.
+Opciones sin dominio propio:
+
+- **ngrok gratis, descartado.** El dominio fijo viene incluido, pero antes de
+  cualquier página HTML abierta en un navegador muestra un aviso
+  anti-phishing. El webview de Telegram no puede mandar el header que lo salta,
+  así que la Mini App abriría en ese aviso. Además tiene topes de 1 GB y 20.000
+  requests al mes.
+- **Tailscale Funnel, elegido.** Es gratis, la URL es fija
+  (`<mac>.<tailnet>.ts.net`) y el certificado lo gestiona Tailscale. Con
+  `--bg` la configuración persiste, y al despertar la Mac vuelve sola, sin
+  tocar `APP_URL`. Límites: el ancho de banda tiene un tope que no se publica,
+  que para una persona no importa, y Funnel sigue en beta. La app ya validaba
+  `initData` y la allowlist, así que exponerla en una URL pública estable no
+  cambia el modelo de acceso. El nombre de la tailnet va solo en `.env`.
+
+La Mac dormida sigue cortando el servicio: durante ese rato no hay app.
+
 ## Plataforma, modelo y limitaciones
 
 - **Plataforma: Telegram.** Tiene API gratuita y no pide aprobación. Hoy los
