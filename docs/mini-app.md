@@ -60,18 +60,24 @@ haya acertado nada.
 ```bash
 family-expense-bot --migrar                        # solo si la base es de antes de la app
 family-expense-bot --app                           # http://127.0.0.1:8080, solo local
-cloudflared tunnel --url http://localhost:8080     # en otra terminal: da una URL https
+tailscale funnel --bg 8080                         # una sola vez: https://<mac>.<tailnet>.ts.net
 # pon esa URL en APP_URL (.env) y reinicia el bot: registra el botón de menú
 ```
+
+La app sale a internet por **Tailscale Funnel**: la URL es fija y no hace falta
+un dominio propio. `--bg` deja la configuración guardada en Tailscale, así que
+sobrevive a reinicios y a la Mac dormida sin tocar `APP_URL`. Por qué Funnel y
+no otra cosa: [decisiones](decisiones.md#hosting).
 
 Limitaciones:
 
 - **Funciona solo con la Mac prendida.** La base vive ahí a propósito: los
   datos no salen de la máquina. La contracara es que no hay app sin Mac.
-- **La URL del túnel rápido cambia en cada arranque**, y vence si la Mac se
-  duerme un rato. Hay que actualizar `APP_URL` y reiniciar el bot; con Docker,
-  `docker compose up -d bot`, porque `restart` no vuelve a leer el `.env`. Un
-  túnel con nombre y un dominio propio lo resolvería, pero no está hecho.
+- **Con la Mac dormida no hay app**, pero al despertar vuelve sola, con la
+  misma URL. Antes, con el túnel rápido de cloudflared, la URL cambiaba en cada
+  arranque y moría con cada siesta de la Mac (error 1033).
+- **Si `APP_URL` cambia**, con Docker hay que correr `docker compose up -d bot`:
+  `restart` no vuelve a leer el `.env`.
 - **El bot y la app son dos procesos sobre el mismo SQLite.** Con una persona
   registrando a mano alcanza (SQLite serializa las escrituras), pero no es
   para muchos usuarios.
