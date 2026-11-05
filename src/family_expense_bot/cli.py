@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+from datetime import date
 from pathlib import Path
 
 import uvicorn
@@ -18,6 +19,7 @@ from family_expense_bot.evaluacion import (
     iniciar_corrida,
     leer_corrida,
     resumir,
+    reverificar,
     tabla_markdown,
     version_prompt,
 )
@@ -234,8 +236,11 @@ def _evaluar(
 
 
 def _recalcular_evaluacion(banco: Path, corrida: Path) -> None:
-    _, casos = cargar_casos(banco, cargar_taxonomia())
-    meta, resultados = leer_corrida(corrida)
+    taxonomia = cargar_taxonomia()
+    _, casos = cargar_casos(banco, taxonomia)
+    meta, guardados = leer_corrida(corrida)
+    # Las respuestas del LLM son las guardadas; la verificación es la de hoy.
+    resultados = reverificar(casos, guardados, taxonomia, date.fromisoformat(meta["hoy"]))
     if meta["prompt"] != version_prompt():
         print(
             f"  Ojo: la corrida es del prompt {meta['prompt']}, el actual es {version_prompt()}\n"

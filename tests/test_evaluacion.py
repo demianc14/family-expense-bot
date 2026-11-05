@@ -10,6 +10,7 @@ import pytest
 from family_expense_bot.evaluacion import (
     Caso,
     Celda,
+    Resultado,
     agregar_resultado,
     cargar_casos,
     correr,
@@ -17,6 +18,7 @@ from family_expense_bot.evaluacion import (
     iniciar_corrida,
     leer_corrida,
     resumir,
+    reverificar,
     tabla_markdown,
 )
 from family_expense_bot.extraction.categorias import cargar_taxonomia
@@ -190,3 +192,17 @@ def test_una_corrida_de_otro_dia_empieza_de_cero(tmp_path: Path) -> None:
     resultados, _ = evaluar([caso("taxi 15", monto="15")], {"monto": "15"})
     guardar_corrida(ruta, "falso", HOY, resultados)
     assert iniciar_corrida(ruta, "falso", date(2026, 3, 16)) == []
+
+
+def test_reverificar_pasa_lo_guardado_por_la_verificacion_de_hoy() -> None:
+    casos = [caso("taxi 15", monto="15"), caso("café 3", monto="3")]
+    resultados, _ = evaluar(casos, {"monto": "15"}, ErrorDelLLM("timeout"))
+    # Una corrida vieja con un gasto ya verificado distinto: reverificar lo recalcula
+    # desde el crudo, no lo copia. Lo que no tuvo respuesta queda como estaba.
+    viejo = Resultado(resultados[0].id, resultados[0].crudo, None, "otro", 1.0)
+    nuevos = reverificar(casos, [viejo, resultados[1]], TAXONOMIA, HOY)
+
+    assert nuevos[0].gasto == resultados[0].gasto
+    assert nuevos[0].error is None
+    assert nuevos[0].segundos == 1.0
+    assert nuevos[1] == resultados[1]

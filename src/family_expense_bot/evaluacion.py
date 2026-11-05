@@ -165,6 +165,45 @@ def correr(
         yield Resultado(caso.id, grabador.crudo, gasto, error, grabador.segundos)
 
 
+class _ClienteRepetidor:
+    """Devuelve una respuesta ya guardada, sin llamar a nadie."""
+
+    def __init__(self, crudo: str) -> None:
+        self._crudo = crudo
+
+    def completar_json(self, prompt: str, schema: dict[str, object]) -> str:
+        return self._crudo
+
+
+def reverificar(
+    casos: list[Caso], resultados: list[Resultado], taxonomia: Taxonomia, hoy: date
+) -> list[Resultado]:
+    """Pasa lo que el LLM respondió en una corrida por la verificación de hoy.
+
+    Así un cambio solo de código se mide contra las mismas respuestas reales:
+    el antes y el después difieren en el código, no en el humor del modelo, y
+    no se gasta cuota. Lo que no tuvo respuesta (timeout, cuota) queda igual.
+    """
+    por_id = {c.id: c for c in casos}
+    nuevos: list[Resultado] = []
+    for r in resultados:
+        caso = por_id.get(r.id)
+        if r.crudo is None or caso is None:
+            nuevos.append(r)
+            continue
+        gasto: dict[str, Any] | None = None
+        error: str | None = None
+        try:
+            extraido = extraer(
+                caso.texto, _ClienteRepetidor(r.crudo), taxonomia, caso.remitente, hoy
+            )
+            gasto = extraido.model_dump(mode="json")
+        except ErrorDeExtraccion as e:
+            error = str(e)
+        nuevos.append(Resultado(r.id, r.crudo, gasto, error, r.segundos))
+    return nuevos
+
+
 def clasificar(caso: Caso, gasto: GastoExtraido) -> dict[str, Celda]:
     """La celda de cada campo que el caso puntúa."""
     celdas: dict[str, Celda] = {}
