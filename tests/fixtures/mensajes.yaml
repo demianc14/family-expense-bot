@@ -98,6 +98,18 @@
     atribuido_a: papa
     confianza: { monto: alta, categoria: baja, fecha: media, atribuido_a: media }
 
+- id: otros_nunca_con_confianza_alta
+  remitente: papa
+  texto: "12 en la farmacia"
+  # Pasó en la evaluación: con salud inactiva, el LLM afirma `otros` con confianza alta
+  respuesta_llm: { monto: "12", categoria: otros, descripcion: "farmacia" }
+  espera:
+    monto: "12"
+    categoria: otros
+    fecha: "2026-03-15"
+    atribuido_a: papa
+    confianza: { monto: alta, categoria: media, fecha: media, atribuido_a: media }
+
 - id: dos_gastos_en_un_mensaje
   remitente: demian
   texto: "20 de gasolina y 8 del almuerzo"
