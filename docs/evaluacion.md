@@ -127,6 +127,11 @@ family-expense-bot --evaluar --desde-corrida evals/corridas/<corrida>.jsonl   # 
 Cada corrida se guarda en `evals/corridas/<modelo>-<versión del prompt>.jsonl`
 con la respuesta cruda del LLM, y se versiona: los mensajes son sintéticos.
 
+`--desde-corrida` no copia lo que se guardó: vuelve a pasar cada respuesta cruda
+por la verificación actual de `parser.py`. Así, un cambio solo de código se mide
+antes y después contra las mismas respuestas reales, sin gastar cuota y sin que
+el modelo, que no es determinista, mueva los números.
+
 ## Limitaciones
 
 - **El banco es sintético y lo escribió quien escribió el prompt.** Puede tener
