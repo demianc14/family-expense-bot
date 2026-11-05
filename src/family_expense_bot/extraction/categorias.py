@@ -66,6 +66,9 @@ class Bolsillo(BaseModel):
 
 class Presupuesto(BaseModel):
     bolsillos: list[Bolsillo]
+    alertas: list[int] = []
+    """Porcentajes de un bolsillo que, al cruzarlos con un gasto, mandan un aviso.
+    Vacía = sin avisos."""
 
 
 class Taxonomia(BaseModel):
@@ -133,6 +136,12 @@ class Taxonomia(BaseModel):
         marcadores = [normalizar(m) for b in bolsillos for m in b.marcadores]
         if len(set(marcadores)) != len(marcadores):
             raise ValueError("Un mismo marcador no puede mandar a dos bolsillos")
+
+        alertas = presupuesto.alertas
+        if any(not 1 <= a <= 100 for a in alertas):
+            raise ValueError(f"Las alertas son porcentajes entre 1 y 100 (llegó {alertas})")
+        if alertas != sorted(set(alertas)):
+            raise ValueError(f"Las alertas van de menor a mayor y sin repetir (llegó {alertas})")
 
     def _parentescos_consistentes(self) -> None:
         for a in self.atribuciones:
@@ -214,6 +223,10 @@ class Taxonomia(BaseModel):
     @property
     def bolsillos(self) -> tuple[Bolsillo, ...]:
         return tuple(self.presupuesto.bolsillos) if self.presupuesto else ()
+
+    @property
+    def alertas(self) -> tuple[int, ...]:
+        return tuple(self.presupuesto.alertas) if self.presupuesto else ()
 
     def bolsillo_de(self, categoria: str, texto: str) -> str | None:
         """Contra qué bolsillo cuenta un gasto. None si contra ninguno.

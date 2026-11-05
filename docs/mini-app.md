@@ -32,7 +32,9 @@ mismo bot. Tiene tres pestañas:
   regla del ritmo que `/puedo`. Como no hay texto libre, **no pasa por el LLM** ni
   gasta cuota. Si el bolsillo no alcanza pero el fondo sí, ofrece probar desde el fondo.
 - **Registrar:** un formulario campo por campo, para cuando escribir una
-  frase es más lento que llenar cuatro casillas.
+  frase es más lento que llenar cuatro casillas. Si el gasto hace cruzar el
+  80% o el 100% del bolsillo, llega una [alerta](presupuesto.md#alertas) al
+  chat del bot.
 
 Es otra capa de I/O, igual que el bot: las rutas (`src/family_expense_bot/app/api.py`)
 no tienen lógica de negocio. Lo único nuevo es `extraction/formulario.py`, que

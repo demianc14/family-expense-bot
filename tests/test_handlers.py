@@ -639,6 +639,68 @@ async def test_al_guardar_dice_cuanto_queda_en_el_bolsillo(engine: Engine) -> No
     assert texto.endswith("Necesarios de marzo: quedan $345.00 de $360.00.")
 
 
+async def _guardar_como_demian(contexto: MagicMock, texto: str) -> MagicMock:
+    """Manda el mensaje, toca "Sí, guardar" y devuelve el callback."""
+    await registrar_gasto(_update(texto, user_id=DEMIAN), contexto)
+    token = next(iter(contexto.bot_data["pendientes"]))
+    callback = _callback(f"guardar:{token}", user_id=DEMIAN)
+    callback.effective_chat = SimpleNamespace(id=DEMIAN)
+    await responder_confirmacion(callback, contexto)
+    return callback
+
+
+def _alertas_mandadas(contexto: MagicMock) -> list[str]:
+    return [c.args[1] for c in contexto.bot.send_message.await_args_list]
+
+
+async def test_cruzar_el_80_manda_la_alerta_aparte(engine: Engine) -> None:
+    # Necesarios con 1200 de ingreso: 360 asignados, el 80% son 288.
+    cliente = ClienteFalso(_respuesta(monto="280"))
+    contexto = _contexto(
+        _servicios_con(engine, cliente, ingresos=INGRESOS, hoy=lambda: date(2026, 3, 20))
+    )
+    contexto.bot.send_message = AsyncMock()
+    await _guardar_como_demian(contexto, "280 de taxi ayer")
+    assert _alertas_mandadas(contexto) == [], "280 de 360 todavía no es el 80%"
+
+    cliente.respuesta = _respuesta()
+    callback = await _guardar_como_demian(contexto, "15 de taxi ayer")
+
+    texto = callback.callback_query.edit_message_text.await_args.args[0]
+    assert texto.startswith("Guardado ✅"), "la alerta no reemplaza el aviso de guardado"
+    [alerta] = _alertas_mandadas(contexto)
+    assert alerta.startswith("🔔 Necesarios de marzo llegó al 80%")
+    assert contexto.bot.send_message.await_args.args[0] == DEMIAN
+
+
+async def test_un_gasto_de_otro_mes_no_alerta(engine: Engine) -> None:
+    cliente = ClienteFalso(_respuesta(monto="300"))
+    contexto = _contexto(
+        _servicios_con(engine, cliente, ingresos=INGRESOS, hoy=lambda: date(2026, 4, 2))
+    )
+    contexto.bot.send_message = AsyncMock()
+    await _guardar_como_demian(contexto, "300 de taxi ayer")
+    assert _alertas_mandadas(contexto) == []
+
+
+async def test_si_falla_el_presupuesto_el_guardado_se_ve_igual(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    servicios = _servicios_con(engine, ingresos=INGRESOS, hoy=lambda: date(2026, 3, 20))
+    contexto = _contexto(servicios)
+    contexto.bot.send_message = AsyncMock()
+
+    def romper(*_: object, **__: object) -> None:
+        raise RuntimeError("base caída")
+
+    monkeypatch.setattr(servicios.repositorio, "listar", romper)
+    callback = await _guardar_como_demian(contexto, "15 de taxi ayer")
+
+    texto = callback.callback_query.edit_message_text.await_args.args[0]
+    assert texto.startswith("Guardado ✅")
+    assert _alertas_mandadas(contexto) == []
+
+
 async def test_cambiar_a_quien_corresponde_actualiza_el_bolsillo(engine: Engine) -> None:
     servicios = _servicios_con(engine, ingresos=INGRESOS)
     contexto = _contexto(servicios)

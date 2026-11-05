@@ -332,3 +332,25 @@ def test_un_marcador_no_puede_mandar_a_dos_bolsillos() -> None:
                 {"nombre": "b", "etiqueta": "B", "porcentaje": 50, "marcadores": ["Del Fondo"]},
             ]
         )
+
+
+def test_el_yaml_real_avisa_al_80_y_al_100() -> None:
+    assert TAXONOMIA.alertas == (80, 100)
+
+
+def test_sin_alertas_no_se_avisa_nunca() -> None:
+    assert _con_presupuesto(BOLSILLOS_MINIMOS).alertas == ()
+
+
+@pytest.mark.parametrize(
+    ("alertas", "error"),
+    [
+        ([100, 80], "de menor a mayor"),
+        ([80, 80], "de menor a mayor"),
+        ([0, 80], "entre 1 y 100"),
+        ([80, 120], "entre 1 y 100"),
+    ],
+)
+def test_alertas_invalidas_no_cargan(alertas: list[int], error: str) -> None:
+    with pytest.raises(ValidationError, match=error):
+        _taxonomia(presupuesto={"bolsillos": BOLSILLOS_MINIMOS, "alertas": alertas})
