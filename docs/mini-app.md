@@ -38,7 +38,8 @@ mismo bot. Tiene cuatro pestañas:
   más lento que llenar cuatro casillas. Arriba se elige **Gasto** o **Ingreso**.
   La **subcategoría** es opcional ("Tipti" dentro de Alimentación), y la app
   sugiere las que ya usaste en esa categoría. Si eliges **Otros**, pide de qué
-  bolsillo sale.
+  bolsillo sale. Si el gasto hace cruzar el 80% o el 100% del bolsillo, llega
+  una [alerta](presupuesto.md#alertas) al chat del bot.
 
 **Ingresos extra.** Un trabajo puntual, un bono o un regalo se registran con el
 mismo flujo que un gasto: Revisar, "Sí, guardar", y después editar o borrar

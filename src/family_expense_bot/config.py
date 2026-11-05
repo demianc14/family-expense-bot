@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     """
 
     app_url: str = ""
-    """URL https pública de la Mini App (el túnel de cloudflared). Vacía = sin app:
+    """URL https pública de la Mini App (Tailscale Funnel). Vacía = sin app:
     el bot funciona igual, sin botón de menú."""
 
     telegram_allowed_ids: str = ""

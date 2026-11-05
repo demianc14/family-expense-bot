@@ -178,6 +178,10 @@ quien lo mantiene prefiere un flujo visual.
 - **La métrica de calidad no es comparable uno a uno.** El acierto directo se
   calcula igual, pero acá no hay botones de corrección (`corregida` siempre es
   falso) y hay resultados que Python no tiene.
+- **Sin alertas de bolsillo.** El aviso al cruzar el 80% o el 100%
+  ([presupuesto](../docs/presupuesto.md#alertas)) es solo de la versión Python:
+  llegó después de cerrar la etapa del bot familiar y no se portó. El umbral
+  sí viaja en `taxonomia.json`, sin uso.
 - **Un bot por implementación.** Telegram entrega a un webhook o a polling,
   no a los dos: la versión n8n necesita su propio bot de @BotFather.
 
