@@ -171,7 +171,18 @@ def _verificar_categoria(
         )
         return taxonomia.fallback, Confianza.BAJA
     assert respuesta.categoria is not None  # contiene() ya lo garantizó
-    return respuesta.categoria.strip().lower(), respuesta.confianza_categoria
+    categoria = respuesta.categoria.strip().lower()
+    if categoria == taxonomia.fallback and respuesta.confianza_categoria is Confianza.ALTA:
+        # Igual que `casa`: el cajón de sastre nunca es una certeza. Si nada encajó,
+        # se pregunta, en vez de que el gasto quede ahí sin que nadie lo note.
+        notas.append(
+            Nota(
+                campo="categoria",
+                texto=f"Quedó como {categoria!r} porque ninguna categoría encajó; ¿es esa?",
+            )
+        )
+        return categoria, Confianza.MEDIA
+    return categoria, respuesta.confianza_categoria
 
 
 def _verificar_fecha(

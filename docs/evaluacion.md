@@ -110,11 +110,29 @@ escondía esto; por eso la tabla reporta percentiles.
 
 Quedan medidas contra este banco, antes y después:
 
-1. `otros` nunca con confianza alta, igual que `casa`: si nada encaja, se pregunta.
+1. ~~`otros` nunca con confianza alta~~: hecho, ver [antes → después](#mejoras-antes--después).
 2. Mensajes de devolución o ingreso: que el prompt los marque como "no es gasto" y
    el código los rechace.
 3. Separar `personal` de `educacion` en las descripciones del yaml.
 4. Bajar el timeout y reintentar una vez, en vez de esperar 30 s.
+
+## Mejoras, antes → después
+
+Cada mejora se mide contra el banco. Si es solo de código, con `--desde-corrida`
+sobre la misma corrida de flash-lite (`gemini-3.5-flash-lite-64386658.jsonl`):
+mismas respuestas del LLM, 0 llamadas. Si cambia el prompt, hace falta una
+corrida nueva, y el ruido del modelo entra en la comparación.
+
+| Mejora | Métrica | Antes | Después | Medido con |
+|---|---|---:|---:|---|
+| `otros` nunca con confianza alta | Dudó cuando debía | 22 de 26 | 24 de 26 | `--desde-corrida`, 0 llamadas |
+| | Categoría: acierto confiado / con duda | 68 / 5 | 66 / 7 | |
+| | Categoría: error silencioso | 2 | 2 | |
+
+**`otros` nunca con confianza alta.** Los dos casos que pasan a duda son farmacia
+y luz, justo los dos que debían dudar. Ningún otro caso tenía `otros` con
+confianza alta, así que la fricción que suma son esas dos preguntas. Los dos
+errores silenciosos de categoría siguen ahí porque no son de `otros` (ver arriba).
 
 ## Correrlo
 
