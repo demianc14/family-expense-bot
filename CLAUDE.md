@@ -117,34 +117,48 @@ capa de I/O, sin lógica de negocio nueva en las rutas. Lo que no cambia:
   vive en `docs/` y la versión n8n en `n8n/README.md`. Las capturas se regeneran
   con `scripts/capturas.py`, siempre con datos sintéticos.
 
-## Arquitectura propuesta
+## Arquitectura
 
 ```
-src/
+src/family_expense_bot/
   bot/
-    handlers.py          # I/O de Telegram: recibe mensaje/foto, muestra
-                          # confirmación, responde. Sin lógica de negocio.
+    handlers.py          # I/O de Telegram: recibe, muestra confirmación, responde.
+                         # Sin lógica de negocio.
+    mensajes.py          # textos que manda el bot
+  app/
+    api.py               # Mini App (FastAPI): otra capa de I/O sobre el mismo núcleo
+    auth.py              # valida el initData firmado de Telegram + allowlist
+    static/index.html    # la Mini App
   extraction/
-    schema.py            # contrato Pydantic: GastoExtraido (monto,
-                          # categoria, fecha, descripcion, confianza,
-                          # texto_original)
-    parser.py            # llama al LLM gratuito (Gemini/Groq), devuelve
-                          # GastoExtraido con score de confianza por campo
-    ocr.py                # Tesseract para fotos de recibos (fase posterior)
+    schema.py            # contrato Pydantic: GastoExtraido, confianza por campo
+    parser.py            # LLM → GastoExtraido; el código verifica y degrada confianza
+    gemini.py            # cliente de Gemini (reintentos, timeouts, cuota)
+    verificacion.py      # el monto tiene que estar escrito en el mensaje
+    formulario.py        # gastos del formulario de la Mini App, sin LLM
+    categorias.py        # carga de la taxonomía desde el yaml
   storage/
-    models.py             # esquema SQL (SQLAlchemy) para gastos confirmados
-    repository.py         # persistencia, sin lógica de negocio
+    models.py            # esquema SQL (SQLAlchemy) de gastos confirmados
+    repository.py        # persistencia, sin lógica de negocio
+    dinero.py            # montos en centavos
   dashboard/
-    report.py             # agregaciones mensuales, export a Power BI/Streamlit
+    report.py            # agregaciones mensuales y reporte de calidad
+    presupuesto.py       # bolsillos 30/30/20/20, "¿puedo?", alertas
+  evaluacion.py          # banco etiquetado contra el LLM real (--evaluar)
+  config.py
   cli.py
-config/
-  categories.yaml          # taxonomía de categorías, fuente de verdad
-data/
-  processed/                # NUNCA se sube al repo — solo local, .gitignore
-tests/
-  fixtures/                 # mensajes de ejemplo (texto libre variado)
-README.md
+config/categories.yaml   # taxonomía, fuente de verdad
+evals/                   # mensajes.yaml (sintético) y corridas/ guardadas
+n8n/                     # segunda implementación, congelada
+scripts/capturas.py      # capturas del README con datos sintéticos
+data/processed/          # NUNCA se sube al repo — solo local, .gitignore
+tests/                   # fixtures de mensajes; el LLM siempre mockeado
 ```
+
+## Estado
+
+El plan vigente y el estado para retomar están en `ROADMAP.md` (fases A a F).
+Las fases de abajo son las originales del bot familiar, ya cerradas en
+`v1.0-bot-familiar`; se dejan como historia.
 
 ## Fases de desarrollo
 
@@ -180,9 +194,9 @@ necesitaron corrección manual vs. los que el LLM acertó a la primera
 (esta métrica es el reporte de calidad de este proyecto, equivalente al
 de MetalurgicaAndina_QC). Dashboard en Streamlit o export a Power BI.
 
-**Fase 5 — OCR de recibos (opcional).** Solo si se decide extender más
-allá de texto libre. Tesseract extrae texto de la foto, y ese texto
-entra al mismo `parser.py` de la Fase 1 — no un pipeline paralelo.
+**Fase 5 — OCR de recibos: descartada.** Quedó fuera de alcance (ver
+`ROADMAP.md`). Si algún día vuelve, el texto de la foto entra al mismo
+`parser.py`, no a un pipeline paralelo.
 
 **Fase 6 — Tests de integración + README + hardening de privacidad.**
 Verificar que ningún dato real quede versionado en ningún punto del
