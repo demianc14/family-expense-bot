@@ -2,12 +2,14 @@
 
 import argparse
 import asyncio
+import functools
 import logging
 from pathlib import Path
 
 import uvicorn
 
 from family_expense_bot.app.api import ServiciosApp, crear_app
+from family_expense_bot.bot.envio import enviar
 from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
 from family_expense_bot.config import Settings
 from family_expense_bot.dashboard.report import exportar_csv
@@ -185,6 +187,7 @@ def _levantar_app(settings: Settings, token: str, host: str, puerto: int) -> Non
             bot_token=token,
             usuarios=settings.usuarios,
             ingresos=settings.ingresos,
+            notificar=functools.partial(enviar, token),
         )
     except (ValueError, EsquemaDesactualizado) as e:
         raise SystemExit(f"No arranco: {e}") from e

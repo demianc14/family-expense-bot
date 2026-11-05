@@ -133,6 +133,45 @@ def estado_tras_gasto(
     return resumen.bolsillo(nombre) if nombre else None
 
 
+class Alerta(BaseModel):
+    """Un gasto hizo que su bolsillo cruzara uno de los umbrales del yaml."""
+
+    model_config = ConfigDict(frozen=True)
+
+    bolsillo: EstadoBolsillo
+    umbral: int
+    dias_restantes: int
+    """Días del mes después de hoy."""
+
+
+def alerta_tras_gasto(
+    estado: EstadoBolsillo | None,
+    registrado: GastoRegistrado,
+    umbrales: Sequence[int],
+    hoy: date,
+) -> Alerta | None:
+    """El umbral más alto que este gasto hizo cruzar en su bolsillo. None si ninguno.
+
+    No guarda estado: el cruce sale del antes y el después del mismo gasto, así
+    que un reinicio no repite avisos y quien ya iba en 85% no vuelve a recibir
+    el del 80%. Un gasto de otro mes no avisa: ese mes ya pasó o todavía no empieza.
+    """
+    if estado is None or not estado.se_gasta:
+        return None
+    if (registrado.fecha.year, registrado.fecha.month) != (hoy.year, hoy.month):
+        return None
+    antes = estado.gastado - registrado.monto
+    # Sin dividir: el borde exacto (80.00 de 100.00) cuenta como cruzado.
+    cruzados = [u for u in umbrales if antes * 100 < estado.asignado * u <= estado.gastado * 100]
+    if not cruzados:
+        return None
+    return Alerta(
+        bolsillo=estado,
+        umbral=max(cruzados),
+        dias_restantes=calendar.monthrange(hoy.year, hoy.month)[1] - hoy.day,
+    )
+
+
 # --- ¿Puedo gastar esto? ---------------------------------------------------------
 
 
