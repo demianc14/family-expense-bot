@@ -18,7 +18,9 @@ from family_expense_bot.bot.handlers import (
     Pendiente,
     Servicios,
     _botones,
+    _problema_de_app_url,
     _registrar_menu,
+    _verificar_app,
     build_application,
     consultar,
     obtener_identidad,
@@ -792,3 +794,53 @@ async def test_si_falla_registrar_el_menu_el_bot_sigue() -> None:
     bot = AsyncMock()
     bot.set_chat_menu_button.side_effect = RuntimeError("sin red")
     await _registrar_menu(bot, "https://app.example")  # no lanza
+
+
+async def _responde(_: str) -> None:
+    return None
+
+
+async def _caida(_: str) -> None:
+    raise ConnectionError("sin túnel")
+
+
+async def test_app_que_responde_no_tiene_problema() -> None:
+    assert await _problema_de_app_url("https://mac.tailnet.ts.net", _responde, 0) is None
+
+
+async def test_el_tunel_rapido_de_cloudflared_se_marca_aunque_responda() -> None:
+    """Fue la caída real: la URL respondía el día que se puso y murió con la Mac dormida."""
+    problema = await _problema_de_app_url("https://a-b-c.trycloudflare.com", _responde, 0)
+    assert problema is not None and "cloudflared" in problema
+
+
+async def test_la_app_que_tarda_en_arrancar_no_cuenta_como_caida() -> None:
+    intentos: list[str] = []
+
+    async def arranca_al_segundo(url: str) -> None:
+        intentos.append(url)
+        if len(intentos) < 2:
+            raise ConnectionError("todavía no")
+
+    assert await _problema_de_app_url("https://mac.tailnet.ts.net", arranca_al_segundo, 0) is None
+
+
+async def test_app_caida_avisa_solo_a_la_allowlist() -> None:
+    bot = AsyncMock()
+    await _verificar_app(bot, "https://mac.tailnet.ts.net", [111, 222], _caida, 0)
+    destinos = [c.args[0] for c in bot.send_message.await_args_list]
+    assert destinos == [111, 222]
+    assert "Mini App no va a abrir" in bot.send_message.await_args_list[0].args[1]
+
+
+async def test_app_que_responde_no_avisa() -> None:
+    bot = AsyncMock()
+    await _verificar_app(bot, "https://mac.tailnet.ts.net", [111], _responde, 0)
+    bot.send_message.assert_not_awaited()
+
+
+async def test_si_falla_un_aviso_los_demas_igual_salen() -> None:
+    bot = AsyncMock()
+    bot.send_message.side_effect = [RuntimeError("bloqueó al bot"), None]
+    await _verificar_app(bot, "https://mac.tailnet.ts.net", [111, 222], _caida, 0)
+    assert bot.send_message.await_count == 2

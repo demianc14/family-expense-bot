@@ -57,12 +57,49 @@ con `origen = formulario` y **no** se registran en `extracciones`. Ahí nadie
 leyó nada con el LLM, y contarlos subiría el acierto directo sin que el modelo
 haya acertado nada.
 
+## Puesta en marcha (una sola vez por Mac)
+
+Cada paso tiene su comprobación. Si un paso no se cumple, la app no abre, y el
+síntoma es siempre el mismo: el botón del bot lleva a una página que no carga.
+
+| # | Paso | Comprobación |
+|---|---|---|
+| 1 | Instalar Tailscale (`brew install --cask tailscale`), abrirlo e iniciar sesión | `tailscale status` muestra la Mac |
+| 2 | OrbStack con arranque al iniciar sesión: `orb config set app.start_at_login true` | `orb status` → `Running` |
+| 3 | `docker compose up -d` | `docker compose ps`: `app` en `(healthy)` y `curl 127.0.0.1:8080` → 200 |
+| 4 | `tailscale funnel --bg 8080`. La primera vez pide activar HTTPS y Funnel en la consola de Tailscale | `tailscale funnel status` muestra `proxy http://127.0.0.1:8080` |
+| 5 | Poner esa URL (`https://<mac>.<tailnet>.ts.net/`) en `APP_URL` del `.env` y correr `docker compose up -d bot` (con `restart` no relee el `.env`) | `docker compose logs bot` → `Mini App verificada: responde en APP_URL` |
+| 6 | Que la Mac no se duerma enchufada: `sudo pmset -c sleep 0` | `pmset -g custom`, en `AC Power` → `sleep 0` |
+
+Sin Docker, los pasos 2 y 3 se reemplazan por `family-expense-bot --app` y el
+bot en otra terminal (`family-expense-bot --migrar` antes, solo si la base es de
+antes de la app).
+
+Los pasos 2, 4 y 6 quedan guardados: después de reiniciar o despertar la Mac,
+todo vuelve solo, con la misma URL. Lo único que hay que tener abierto es la
+app de Tailscale.
+
+### Si la Mini App no abre
+
+El bot revisa `APP_URL` al arrancar y avisa por Telegram si no carga. Para
+encontrar la falla, se recorre la tabla de arriba **de abajo hacia arriba**:
+
 ```bash
-family-expense-bot --migrar                        # solo si la base es de antes de la app
-family-expense-bot --app                           # http://127.0.0.1:8080, solo local
-tailscale funnel --bg 8080                         # una sola vez: https://<mac>.<tailnet>.ts.net
-# pon esa URL en APP_URL (.env) y reinicia el bot: registra el botón de menú
+docker compose logs bot | grep "Mini App"          # qué vio el bot al arrancar
+grep ^APP_URL .env                                 # ¿es la URL de ts.net? (trycloudflare = mal)
+tailscale funnel status                            # ¿sigue el proxy a 8080?
+docker compose ps                                  # ¿app healthy?
+orb status                                         # ¿OrbStack prendido?
 ```
+
+Casos ya vistos:
+
+- **9-nov-2026: no abría.** `APP_URL` seguía en el túnel rápido de cloudflared
+  de octubre, Tailscale nunca se había instalado y OrbStack estaba apagado. La
+  documentación daba por hecho el paso 4. Desde entonces existe esta tabla y
+  el bot marca cualquier `*.trycloudflare.com` como problema, aunque responda.
+
+## Hosting y limitaciones
 
 La app sale a internet por **Tailscale Funnel**: la URL es fija y no hace falta
 un dominio propio. `--bg` deja la configuración guardada en Tailscale, así que
@@ -78,6 +115,12 @@ Limitaciones:
   arranque y moría con cada siesta de la Mac (error 1033).
 - **Si `APP_URL` cambia**, con Docker hay que correr `docker compose up -d bot`:
   `restart` no vuelve a leer el `.env`.
+- **Una app caída no se nota hasta tocar el botón**, así que el bot la revisa al
+  arrancar: pide `APP_URL` por la URL pública (tres intentos, 10 s entre cada
+  uno) y, si no carga o es un túnel rápido de cloudflared, avisa por Telegram
+  a la allowlist. El chat sigue funcionando igual. En Docker, `docker compose
+  ps` muestra la app como `unhealthy` si deja de responder.
+- **Con batería la Mac se duerme igual**, y mientras duerme no hay app.
 - **El bot y la app son dos procesos sobre el mismo SQLite.** Con una persona
   registrando a mano alcanza (SQLite serializa las escrituras), pero no es
   para muchos usuarios.

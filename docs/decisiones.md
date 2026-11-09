@@ -214,6 +214,14 @@ Opciones sin dominio propio:
 
 La Mac dormida sigue cortando el servicio: durante ese rato no hay app.
 
+**Lo que faltó (9-nov-2026).** La decisión quedó escrita, pero el cambio nunca
+se aplicó en la Mac: `APP_URL` siguió en cloudflared hasta que el túnel murió y
+la app dejó de abrir sin aviso. Arreglarlo tomó dos cosas. La puesta en marcha
+ahora es una tabla con una comprobación por paso
+([mini-app](mini-app.md#puesta-en-marcha-una-sola-vez-por-mac)), y el bot
+verifica `APP_URL` al arrancar y avisa por Telegram si no carga. Una decisión
+de operación no está hecha hasta que algo comprueba que se aplicó.
+
 ## Plataforma, modelo y limitaciones
 
 - **Plataforma: Telegram.** Tiene API gratuita y no pide aprobación. Hoy los
