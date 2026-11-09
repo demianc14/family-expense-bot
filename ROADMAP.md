@@ -1,79 +1,86 @@
 # Roadmap
 
-Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, está medido y se despliega solo. Tesis: *el LLM propone, el código verifica*.
+Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, está medido y hace algo útil sin que se lo pidan. Tesis: *el LLM propone, el código verifica*.
 
-> Los plazos son estimaciones, no compromisos.
+> Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una fase a la vez, y cada fase termina con una PR y una evidencia (tabla, test o captura).
 
-## Estado al 2026-10-26 (para retomar)
+## Estado al 2026-11-05 (para retomar)
 
-- **En `main`:** Fase A, Fase B (PR #2: Mini App riso y solo personal) y la evaluación de la
-  Fase C (PR #3). CI en verde. Las capturas de `docs/img/` están al día con el diseño riso
-  (`scripts/capturas.py` las regenera idénticas).
-- **Evaluación** (`docs/evaluacion.md`): banco de 84 casos en `evals/mensajes.yaml` y
-  `family-expense-bot --evaluar`. Con flash-lite: 0 errores silenciosos en monto y fecha,
-  2 de 75 en categoría. Al evaluar apareció un bug: ante un 429 el SDK dormía horas con el
-  `Retry-After`. Ya está arreglado (`REINTENTABLES` en `gemini.py`) y desplegado en Docker.
-- **Flash, a medias:** 15 de 84 casos en `evals/corridas/gemini-3.5-flash-64386658.jsonl`.
-  El plan gratuito da 20 requests por día; `family-expense-bot --evaluar --modelo
-  gemini-3.5-flash` retoma donde quedó. Cuando esté completa, la tabla va a
-  `docs/evaluacion.md`.
-- **Corriendo con Docker** (`docker compose up -d`), con la Mini App por Tailscale Funnel
-  (`tailscale funnel --bg 8080`): la URL es fija y vuelve sola cuando la Mac despierta. Si
-  `APP_URL` cambia, hay que correr `docker compose up -d bot` (`restart` no relee el `.env`).
-- **Base real:** respaldo previo a la migración en `data/processed/gastos.respaldo-20261021-133136.db`.
+- **En `main` (de446e9, 27-oct):** Fases A y B completas; Fase C con la evaluación hecha; hosting con Tailscale Funnel; Mini App con validación firmada de `initData` y allowlist.
+- **Verificado el 5-nov en un clon limpio:** `pytest` 443 pasan, `ruff` y `mypy` sin errores. La CI corre en Python 3.12 y 3.14 con historial completo y Node.
+- **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; 4 de 26 casos que debían dudar no dudaron (devolución como gasto, `otros` con confianza alta).
+- **Flash:** 15 de 84 casos (`evals/corridas/gemini-3.5-flash-64386658.jsonl`); el plan gratuito da 20 requests/día y ya se descartó para producción por latencia y cuota. **Decisión: no se completa.** Se deja la corrida parcial documentada.
+- **Sin mergear:** la rama `fase-d-alertas` tiene D1 hecho (alertas al 80 % y 100 %, también desde la Mini App; ver `docs/presupuesto.md#alertas`). Espera a que se cierre la Fase C.
+- **Lo que falta para el perfil objetivo:** una automatización que actúe sola (Fase D) y, opcionalmente, un paso de agente con herramientas (Fase F). Hoy todo ocurre cuando alguien escribe.
 
-### Siguiente sesión
+### Operación
 
-1. Completar flash (unos 4 días de cuota) y su tabla.
-2. Mejoras candidatas de `docs/evaluacion.md`, cada una medida antes y después contra el
-   banco: devoluciones registradas como gasto, `otros` con confianza alta, `personal` contra
-   `educacion` y el timeout de 30 s.
+- Corre con `docker compose up -d`; la Mini App sale por `tailscale funnel --bg 8080` (URL fija, vuelve sola cuando la Mac despierta). Si cambia `APP_URL`: `docker compose up -d bot` (`restart` no relee el `.env`).
+- **Aplicado de verdad recién el 2026-11-09.** Hasta ese día `APP_URL` seguía en cloudflared y la app no abría. La puesta en marcha, con una comprobación por paso, está en `docs/mini-app.md#puesta-en-marcha-una-sola-vez-por-mac`. Desde la PR #11, el bot verifica `APP_URL` al arrancar y avisa por Telegram si no carga.
+- Respaldo de la base previo a la migración: `data/processed/gastos.respaldo-20261021-133136.db` (local, nunca en el repo).
 
-## Fase A. Base y presentación (días 1 a 3)
+## Hecho (Fases A y B)
 
-- [x] Probar la Mini App en Telegram real; `pytest`, `ruff` y `mypy` en verde; push.
-- [x] README corto (pitch, GIF de la Mini App, cómo correrlo, enlaces); detalle en `docs/`; la sección n8n pasa a `n8n/README.md`.
-- [x] Revisar el historial de git por datos reales; confirmar que `data/processed/` y `*.egg-info/` no estén versionados. Queda como test en `tests/test_privacy.py`.
-- [x] Descripción del repo y topics (`telegram-bot`, `llm`, `fastapi`, `n8n`, `personal-finance`).
+- README de una pantalla, detalle en `docs/`, n8n en `n8n/README.md`; historial sin datos reales (`tests/test_privacy.py`); topics del repo.
+- CI con badge (`pytest` + `ruff` + `mypy`, Gemini mockeado), `Dockerfile` + `docker-compose`, `.env.example`, `pre-commit`.
+- Rediseño riso de la Mini App y presupuesto solo personal (PR #2).
 
-## Fase B. Ingeniería visible (semana 1)
+## Fase C. Cerrar la evaluación (semana 1)
 
-- [x] GitHub Actions: `pytest` + `ruff` + `mypy` en cada push, con badge. Sin secrets (Gemini va mockeado en los tests).
-- [x] `Dockerfile` y `docker-compose` para levantar bot y Mini App con un comando.
-- [x] `.env.example` documentado y `pre-commit` con ruff.
-- [x] Extra: rediseño de la Mini App y presupuesto solo personal (ver Estado).
+- [x] Banco de 84 casos y `--evaluar` con errores silenciosos separados.
+- [x] flash-lite medido.
+- [ ] Cerrar flash como "descartado por cuota y latencia" en `docs/evaluacion.md` y en este roadmap.
+- [ ] Mejora 1: `otros` nunca con confianza alta (igual que `casa`). Medida antes y después contra el banco.
+- [ ] Mejora 2: devoluciones e ingresos ("me devolvieron 20") se rechazan como "no es gasto". Medida antes y después.
+- [ ] Mejora 3: separar `personal` de `educacion` en el yaml.
+- [ ] Mejora 4: timeout más corto con un reintento.
+- [ ] Tabla "antes → después" en `docs/evaluacion.md` y una línea en el README. Esa tabla es la evidencia de portafolio de esta fase.
 
-## Fase C. Evaluación del modelo (semana 2)
+Regla: cada mejora es una PR chica; si el número empeora, se descarta y se documenta.
 
-- [x] Dataset etiquetado: 84 mensajes sintéticos en `evals/mensajes.yaml`. No hay reales anonimizados porque `extracciones` no guarda el texto.
-- [x] Script `eval` que mide aciertos por campo (monto, categoría, fecha, atribución; la atribución solo aplica al bot de chat, la Mini App ya no la pide) y cuántas veces el código rechazó o pidió confirmación correctamente.
-- [ ] Comparar modelos (`GEMINI_MODELO`) y versiones de prompt; resultados en `docs/evaluacion.md` y tabla en el README. Hecho flash-lite (84 casos en `evals/`); flash va en 15 de 84, porque el plan gratuito da 20 requests por día.
-- [ ] Mejoras guiadas por esa tabla, medidas antes y después: varios gastos en un mensaje y estabilidad de la confianza.
+## Fase D. Automatización que actúa sola (semanas 2 y 3)
 
-## Fase D. Automatización (semana 3)
+Se hace en este orden, de lo más determinista a lo más complejo. Ninguna usa el LLM.
 
-- [ ] Resumen semanal/mensual que llega solo al chat de Telegram.
-- [ ] Gastos recurrentes (suscripciones, cuotas) propuestos cada mes y confirmados con un toque.
-- [ ] Alerta cuando un bolsillo llega al 80%.
-- [ ] Opcional: orquestar el resumen con el flujo n8n existente.
+- [ ] D1. Alerta cuando un bolsillo llega al 80 %: mensaje de Telegram una sola vez por bolsillo y mes. *(Hecha en `fase-d-alertas`, sin mergear.)*
+- [ ] D2. Resumen semanal automático al chat (JobQueue de python-telegram-bot; sin n8n).
+- [ ] D3. Gastos recurrentes (suscripciones, cuotas): el bot propone el gasto cada mes y se confirma con un toque; nunca se guarda solo.
+- [ ] Requisitos de las tres: tests con reloj falso, **idempotencia** (un reinicio del bot no reenvía lo ya enviado) y envío solo a IDs de la allowlist. D1 la saca del cruce antes/después del mismo gasto, sin estado en la base; D2 y D3 no tienen un gasto que las dispare, así que guardan el último envío en la base.
+- [ ] README: sección corta "Qué hace sin que se lo pidas".
 
-## Fase E. Despliegue y cierre (semana 4)
+## Fase E. Operación mínima (semana 3 o 4)
 
-- [x] Hosting estable: Tailscale Funnel, URL fija y datos en la Mac (2026-10-26, ver `docs/decisiones.md`).
-- [ ] Logs y una métrica simple de latencia y errores.
-- [ ] Demo corta (GIF o video).
+- [x] Hosting estable: Tailscale Funnel (2026-10-26, ver `docs/decisiones.md`).
+- [x] Demo corta (GIF de la Mini App en el README).
+- [ ] Logs estructurados (una línea por extracción: modelo, latencia, resultado, error).
+- [ ] Comando `/estado`: latencia p50/p90 y tasa de error de los últimos 7 días, desde la tabla `extracciones`. Nada de Grafana ni Prometheus.
+
+## Fase F. Consultas con herramientas (opcional, solo si C y D están cerradas)
+
+Un paso de agente pequeño y medible, para mostrar tool use sin abrir otro repo.
+
+- [ ] El LLM recibe una pregunta ("¿cuánto gasté en comida este mes?") y **elige una función de solo lectura** con parámetros tipados (Pydantic): `gasto_por_categoria`, `saldo_bolsillo`, `puedo_gastar`, `ultimos_gastos`.
+- [ ] El código ejecuta la función y **arma la respuesta con los números que devolvió**; el LLM no escribe cifras. Mismo principio, un nivel más arriba.
+- [ ] Verificación: si el LLM pide una función que no existe o parámetros inválidos, se rechaza. Sin herramientas de escritura.
+- [ ] Evaluación aparte: 30 preguntas etiquetadas; se mide función correcta, parámetros correctos y cifras que no vienen de la herramienta (meta: 0).
+- [ ] Límite honesto en el README: un solo usuario, datos chicos, cuota gratuita. OJO: la cuota diaria de flash-lite no está documentada aquí; verificarla antes de planificar la evaluación.
+
+Si la Fase D no sale primero, no se empieza esta.
 
 ## Fuera de alcance
 
-- OCR de recibos (la Fase 5 original era opcional).
-- Fine-tuning: sobredimensionado para el volumen de datos.
-- Más frameworks o dashboards sin una pregunta que respondan.
+- OCR de recibos, fine-tuning, importar Excel, multi-moneda, multiusuario, WhatsApp.
+- Más trabajo en la versión n8n (queda congelada como segunda implementación).
+- Dashboards o frameworks sin una pregunta que respondan.
+- Hosting en la nube: Funnel basta para una persona.
 
 ## Criterio de "terminado"
 
 - [x] Corre con un comando (Docker).
 - [x] CI verde con badge.
 - [x] Tabla de evaluación con números reales.
-- [ ] Al menos una automatización que actúa sin que se pida.
-- [ ] README de una pantalla y limitaciones honestas.
 - [x] Historial sin datos personales.
+- [ ] Tabla "antes → después" de las mejoras de la Fase C.
+- [ ] Al menos una automatización que actúa sin que se pida (Fase D).
+- [ ] `/estado` con latencia y errores (Fase E).
+- [ ] README de una pantalla y limitaciones honestas, al día con lo anterior.
