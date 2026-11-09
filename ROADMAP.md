@@ -16,6 +16,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 ### Operación
 
 - Corre con `docker compose up -d`; la Mini App sale por `tailscale funnel --bg 8080` (URL fija, vuelve sola cuando la Mac despierta). Si cambia `APP_URL`: `docker compose up -d bot` (`restart` no relee el `.env`).
+- **Aplicado de verdad recién el 2026-11-09.** Hasta ese día `APP_URL` seguía en cloudflared y la app no abría. La puesta en marcha, con una comprobación por paso, está en `docs/mini-app.md#puesta-en-marcha-una-sola-vez-por-mac`. Desde la PR #11, el bot verifica `APP_URL` al arrancar y avisa por Telegram si no carga.
 - Respaldo de la base previo a la migración: `data/processed/gastos.respaldo-20261021-133136.db` (local, nunca en el repo).
 
 ## Hecho (Fases A y B)
