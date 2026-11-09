@@ -6,14 +6,16 @@ solo si dice que sí, se guarda. Nada se persiste antes de ese sí.
 
 import asyncio
 import logging
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
+import httpx
 from telegram import (
     Bot,
     InlineKeyboardButton,
@@ -451,6 +453,10 @@ def build_application(
 ) -> Application:  # type: ignore[type-arg]
     async def registrar_menu(app: Application) -> None:  # type: ignore[type-arg]
         await _registrar_menu(app.bot, app_url)
+        if app_url:
+            # En segundo plano: el sondeo tarda y el polling no tiene por qué esperarlo.
+            avisar_a = servicios.usuarios.keys() if servicios else ()
+            app.create_task(_verificar_app(app.bot, app_url, avisar_a))
 
     app = Application.builder().token(token).post_init(registrar_menu).build()
     if servicios is not None:
@@ -478,11 +484,64 @@ TEXTO_MENU = "Mi presupuesto"
 async def _registrar_menu(bot: Bot, app_url: str) -> None:
     """El botón de menú del chat abre la Mini App. Sin APP_URL vuelve al menú normal.
 
-    Se registra en cada arranque porque la URL del túnel rápido cambia. Si falla,
-    el bot sigue: la app es un extra, el registro de gastos no depende de ella.
+    Se registra en cada arranque por si APP_URL cambió. Si falla, el bot sigue:
+    la app es un extra, el registro de gastos no depende de ella.
     """
     boton = MenuButtonWebApp(TEXTO_MENU, WebAppInfo(app_url)) if app_url else MenuButtonDefault()
     try:
         await bot.set_chat_menu_button(menu_button=boton)
     except Exception:
         log.exception("No se pudo registrar el botón de la Mini App")
+
+
+INTENTOS_SONDEO = 3
+ESPERA_SONDEO_S = 10.0
+"""Con docker compose el bot y la app arrancan juntos: la app puede tardar unos
+segundos en responder, y eso no es una caída."""
+
+Sondeo = Callable[[str], Awaitable[None]]
+
+
+async def _sondear(url: str) -> None:
+    """Pide la página como la pediría Telegram, por la URL pública. Lanza si no carga."""
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as cliente:
+        (await cliente.get(url)).raise_for_status()
+
+
+async def _problema_de_app_url(
+    app_url: str, sondear: Sondeo = _sondear, espera_s: float = ESPERA_SONDEO_S
+) -> str | None:
+    """Por qué el botón del menú no va a abrir la app, o None si responde."""
+    if (urlsplit(app_url).hostname or "").endswith(".trycloudflare.com"):
+        # Responde hoy, pero muere con la próxima siesta de la Mac: ya pasó.
+        return "APP_URL es un túnel rápido de cloudflared, que cambia en cada arranque"
+    error: Exception | None = None
+    for intento in range(INTENTOS_SONDEO):
+        if intento:
+            await asyncio.sleep(espera_s)
+        try:
+            await sondear(app_url)
+            return None
+        except Exception as e:
+            error = e
+    return f"APP_URL no responde ({type(error).__name__})"
+
+
+async def _verificar_app(
+    bot: Bot,
+    app_url: str,
+    avisar_a: Iterable[int],
+    sondear: Sondeo = _sondear,
+    espera_s: float = ESPERA_SONDEO_S,
+) -> None:
+    """Una app caída no se nota hasta que alguien toca el botón: se avisa al arrancar."""
+    problema = await _problema_de_app_url(app_url, sondear, espera_s)
+    if problema is None:
+        log.info("Mini App verificada: responde en APP_URL")
+        return
+    log.warning("La Mini App no va a abrir: %s", problema)
+    for chat_id in avisar_a:  # solo la allowlist
+        try:
+            await bot.send_message(chat_id, mensajes.app_no_responde(problema))
+        except Exception:
+            log.exception("No se pudo avisar que la Mini App no responde")

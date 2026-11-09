@@ -78,6 +78,15 @@ Limitaciones:
   arranque y moría con cada siesta de la Mac (error 1033).
 - **Si `APP_URL` cambia**, con Docker hay que correr `docker compose up -d bot`:
   `restart` no vuelve a leer el `.env`.
+- **Una app caída no se nota hasta tocar el botón**, así que el bot la revisa al
+  arrancar: pide `APP_URL` por la URL pública (tres intentos, 10 s entre cada
+  uno) y, si no carga o es un túnel rápido de cloudflared, avisa por Telegram
+  a la allowlist. El chat sigue funcionando igual. En Docker, `docker compose
+  ps` muestra la app como `unhealthy` si deja de responder.
+- **Para que vuelva sola después de reiniciar la Mac:** OrbStack con arranque
+  al iniciar sesión (`orb config set app.start_at_login true`), la app de
+  Tailscale abierta (Funnel con `--bg` queda guardado) y, enchufada, sin
+  suspensión (`sudo pmset -c sleep 0`). Con batería se duerme igual.
 - **El bot y la app son dos procesos sobre el mismo SQLite.** Con una persona
   registrando a mano alcanza (SQLite serializa las escrituras), pero no es
   para muchos usuarios.

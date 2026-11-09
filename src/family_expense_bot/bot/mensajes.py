@@ -281,3 +281,11 @@ def consulta_sin_monto() -> str:
         "No encontré cuánto sería el gasto en tu mensaje. "
         "Escríbemelo con el monto, por ejemplo: /puedo 30 concierto"
     )
+
+
+def app_no_responde(problema: str) -> str:
+    """Aviso al arrancar: el botón del menú llevaría a una página que no carga."""
+    return (
+        f"⚠️ La Mini App no va a abrir: {problema}. "
+        "Los gastos por chat siguen funcionando. Ver docs/mini-app.md."
+    )
