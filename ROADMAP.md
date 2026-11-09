@@ -4,10 +4,10 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 > Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una fase a la vez, y cada fase termina con una PR y una evidencia (tabla, test o captura).
 
-## Estado al 2026-11-05 (para retomar)
+## Estado al 2026-11-09 (para retomar)
 
-- **En `main` (de446e9, 27-oct):** Fases A y B completas; Fase C con la evaluación hecha; hosting con Tailscale Funnel; Mini App con validación firmada de `initData` y allowlist.
-- **Verificado el 5-nov en un clon limpio:** `pytest` 443 pasan, `ruff` y `mypy` sin errores. La CI corre en Python 3.12 y 3.14 con historial completo y Node.
+- **En `main` (fe3c704, 9-nov):** Fases A y B completas; Fase C con la evaluación hecha, flash cerrado como descartado, `--desde-corrida` y la mejora 1 (PRs #6, #8, #9, #10); el bot verifica `APP_URL` al arrancar (PR #11); hosting con Tailscale Funnel; Mini App con validación firmada de `initData` y allowlist.
+- **Verificado el 9-nov en `main`:** `pytest` 452 pasan, `ruff` y `mypy` sin errores. La CI corre en Python 3.12 y 3.14 con historial completo y Node.
 - **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; 4 de 26 casos que debían dudar no dudaron (devolución como gasto, `otros` con confianza alta).
 - **Flash:** 15 de 84 casos (`evals/corridas/gemini-3.5-flash-64386658.jsonl`); el plan gratuito da 20 requests/día y ya se descartó para producción por latencia y cuota. **Decisión: no se completa.** Se deja la corrida parcial documentada.
 - **Sin mergear:** la rama `fase-d-alertas` tiene D1 hecho (alertas al 80 % y 100 %, también desde la Mini App; ver `docs/presupuesto.md#alertas`). Espera a que se cierre la Fase C.
@@ -29,8 +29,8 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 
 - [x] Banco de 84 casos y `--evaluar` con errores silenciosos separados.
 - [x] flash-lite medido.
-- [ ] Cerrar flash como "descartado por cuota y latencia" en `docs/evaluacion.md` y en este roadmap.
-- [ ] Mejora 1: `otros` nunca con confianza alta (igual que `casa`). Medida antes y después contra el banco.
+- [x] Cerrar flash como "descartado por cuota y latencia" en `docs/evaluacion.md` y en este roadmap.
+- [x] Mejora 1: `otros` nunca con confianza alta (igual que `casa`). Medida antes y después contra el banco.
 - [ ] Mejora 2: devoluciones e ingresos ("me devolvieron 20") se rechazan como "no es gasto". Medida antes y después.
 - [ ] Mejora 3: separar `personal` de `educacion` en el yaml.
 - [ ] Mejora 4: timeout más corto con un reintento.
