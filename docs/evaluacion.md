@@ -54,17 +54,16 @@ Latencia p50 4.2 s, p90 21.8 s. 3 de 84 llamadas cortaron por timeout a los 30 s
 
 Dudó cuando debía: 22 de 26 (85%).
 
-### gemini-3.5-flash: pendiente
+### gemini-3.5-flash: descartado por cuota y latencia
 
-En el plan gratuito, flash da **20 requests por día**, y el banco tiene 84. La
-comparación necesita unos cinco días de cuota, o pasar al plan pago. Como la
-corrida se guarda caso por caso, `family-expense-bot --evaluar --modelo
-gemini-3.5-flash` retoma donde quedó cada día. Hasta que esté completa, no hay
-una tabla que comparar, y una parcial de pocos casos no dice nada.
+La corrida quedó en **15 de 84 casos** (`evals/corridas/gemini-3.5-flash-64386658.jsonl`)
+y no se completa. En el plan gratuito, flash da **20 requests por día**: alcanza
+para 20 gastos al día, así que no sirve para producción aunque leyera mejor.
 
-Ya se sabía que flash es más lento (15 s contra 2.8 s, medido al elegir el
-modelo), y con este límite queda descartado para producción: alcanza para 20
-gastos al día.
+Lo que dejó la corrida parcial: 14 respuestas válidas de 15, latencia p50 4.9 s
+y **p90 67.2 s**, sin errores silenciosos. No se compara con flash-lite: son los
+15 primeros casos del banco, los fáciles, y ninguno es de los que debían dudar.
+Para pasar a flash habría que pagar el plan y correr el banco entero.
 
 ### Un bug que encontró la evaluación
 
@@ -134,7 +133,7 @@ con la respuesta cruda del LLM, y se versiona: los mensajes son sintéticos.
   `extracciones` no guarda el texto, a propósito ([calidad](calidad.md)).
 - **84 casos son pocos.** Un caso es más de un punto porcentual: las diferencias
   chicas entre modelos no significan nada.
-- **Un solo modelo, por ahora.** La comparación con flash espera cuota (ver arriba).
+- **Un solo modelo medido entero.** Flash quedó en 15 casos (ver arriba).
 - **Una sola corrida.** Gemini no es determinista, así que repetir la
   corrida puede mover un par de casos.
 - **Las etiquetas son criterio humano.** Los dos errores silenciosos de categoría
