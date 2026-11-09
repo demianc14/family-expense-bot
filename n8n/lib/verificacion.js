@@ -371,7 +371,16 @@ function verificarCategoriaDe(respuesta, taxonomia, notas) {
     });
     return [taxonomia.fallback, "baja"];
   }
-  return [strip(respuesta.categoria).toLowerCase(), respuesta.confianza_categoria];
+  const categoria = strip(respuesta.categoria).toLowerCase();
+  if (categoria === taxonomia.fallback && respuesta.confianza_categoria === "alta") {
+    // Igual que `casa`: el cajón de sastre nunca es una certeza (parser.py).
+    notas.push({
+      campo: "categoria",
+      texto: `Quedó como ${repr(categoria)} porque ninguna categoría encajó; ¿es esa?`,
+    });
+    return [categoria, "media"];
+  }
+  return [categoria, respuesta.confianza_categoria];
 }
 
 function verificarFechaDe(respuesta, hoy, notas) {
