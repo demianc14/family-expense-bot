@@ -111,6 +111,7 @@ El bot revisa `APP_URL` al arrancar y avisa por Telegram si no carga. Para
 encontrar la falla, se recorre la tabla de arriba **de abajo hacia arriba**:
 
 ```bash
+docker context show                                # tiene que decir orbstack
 docker compose logs bot | grep "Mini App"          # qué vio el bot al arrancar
 grep ^APP_URL .env                                 # ¿es la URL de ts.net? (trycloudflare = mal)
 tailscale funnel status                            # ¿sigue el proxy a 8080?
@@ -124,6 +125,21 @@ Casos ya vistos:
   de octubre, Tailscale nunca se había instalado y OrbStack estaba apagado. La
   documentación daba por hecho el paso 4. Desde entonces existe esta tabla y
   el bot marca cualquier `*.trycloudflare.com` como problema, aunque responda.
+- **10-nov-2026: "el bot está apagado".** Eran tres cosas a la vez:
+  - **Docker Desktop se instaló y se quedó con Docker.** Puso su contexto
+    (`desktop-linux`) como el activo, y `docker` dejó de ver los contenedores de
+    OrbStack: parecía que no había nada corriendo. Se arregla con `docker context
+    use orbstack`. También dejó `"credsStore": "desktop"` en `~/.docker/config.json`,
+    y sin Docker Desktop abierto `docker compose build` falla con
+    `docker-credential-desktop not found`; se arregla cambiándolo a `osxkeychain`.
+    Lo más simple es no tener los dos: este proyecto usa OrbStack.
+  - **Se cortó la red** a las 11:23 y el bot quedó trabado en errores de DNS
+    (`Temporary failure in name resolution`), aunque el contenedor seguía
+    "Up". Reiniciarlo (`docker compose up -d`) lo destraba.
+  - **Tailscale estaba detenido** (`tailscale status` → `Tailscale is stopped`),
+    así que la URL pública no llegaba a la Mac aunque la app respondiera en
+    local. Se arregla abriendo la app de Tailscale y conectándola; `funnel --bg`
+    vuelve solo.
 
 ## Hosting y limitaciones
 
