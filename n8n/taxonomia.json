@@ -261,7 +261,8 @@
         "porcentaje": 30,
         "se_gasta": false,
         "categorias": [],
-        "marcadores": []
+        "marcadores": [],
+        "marcadores_otros": []
       },
       {
         "nombre": "necesarios",
@@ -278,7 +279,10 @@
           "salud",
           "servicios"
         ],
-        "marcadores": []
+        "marcadores": [],
+        "marcadores_otros": [
+          "de necesarios"
+        ]
       },
       {
         "nombre": "fondo",
@@ -293,7 +297,8 @@
           "de mi fondo",
           "con mi fondo",
           "fondo personal"
-        ]
+        ],
+        "marcadores_otros": []
       },
       {
         "nombre": "lujos",
@@ -306,7 +311,10 @@
           "extras",
           "ropa"
         ],
-        "marcadores": []
+        "marcadores": [],
+        "marcadores_otros": [
+          "de lujos"
+        ]
       }
     ]
   }

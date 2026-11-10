@@ -25,6 +25,14 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 - CI con badge (`pytest` + `ruff` + `mypy`, Gemini mockeado), `Dockerfile` + `docker-compose`, `.env.example`, `pre-commit`.
 - Rediseño riso de la Mini App y presupuesto solo personal (PR #2).
 
+## Pedidos de uso real (10-nov, fuera de fase)
+
+- [x] Montos con coma decimal en la Mini App.
+- [x] Subcategoría libre, con sugerencias de las ya usadas.
+- [x] "Otros" pide de qué bolsillo sale (`marcadores_otros`, con paridad en n8n).
+- [x] Pestaña Gastos: editar (anular + crear) y borrar con confirmación.
+- [ ] En la Mac: respaldo, `--migrar` y `docker compose up -d --build` (ver `docs/mini-app.md`).
+
 ## Fase C. Cerrar la evaluación (semana 1)
 
 - [x] Banco de 84 casos y `--evaluar` con errores silenciosos separados.

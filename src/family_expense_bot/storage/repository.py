@@ -43,6 +43,7 @@ class GastoRegistrado(BaseModel):
     corregido_manualmente: bool
     anulado: bool
     origen: str = "chat"
+    subcategoria: str | None = None
 
     @classmethod
     def desde_fila(cls, fila: Gasto) -> "GastoRegistrado":
@@ -58,6 +59,7 @@ class GastoRegistrado(BaseModel):
             creado_en=_como_utc(fila.creado_en),
             corregido_manualmente=fila.corregido_manualmente,
             anulado=fila.anulado_en is not None,
+            subcategoria=fila.subcategoria,
             origen=fila.origen,
         )
 
@@ -72,11 +74,12 @@ class EsquemaDesactualizado(RuntimeError):
 
 MIGRACIONES = {
     "gastos.origen": "ALTER TABLE gastos ADD COLUMN origen VARCHAR(12) NOT NULL DEFAULT 'chat'",
+    "gastos.subcategoria": "ALTER TABLE gastos ADD COLUMN subcategoria VARCHAR(40)",
 }
 """Columnas agregadas después de que ya había bases con datos reales.
 
 Cada una tiene un default, así que las filas existentes quedan bien sin tocarlas
-(todo lo anterior a la Mini App entró por el chat).
+(todo lo anterior a la Mini App entró por el chat; nada tenía subcategoría).
 """
 
 
@@ -136,17 +139,91 @@ class RepositorioGastos:
         registrado_por: int,
         corregido_manualmente: bool = False,
         origen: str = "chat",
+        subcategoria: str | None = None,
     ) -> GastoRegistrado:
-        """Guarda un gasto **ya confirmado**. La confirmación ocurre antes, en el bot."""
+        """Guarda un gasto **ya confirmado**. La confirmación ocurre antes, en el bot.
+
+        La subcategoría va aparte del gasto porque no es parte de la extracción:
+        solo la escribe una persona en la Mini App.
+        """
         if gasto.monto is None:
             raise GastoSinMonto(f"El gasto de {gasto.texto_original!r} no tiene monto")
 
-        fila = Gasto(
+        fila = self._fila(gasto, registrado_por, corregido_manualmente, origen, subcategoria)
+        with self._sesion.begin() as sesion:
+            sesion.add(fila)
+        return GastoRegistrado.desde_fila(fila)
+
+    def reemplazar(
+        self,
+        id_gasto: int,
+        gasto: GastoExtraido,
+        registrado_por: int,
+        origen: str,
+        subcategoria: str | None = None,
+    ) -> GastoRegistrado | None:
+        """Editar sin perder historia: anula el viejo y guarda el nuevo, todo o nada.
+
+        Devuelve None si el viejo no existe, ya estaba anulado o lo registró otra
+        persona. El viejo queda con el motivo `editado → #<nuevo>`.
+        """
+        if gasto.monto is None:
+            raise GastoSinMonto(f"El gasto de {gasto.texto_original!r} no tiene monto")
+        with self._sesion.begin() as sesion:
+            viejo = sesion.get(Gasto, id_gasto)
+            if (
+                viejo is None
+                or viejo.anulado_en is not None
+                or viejo.registrado_por != registrado_por
+            ):
+                return None
+            nuevo = self._fila(gasto, registrado_por, False, origen, subcategoria)
+            sesion.add(nuevo)
+            sesion.flush()  # para conocer el id del nuevo antes de anotarlo en el viejo
+            viejo.anulado_en = datetime.now(UTC)
+            viejo.motivo_anulacion = f"editado → #{nuevo.id}"
+        return GastoRegistrado.desde_fila(nuevo)
+
+    def subcategorias_usadas(self, registrado_por: int) -> dict[str, list[str]]:
+        """Categoría → subcategorías que esa persona ya usó, la más reciente primero.
+
+        Sin repetir mayúsculas: "Tipti" y "tipti" son la misma, con la última grafía.
+        """
+        consulta = (
+            select(Gasto.categoria, Gasto.subcategoria)
+            .where(Gasto.registrado_por == registrado_por)
+            .where(Gasto.subcategoria.is_not(None))
+            .where(Gasto.anulado_en.is_(None))
+            .order_by(Gasto.creado_en.desc(), Gasto.id.desc())
+        )
+        usadas: dict[str, list[str]] = {}
+        vistas: set[tuple[str, str]] = set()
+        with self._sesion() as sesion:
+            for categoria, subcategoria in sesion.execute(consulta):
+                if subcategoria is None:  # el WHERE ya las saca; esto es para el tipo
+                    continue
+                clave = (categoria, subcategoria.casefold())
+                if clave not in vistas:
+                    vistas.add(clave)
+                    usadas.setdefault(categoria, []).append(subcategoria)
+        return usadas
+
+    @staticmethod
+    def _fila(
+        gasto: GastoExtraido,
+        registrado_por: int,
+        corregido_manualmente: bool,
+        origen: str,
+        subcategoria: str | None,
+    ) -> Gasto:
+        assert gasto.monto is not None
+        return Gasto(
             monto_centavos=a_centavos(gasto.monto),
             categoria=gasto.categoria,
             atribuido_a=gasto.atribuido_a,
             fecha=gasto.fecha or date.today(),
             descripcion=gasto.descripcion,
+            subcategoria=subcategoria,
             texto_original=gasto.texto_original,
             registrado_por=registrado_por,
             confianza_monto=gasto.confianza_monto,
@@ -156,9 +233,6 @@ class RepositorioGastos:
             corregido_manualmente=corregido_manualmente,
             origen=origen,
         )
-        with self._sesion.begin() as sesion:
-            sesion.add(fila)
-        return GastoRegistrado.desde_fila(fila)
 
     def obtener(self, id_gasto: int) -> GastoRegistrado | None:
         with self._sesion() as sesion:

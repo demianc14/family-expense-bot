@@ -63,6 +63,10 @@ class Bolsillo(BaseModel):
     """Frases que mandan un gasto a este bolsillo sea cual sea su categoría
     ("del fondo"). Como con la casa, nunca se deduce: el mensaje lo tiene que decir."""
 
+    marcadores_otros: list[str] = []
+    """Frases que le dan este bolsillo a un gasto de la categoría de respaldo, que
+    no tiene uno propio ("de lujos"). En cualquier otra categoría no hacen nada."""
+
 
 class Presupuesto(BaseModel):
     bolsillos: list[Bolsillo]
@@ -116,7 +120,7 @@ class Taxonomia(BaseModel):
         todas = {c.nombre for c in self.categorias}
         asignadas: list[str] = []
         for b in bolsillos:
-            if not b.se_gasta and (b.categorias or b.marcadores):
+            if not b.se_gasta and (b.categorias or b.marcadores or b.marcadores_otros):
                 raise ValueError(
                     f"El bolsillo {b.nombre!r} no se gasta: no puede tener categorías ni marcadores"
                 )
@@ -130,9 +134,15 @@ class Taxonomia(BaseModel):
         repetidas = {c for c in asignadas if asignadas.count(c) > 1}
         if repetidas:
             raise ValueError(f"Categorías en más de un bolsillo: {sorted(repetidas)}")
-        marcadores = [normalizar(m) for b in bolsillos for m in b.marcadores]
+        marcadores = [
+            normalizar(m) for b in bolsillos for m in (*b.marcadores, *b.marcadores_otros)
+        ]
         if len(set(marcadores)) != len(marcadores):
             raise ValueError("Un mismo marcador no puede mandar a dos bolsillos")
+        if self.fallback in asignadas and any(b.marcadores_otros for b in bolsillos):
+            raise ValueError(
+                f"{self.fallback!r} ya tiene bolsillo: `marcadores_otros` no tendría efecto"
+            )
 
     def _parentescos_consistentes(self) -> None:
         for a in self.atribuciones:
@@ -219,12 +229,21 @@ class Taxonomia(BaseModel):
         """Contra qué bolsillo cuenta un gasto. None si contra ninguno.
 
         Un marcador en el mensaje ("del fondo") gana sobre la categoría, pero solo
-        si apunta a un único bolsillo; si no, manda la categoría.
+        si apunta a un único bolsillo; si no, manda la categoría. La categoría de
+        respaldo no tiene bolsillo: lo toma de un `marcadores_otros` ("de lujos"),
+        con la misma regla de un único bolsillo.
         """
         por_marcador = [b.nombre for b in self.bolsillos if menciona_alguna(texto, b.marcadores)]
         if len(por_marcador) == 1:
             return por_marcador[0]
-        return next((b.nombre for b in self.bolsillos if categoria in b.categorias), None)
+        propio = next((b.nombre for b in self.bolsillos if categoria in b.categorias), None)
+        if propio is None and categoria == self.fallback:
+            elegidos = [
+                b.nombre for b in self.bolsillos if menciona_alguna(texto, b.marcadores_otros)
+            ]
+            if len(elegidos) == 1:
+                return elegidos[0]
+        return propio
 
     def expresiones(self, persona: str, remitente: str) -> list[str]:
         """Cómo llama `remitente` a `persona`."""

@@ -85,7 +85,7 @@ def _ya_guardado(repo: RepositorioGastos, monto: str, categoria: str) -> None:
 # --- quién entra -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("ruta", ["/api/opciones", "/api/presupuesto"])
+@pytest.mark.parametrize("ruta", ["/api/opciones", "/api/presupuesto", "/api/gastos"])
 def test_sin_initdata_no_entra(cliente: TestClient, ruta: str) -> None:
     assert cliente.get(ruta).status_code == 401
     assert cliente.get(ruta, headers={"Authorization": "Bearer x"}).status_code == 401
@@ -170,7 +170,8 @@ def test_sin_ingreso_no_hay_presupuesto(cliente: TestClient) -> None:
         ("150", "entretenimiento", None),
         ("230", "entretenimiento", None),
         ("230", "entretenimiento", "fondo"),
-        ("10", "otros", None),
+        ("10", "otros", "lujos"),
+        ("10", "otros", "necesarios"),
     ],
 )
 def test_puedo_da_el_mismo_veredicto_que_evaluar_gasto(
@@ -217,6 +218,7 @@ def test_previsualizar_no_escribe_nada(cliente: TestClient, repo: RepositorioGas
         "gasto": {
             "monto": "12.50",
             "categoria": "comida_fuera",
+            "subcategoria": None,
             "fecha": "2026-10-20",
             "descripcion": "almuerzo",
         },
@@ -282,3 +284,187 @@ def test_si_falla_el_guardado_se_avisa(
     r = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(DEMIAN))
     assert r.status_code == 500
     assert "no quedó registrado" in r.json()["detail"]
+
+
+# --- coma, otros y subcategoría ------------------------------------------------
+
+
+def test_el_monto_con_coma_se_guarda(cliente: TestClient, repo: RepositorioGastos) -> None:
+    r = cliente.post(
+        "/api/gastos", json=_gasto(monto="12,50", confirmado=True), headers=_como(DEMIAN)
+    )
+    assert r.status_code == 201
+    assert repo.listar()[0].monto == Decimal("12.50")
+
+
+def test_otros_sin_bolsillo_se_rechaza(cliente: TestClient, repo: RepositorioGastos) -> None:
+    for ruta, cuerpo in [
+        ("/api/gastos/previsualizar", _gasto(categoria="otros")),
+        ("/api/gastos", _gasto(categoria="otros", confirmado=True)),
+        ("/api/puedo", {"monto": "10", "categoria": "otros"}),
+    ]:
+        r = cliente.post(ruta, json=cuerpo, headers=_como(DEMIAN))
+        assert r.status_code == 422, ruta
+        assert "bolsillo" in r.json()["detail"]
+    assert repo.listar() == []
+
+
+def test_otros_con_bolsillo_cuenta_contra_ese_bolsillo(cliente: TestClient) -> None:
+    r = cliente.post(
+        "/api/gastos/previsualizar",
+        json=_gasto(categoria="otros", bolsillo="necesarios"),
+        headers=_como(DEMIAN),
+    )
+    assert r.json()["bolsillo"] == "Necesarios"
+
+
+def test_opciones_dice_que_bolsillos_puede_tener_otros(cliente: TestClient) -> None:
+    datos = cliente.get("/api/opciones", headers=_como(DEMIAN)).json()
+    assert datos["fallback"] == "otros"
+    assert [b["nombre"] for b in datos["bolsillos_para_fallback"]] == [
+        "necesarios",
+        "fondo",
+        "lujos",
+    ]
+    assert datos["subcategorias"] == {}
+
+
+def test_la_subcategoria_se_guarda_y_se_sugiere(
+    cliente: TestClient, repo: RepositorioGastos
+) -> None:
+    cuerpo = _gasto(categoria="alimentacion", subcategoria=" Tipti ", confirmado=True)
+    assert cliente.post("/api/gastos", json=cuerpo, headers=_como(DEMIAN)).status_code == 201
+    assert repo.listar()[0].subcategoria == "Tipti"
+    datos = cliente.get("/api/opciones", headers=_como(DEMIAN)).json()
+    assert datos["subcategorias"] == {"alimentacion": ["Tipti"]}
+    # Las de otra persona no se le sugieren a nadie más.
+    assert cliente.get("/api/opciones", headers=_como(MAMA)).json()["subcategorias"] == {}
+
+
+# --- historial, editar y borrar -----------------------------------------------------
+
+
+def _guardar_por_app(cliente: TestClient, **cambios: Any) -> int:
+    r = cliente.post("/api/gastos", json=_gasto(confirmado=True, **cambios), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    return int(r.json()["id"])
+
+
+def test_historial_trae_solo_los_gastos_propios(
+    cliente: TestClient, repo: RepositorioGastos
+) -> None:
+    propio = _guardar_por_app(cliente, descripcion="mío")
+    cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(MAMA))
+    # De la etapa familiar: lo registró demian, pero es de otra persona.
+    ajeno = repo.guardar(
+        GastoExtraido(
+            monto=Decimal("5"),
+            categoria="ropa",
+            fecha=HOY,
+            atribuido_a="mama",
+            descripcion="de mamá",
+            texto_original="x",
+            remitente="demian",
+            confianza_monto=Confianza.ALTA,
+            confianza_categoria=Confianza.ALTA,
+            confianza_fecha=Confianza.ALTA,
+            confianza_atribuido_a=Confianza.ALTA,
+        ),
+        registrado_por=DEMIAN,
+    )
+    gastos = cliente.get("/api/gastos", headers=_como(DEMIAN)).json()["gastos"]
+    assert [g["id"] for g in gastos] == [propio]
+    assert ajeno.id not in [g["id"] for g in gastos]
+
+
+def test_historial_dice_que_bolsillo_eligio_la_persona(cliente: TestClient) -> None:
+    _guardar_por_app(cliente, categoria="otros", bolsillo="lujos", descripcion="cosa")
+    _guardar_por_app(cliente, categoria="entretenimiento", bolsillo="fondo", descripcion="cine")
+    _guardar_por_app(cliente, categoria="ropa", descripcion="camisa")
+    por_descripcion = {
+        g["descripcion"]: g
+        for g in cliente.get("/api/gastos", headers=_como(DEMIAN)).json()["gastos"]
+    }
+    assert por_descripcion["cosa"]["bolsillo_elegido"] == "lujos"
+    assert por_descripcion["cine"]["bolsillo_elegido"] == "fondo"
+    assert por_descripcion["camisa"]["bolsillo_elegido"] is None
+    assert por_descripcion["camisa"]["bolsillo"] == "Lujos"
+
+
+def test_editar_reemplaza_el_gasto(cliente: TestClient, repo: RepositorioGastos) -> None:
+    viejo = _guardar_por_app(cliente)
+    r = cliente.post(
+        "/api/gastos",
+        json=_gasto(monto="30", categoria="ropa", confirmado=True, reemplaza=viejo),
+        headers=_como(DEMIAN),
+    )
+    assert r.status_code == 201
+    [actual] = repo.listar()
+    assert (actual.id, actual.monto, actual.categoria) == (r.json()["id"], Decimal("30"), "ropa")
+    assert repo.obtener(viejo) is not None and repo.obtener(viejo).anulado  # type: ignore[union-attr]
+
+
+def test_editar_sin_confirmar_no_cambia_nada(cliente: TestClient, repo: RepositorioGastos) -> None:
+    viejo = _guardar_por_app(cliente)
+    r = cliente.post("/api/gastos", json=_gasto(monto="30", reemplaza=viejo), headers=_como(DEMIAN))
+    assert r.status_code == 422
+    assert [g.id for g in repo.listar()] == [viejo]
+
+
+def test_editar_un_gasto_ajeno_o_borrado_no_cambia_nada(
+    cliente: TestClient, repo: RepositorioGastos
+) -> None:
+    de_mama = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(MAMA)).json()[
+        "id"
+    ]
+    borrado = _guardar_por_app(cliente)
+    repo.anular(borrado, "x")
+    for id_gasto in (de_mama, borrado, 999):
+        r = cliente.post(
+            "/api/gastos",
+            json=_gasto(monto="1", confirmado=True, reemplaza=id_gasto),
+            headers=_como(DEMIAN),
+        )
+        assert r.status_code == 404
+    assert [g.id for g in repo.listar()] == [de_mama]
+
+
+def test_editar_con_un_campo_invalido_no_anula_el_viejo(
+    cliente: TestClient, repo: RepositorioGastos
+) -> None:
+    viejo = _guardar_por_app(cliente)
+    r = cliente.post(
+        "/api/gastos",
+        json=_gasto(monto="1,200", confirmado=True, reemplaza=viejo),
+        headers=_como(DEMIAN),
+    )
+    assert r.status_code == 422
+    assert [g.id for g in repo.listar()] == [viejo]
+
+
+def test_borrar_anula_con_confirmacion(cliente: TestClient, repo: RepositorioGastos) -> None:
+    id_gasto = _guardar_por_app(cliente)
+    sin_si = cliente.post(f"/api/gastos/{id_gasto}/anular", json={}, headers=_como(DEMIAN))
+    assert sin_si.status_code == 422
+    assert len(repo.listar()) == 1
+    r = cliente.post(
+        f"/api/gastos/{id_gasto}/anular", json={"confirmado": True}, headers=_como(DEMIAN)
+    )
+    assert r.status_code == 200
+    assert repo.listar() == []
+    assert repo.obtener(id_gasto) is not None  # anulado, no borrado
+    otra_vez = cliente.post(
+        f"/api/gastos/{id_gasto}/anular", json={"confirmado": True}, headers=_como(DEMIAN)
+    )
+    assert otra_vez.status_code == 404
+
+
+def test_no_se_puede_borrar_un_gasto_ajeno(cliente: TestClient, repo: RepositorioGastos) -> None:
+    de_mama = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(MAMA)).json()[
+        "id"
+    ]
+    r = cliente.post(
+        f"/api/gastos/{de_mama}/anular", json={"confirmado": True}, headers=_como(DEMIAN)
+    )
+    assert r.status_code == 404
+    assert [g.id for g in repo.listar()] == [de_mama]

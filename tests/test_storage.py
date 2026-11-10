@@ -219,3 +219,75 @@ def test_migrar_agrega_origen_a_una_base_de_antes_de_la_app(tmp_path: Path) -> N
 def test_el_origen_por_defecto_es_el_chat(repo: RepositorioGastos) -> None:
     assert repo.guardar(_gasto(), registrado_por=1).origen == "chat"
     assert repo.guardar(_gasto(), registrado_por=1, origen="formulario").origen == "formulario"
+
+
+# --- editar y subcategorías -----------------------------------------------------
+
+
+def test_reemplazar_anula_el_viejo_y_guarda_el_nuevo(repo: RepositorioGastos) -> None:
+    viejo = repo.guardar(_gasto(), registrado_por=1)
+    nuevo = repo.reemplazar(
+        viejo.id, _gasto("20.00", categoria="ropa"), 1, "formulario", subcategoria="camisa"
+    )
+    assert nuevo is not None
+    assert (nuevo.monto, nuevo.categoria, nuevo.subcategoria) == (
+        Decimal("20.00"),
+        "ropa",
+        "camisa",
+    )
+    assert [g.id for g in repo.listar()] == [nuevo.id]
+    anulado = repo.obtener(viejo.id)
+    assert anulado is not None and anulado.anulado  # sigue en la base: nada se borra
+    [fila] = [g for g in repo.listar(incluir_anulados=True) if g.id == viejo.id]
+    assert fila.monto == Decimal("15.50")
+
+
+def test_reemplazar_deja_el_motivo_con_el_id_nuevo(repo: RepositorioGastos) -> None:
+    from sqlalchemy import select
+
+    from family_expense_bot.storage.models import Gasto
+
+    viejo = repo.guardar(_gasto(), registrado_por=1)
+    nuevo = repo.reemplazar(viejo.id, _gasto("20.00"), 1, "formulario")
+    assert nuevo is not None
+    with repo._sesion() as sesion:
+        motivo = sesion.scalar(select(Gasto.motivo_anulacion).where(Gasto.id == viejo.id))
+    assert motivo == f"editado → #{nuevo.id}"
+
+
+@pytest.mark.parametrize("caso", ["inexistente", "anulado", "de_otro"])
+def test_reemplazar_no_toca_nada_si_no_corresponde(repo: RepositorioGastos, caso: str) -> None:
+    viejo = repo.guardar(_gasto(), registrado_por=1)
+    if caso == "anulado":
+        repo.anular(viejo.id, "duplicado")
+    id_gasto = 999 if caso == "inexistente" else viejo.id
+    quien = 2 if caso == "de_otro" else 1
+    antes = repo.listar(incluir_anulados=True)
+    assert repo.reemplazar(id_gasto, _gasto("20.00"), quien, "formulario") is None
+    assert repo.listar(incluir_anulados=True) == antes
+
+
+def test_subcategorias_usadas_por_persona_sin_repetir(repo: RepositorioGastos) -> None:
+    repo.guardar(_gasto(categoria="alimentacion"), registrado_por=1, subcategoria="tipti")
+    repo.guardar(_gasto(categoria="alimentacion"), registrado_por=1, subcategoria="Feria")
+    repo.guardar(_gasto(categoria="alimentacion"), registrado_por=1, subcategoria="Tipti")
+    repo.guardar(_gasto(categoria="ropa"), registrado_por=1)
+    repo.guardar(_gasto(categoria="alimentacion"), registrado_por=2, subcategoria="ajena")
+    borrado = repo.guardar(_gasto(categoria="hogar"), registrado_por=1, subcategoria="vieja")
+    repo.anular(borrado.id, "error")
+    assert repo.subcategorias_usadas(1) == {"alimentacion": ["Tipti", "Feria"]}
+
+
+def test_migrar_agrega_subcategoria_sin_tocar_lo_que_habia(tmp_path: Path) -> None:
+    url = f"sqlite:///{tmp_path / 'gastos.db'}"
+    RepositorioGastos(engine := crear_engine(url)).guardar(_gasto(), registrado_por=1)
+    with engine.begin() as con:
+        con.exec_driver_sql("ALTER TABLE gastos DROP COLUMN subcategoria")
+    engine.dispose()
+
+    with pytest.raises(EsquemaDesactualizado, match=r"gastos\.subcategoria"):
+        crear_engine(url)
+    assert migrar(url) == ["gastos.subcategoria"]
+    [viejo] = RepositorioGastos(crear_engine(url)).listar()
+    assert viejo.subcategoria is None
+    assert migrar(url) == []

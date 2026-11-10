@@ -13,6 +13,12 @@ Lo que sí se mantiene de las reglas del chat:
 - "Del fondo" se dice, no se deduce: es un interruptor explícito que agrega el
   marcador del yaml al texto, y `Taxonomia.bolsillo_de` lo resuelve al leer,
   igual que si se hubiera escrito en el chat.
+- La categoría de respaldo (`otros`) no pertenece a ningún bolsillo, así que el
+  formulario exige elegir uno: se guarda igual, como marcador en el texto.
+
+La subcategoría es una etiqueta libre y opcional ("Tipti" dentro de
+alimentacion). No decide nada: el bolsillo y el presupuesto salen de la
+categoría.
 """
 
 import re
@@ -26,9 +32,12 @@ from family_expense_bot.extraction.parser import ANTIGUEDAD_MAXIMA
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 
 LARGO_MAXIMO_DESCRIPCION = 200
+LARGO_MAXIMO_SUBCATEGORIA = 40
 
-_MONTO = re.compile(r"\d{1,9}(\.\d{1,2})?")
-"""Estricto, como INGRESOS_MENSUALES: nada de "1e3", "1_200" ni comas. Nueve
+_MONTO = re.compile(r"\d{1,9}([.,]\d{1,2})?")
+"""Estricto: nada de "1e3", "1_200" ni separador de miles. Coma o punto solo para
+los centavos, porque muchos teclados numéricos solo traen la coma. "1,200" se
+rechaza en vez de adivinar si son mil doscientos o uno con veinte. Nueve
 dígitos enteros sobran para un gasto de una persona."""
 
 
@@ -46,16 +55,19 @@ class CamposFormulario(BaseModel):
     fecha: date
     descripcion: str
     bolsillo: str | None = None
-    """Un bolsillo con marcadores ("fondo") al que la persona mandó el gasto a propósito."""
+    """Un bolsillo con marcadores al que la persona mandó el gasto a propósito."""
+
+    subcategoria: str | None = None
 
 
 def leer_monto(crudo: str) -> Decimal:
     crudo = crudo.strip()
     if not _MONTO.fullmatch(crudo):
         raise FormularioInvalido(
-            f"{crudo!r} no es un monto: van dígitos y hasta dos decimales, con punto (ej. 12.50)"
+            f"{crudo!r} no es un monto: van dígitos y hasta dos decimales, "
+            "con coma o punto (ej. 12,50), sin separador de miles"
         )
-    monto = Decimal(crudo)
+    monto = Decimal(crudo.replace(",", "."))
     if monto <= 0:
         raise FormularioInvalido("El monto tiene que ser mayor que cero")
     return monto
@@ -70,7 +82,21 @@ def leer_categoria(nombre: str, taxonomia: Taxonomia) -> str:
 
 def bolsillo_destino(categoria: str, bolsillo: str | None, taxonomia: Taxonomia) -> str | None:
     """Contra qué bolsillo cuenta, con la misma regla que `bolsillo_de` aplica al texto."""
-    return taxonomia.bolsillo_de(categoria, _marcador(bolsillo, taxonomia))
+    if categoria == taxonomia.fallback and bolsillo is None:
+        raise FormularioInvalido(
+            f"Con {categoria!r} elige de qué bolsillo sale: esa categoría no tiene uno propio"
+        )
+    return taxonomia.bolsillo_de(categoria, _marcador(bolsillo, taxonomia, categoria))
+
+
+def leer_subcategoria(crudo: str | None) -> str | None:
+    """Etiqueta libre y opcional. Vacía = sin subcategoría."""
+    limpia = " ".join((crudo or "").split())
+    if len(limpia) > LARGO_MAXIMO_SUBCATEGORIA:
+        raise FormularioInvalido(
+            f"La subcategoría es muy larga (máximo {LARGO_MAXIMO_SUBCATEGORIA} caracteres)"
+        )
+    return limpia or None
 
 
 def armar_gasto(
@@ -92,7 +118,8 @@ def armar_gasto(
             f"La descripción es muy larga (máximo {LARGO_MAXIMO_DESCRIPCION} caracteres)"
         )
 
-    marcador = _marcador(campos.bolsillo, taxonomia)
+    bolsillo_destino(categoria, campos.bolsillo, taxonomia)  # `otros` exige un bolsillo
+    marcador = _marcador(campos.bolsillo, taxonomia, categoria)
     return GastoExtraido(
         monto=monto,
         categoria=categoria,
@@ -108,11 +135,16 @@ def armar_gasto(
     )
 
 
-def _marcador(bolsillo: str | None, taxonomia: Taxonomia) -> str:
-    """El primer marcador del yaml para ese bolsillo. Vacío si no se eligió ninguno."""
+def _marcador(bolsillo: str | None, taxonomia: Taxonomia, categoria: str) -> str:
+    """El primer marcador del yaml para ese bolsillo. Vacío si no se eligió ninguno.
+
+    Con la categoría de respaldo también valen los `marcadores_otros` ("de lujos").
+    """
     if bolsillo is None:
         return ""
     elegido = next((b for b in taxonomia.bolsillos if b.nombre == bolsillo), None)
-    if elegido is None or not elegido.marcadores:
-        raise FormularioInvalido(f"No se puede mandar un gasto al bolsillo {bolsillo!r}")
-    return elegido.marcadores[0]
+    if elegido is not None and elegido.marcadores:
+        return elegido.marcadores[0]
+    if elegido is not None and categoria == taxonomia.fallback and elegido.marcadores_otros:
+        return elegido.marcadores_otros[0]
+    raise FormularioInvalido(f"No se puede mandar un gasto al bolsillo {bolsillo!r}")

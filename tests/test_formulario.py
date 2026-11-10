@@ -12,6 +12,8 @@ from family_expense_bot.extraction.formulario import (
     FormularioInvalido,
     armar_gasto,
     bolsillo_destino,
+    leer_monto,
+    leer_subcategoria,
 )
 from family_expense_bot.extraction.schema import Confianza
 
@@ -46,7 +48,11 @@ def test_un_formulario_completo_queda_en_confianza_alta() -> None:
         ({"monto": "0"}, "mayor que cero"),
         ({"monto": "-5"}, "no es un monto"),
         ({"monto": "12.505"}, "no es un monto"),
-        ({"monto": "12,50"}, "no es un monto"),
+        ({"monto": "1,200"}, "no es un monto"),
+        ({"monto": "1.200,50"}, "no es un monto"),
+        ({"monto": "12,505"}, "no es un monto"),
+        ({"categoria": "otros"}, "elige de qué bolsillo sale"),
+        ({"categoria": "otros", "bolsillo": "ahorro"}, "No se puede mandar"),
         ({"monto": "1e3"}, "no es un monto"),
         ({"monto": "1_200"}, "no es un monto"),
         ({"monto": "1234567890"}, "no es un monto"),
@@ -104,8 +110,48 @@ def test_espacios_de_mas_se_limpian() -> None:
         ("comida_fuera", None, "lujos"),
         ("alimentacion", None, "necesarios"),
         ("comida_fuera", "fondo", "fondo"),
-        ("otros", None, None),
+        ("otros", "lujos", "lujos"),
+        ("otros", "necesarios", "necesarios"),
+        ("otros", "fondo", "fondo"),
     ],
 )
 def test_bolsillo_destino(categoria: str, bolsillo: str | None, esperado: str | None) -> None:
     assert bolsillo_destino(categoria, bolsillo, TAXONOMIA) == esperado
+
+
+@pytest.mark.parametrize(
+    ("crudo", "esperado"), [("12,50", "12.50"), ("12.50", "12.50"), ("7,5", "7.5"), (" 30 ", "30")]
+)
+def test_el_monto_acepta_coma_o_punto_para_los_centavos(crudo: str, esperado: str) -> None:
+    """Muchos teclados numéricos del celular solo traen la coma."""
+    assert leer_monto(crudo) == Decimal(esperado)
+
+
+def test_otros_con_bolsillo_lo_deja_en_el_texto_y_lo_resuelve_bolsillo_de() -> None:
+    gasto = armar_gasto(
+        _campos(categoria="otros", descripcion="regalo raro", bolsillo="lujos"),
+        "demian",
+        TAXONOMIA,
+        HOY,
+    )
+    assert gasto.texto_original == "regalo raro, de lujos"
+    assert TAXONOMIA.bolsillo_de(gasto.categoria, gasto.texto_original) == "lujos"
+
+
+def test_los_marcadores_de_otros_no_mueven_otra_categoria() -> None:
+    """ "de lujos" solo le da bolsillo a `otros`: en alimentacion manda la categoría."""
+    assert TAXONOMIA.bolsillo_de("alimentacion", "pan, de lujos") == "necesarios"
+    assert TAXONOMIA.bolsillo_de("otros", "cosa, de lujos") == "lujos"
+    assert TAXONOMIA.bolsillo_de("otros", "un reloj de lujo") is None
+
+
+@pytest.mark.parametrize(
+    ("crudo", "esperado"), [(None, None), ("", None), ("   ", None), ("  Tipti  ya ", "Tipti ya")]
+)
+def test_la_subcategoria_es_opcional_y_se_limpia(crudo: str | None, esperado: str | None) -> None:
+    assert leer_subcategoria(crudo) == esperado
+
+
+def test_la_subcategoria_tiene_tope() -> None:
+    with pytest.raises(FormularioInvalido, match="subcategoría es muy larga"):
+        leer_subcategoria("x" * 41)

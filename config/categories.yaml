@@ -173,6 +173,12 @@ presupuesto:
       porcentaje: 30
       categorias:
         [alimentacion, transporte, educacion, mascotas, hogar, deudas_cuotas, salud, servicios]
+      # `otros` no tiene bolsillo propio: la Mini App pide elegir uno y lo deja
+      # en el texto como esta frase, que se resuelve al leer, igual que "del
+      # fondo". Solo vale para `otros`: en otra categoría manda la categoría.
+      # Frases raras a propósito: "de lujo" o "lo necesario" no mueven nada.
+      marcadores_otros:
+        - de necesarios
 
     - nombre: fondo
       etiqueta: "Fondo personal"
@@ -188,3 +194,5 @@ presupuesto:
       etiqueta: "Lujos"
       porcentaje: 20
       categorias: [comida_fuera, entretenimiento, extras, ropa]
+      marcadores_otros:
+        - de lujos

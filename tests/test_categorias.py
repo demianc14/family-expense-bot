@@ -332,3 +332,23 @@ def test_un_marcador_no_puede_mandar_a_dos_bolsillos() -> None:
                 {"nombre": "b", "etiqueta": "B", "porcentaje": 50, "marcadores": ["Del Fondo"]},
             ]
         )
+
+
+def test_marcadores_otros_solo_si_otros_no_tiene_bolsillo() -> None:
+    """Si `otros` ya cuenta contra un bolsillo, sus marcadores no harían nada: es un error."""
+    with pytest.raises(ValidationError, match="ya tiene bolsillo"):
+        _con_presupuesto([BOLSILLOS_MINIMOS[0], BOLSILLOS_MINIMOS[1] | {"marcadores_otros": ["x"]}])
+
+
+def test_el_ahorro_no_puede_recibir_otros() -> None:
+    with pytest.raises(ValidationError, match="no se gasta"):
+        _con_presupuesto(
+            [BOLSILLOS_MINIMOS[0] | {"marcadores_otros": ["al ahorro"]}, BOLSILLOS_MINIMOS[1]]
+        )
+
+
+def test_otros_toma_el_bolsillo_solo_si_el_marcador_apunta_a_uno() -> None:
+    assert TAXONOMIA.bolsillo_de("otros", "cosa de necesarios") == "necesarios"
+    assert TAXONOMIA.bolsillo_de("otros", "cosa de necesarios y de lujos") is None
+    # "del fondo" sigue ganando, como en cualquier categoría.
+    assert TAXONOMIA.bolsillo_de("otros", "cosa del fondo") == "fondo"
