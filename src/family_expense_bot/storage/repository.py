@@ -200,6 +200,8 @@ class RepositorioGastos:
         vistas: set[tuple[str, str]] = set()
         with self._sesion() as sesion:
             for categoria, subcategoria in sesion.execute(consulta):
+                if subcategoria is None:  # el WHERE ya las saca; esto es para el tipo
+                    continue
                 clave = (categoria, subcategoria.casefold())
                 if clave not in vistas:
                     vistas.add(clave)
