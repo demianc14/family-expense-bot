@@ -26,6 +26,13 @@ y cada gasto que se confirma descuenta del bolsillo que le corresponde.
 INGRESOS_MENSUALES=demian:1200
 ```
 
+- **Ingreso del mes = fijo + extras.** Los ingresos extra que se registran en
+  la Mini App (trabajo extra, bono, regalo…) se suman al fijo en el mes de su
+  fecha, y se reparte la suma con los mismos porcentajes. Sin extras, el
+  presupuesto es exactamente el de siempre. `/presupuesto` muestra el desglose:
+  "Ingreso: $1,350.00 ($1,200.00 fijo + $150.00 extra)". El fijo sigue siendo el
+  sueldo: cambiarlo es cambiar `.env`.
+
 - **El reparto es config.** Los bolsillos, sus porcentajes y qué categorías
   caen en cada uno viven en `config/categories.yaml`. Al cargar se valida que
   los porcentajes sumen 100, que ninguna categoría esté en dos bolsillos y que
@@ -97,8 +104,9 @@ imprevistos que normalmente no se toca, y acá el fondo personal sí se gasta, e
 cosas para uno mismo (cursos, metas). Volver al reparto original es cambiar
 cuatro porcentajes en `config/categories.yaml`; la validación exige que sumen 100.
 
-Limitaciones: el ingreso es fijo (si un mes cobras distinto, hay que cambiar
-`.env`), el ahorro no se registra (el bot no sabe si de verdad lo apartaste),
+Limitaciones: el sueldo es fijo (si un mes cobras distinto, hay que cambiar
+`.env`; lo que cobres de más se puede registrar como ingreso extra), n8n no ve
+los ingresos extra, el ahorro no se registra (el bot no sabe si de verdad lo apartaste),
 y las categorías que no están en ningún bolsillo (`mesada`, y `otros` cuando
 no trae un `marcadores_otros`) se muestran aparte como "sin bolsillo" en vez de
 repartirse. En el chat, un gasto de `otros` sin frase sigue quedando ahí: el

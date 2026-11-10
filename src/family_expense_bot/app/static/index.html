@@ -28,6 +28,7 @@
     --fondo-p: #f2b42f;    --s-fondo-p: #141613;
     --ahorro: #0c7b74;     --s-ahorro: #f3f4ef;
     --sin: #8b8f86;        --s-sin: #141613;
+    --ingreso: #157a4c;    --s-ingreso: #f3f4ef;   /* lo que entra: la tinta de "bien" */
     --mezcla: multiply;
     --ancho: "wdth" 118;
     --display: "Archivo", "Arial Narrow", sans-serif;
@@ -41,7 +42,7 @@
       --rosa: #ff5f97; --mal: #ff7a68; --ojo: #f2b84b; --bien: #4fd08f;
       --necesarios: #6080ff; --s-necesarios: #0d0e0c; --lujos: #ff7aa6; --s-lujos: #0d0e0c;
       --fondo-p: #f4c04f; --s-fondo-p: #0d0e0c; --ahorro: #27a99f; --s-ahorro: #0d0e0c;
-      --sin: #6f736a; --s-sin: #0d0e0c; --mezcla: screen;
+      --sin: #6f736a; --s-sin: #0d0e0c; --ingreso: #4fd08f; --s-ingreso: #0d0e0c; --mezcla: screen;
       color-scheme: dark;
     }
   }
@@ -50,7 +51,7 @@
     --rosa: #ff5f97; --mal: #ff7a68; --ojo: #f2b84b; --bien: #4fd08f;
     --necesarios: #6080ff; --s-necesarios: #0d0e0c; --lujos: #ff7aa6; --s-lujos: #0d0e0c;
     --fondo-p: #f4c04f; --s-fondo-p: #0d0e0c; --ahorro: #27a99f; --s-ahorro: #0d0e0c;
-    --sin: #6f736a; --s-sin: #0d0e0c; --mezcla: screen;
+    --sin: #6f736a; --s-sin: #0d0e0c; --ingreso: #4fd08f; --s-ingreso: #0d0e0c; --mezcla: screen;
     color-scheme: dark;
   }
 
@@ -232,6 +233,10 @@
   .gasto-fila small { display: block; color: var(--tinta-2); font-size: 13px; }
   .gasto-fila .cifra { font: 800 19px var(--display); font-variation-settings: var(--ancho); letter-spacing: -.02em; }
   .vacio { color: var(--tinta-2); margin-top: 26px; }
+  .gasto-fila .cifra.mas { color: var(--ingreso); }
+  .segmentos.dos { grid-template-columns: 1fr 1fr; margin-top: 20px; }
+  .reparto-pie:has(.suave) { align-items: center; gap: 12px; }
+  .reparto-pie .suave { flex: none; width: auto; min-height: 36px; margin: 0; padding: 0 14px; border-radius: 11px; font-size: 13.5px; white-space: nowrap; }
 
   /* --- Hoja que sube desde abajo: confirmación y veredicto ------------------- */
   .velo { position: fixed; inset: 0; z-index: 30; background: rgb(10 11 9 / .5); opacity: 0; transition: opacity .25s; }
@@ -306,6 +311,10 @@
 
     <section id="tab-registrar" role="tabpanel" hidden>
       <div class="titulo-vista"><span class="etiqueta" id="g-etiqueta">Nuevo gasto</span><h1 id="g-titulo">¿Cuánto gastaste?</h1></div>
+      <div class="segmentos dos" id="modo" role="radiogroup" aria-label="Qué registras">
+        <button type="button" role="radio" data-modo="gasto" aria-checked="true">Gasto</button>
+        <button type="button" role="radio" data-modo="ingreso" aria-checked="false">Ingreso</button>
+      </div>
       <form id="form-gasto" novalidate>
         <label class="monto-grande"><span>$</span><input id="g-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
         <div class="campo"><label class="etiqueta" for="g-descripcion">Qué fue</label>
@@ -329,18 +338,39 @@
         <button class="suave" type="button" id="g-cancelar" hidden>Cancelar la edición</button>
         <div class="error" id="g-error" role="alert" hidden></div>
       </form>
+
+      <form id="form-ingreso" novalidate hidden>
+        <label class="monto-grande"><span>$</span><input id="i-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
+        <div class="campo"><label class="etiqueta" for="i-descripcion">Qué fue</label>
+          <input id="i-descripcion" class="texto" maxlength="200" placeholder="un trabajo extra, un regalo…" autocomplete="off"></div>
+        <div class="campo"><span class="etiqueta" id="i-cat-t">Categoría</span><div id="i-cats" role="radiogroup" aria-labelledby="i-cat-t"></div></div>
+        <div class="campo"><label class="etiqueta" for="i-subcategoria">Subcategoría <span class="opcional">· opcional</span></label>
+          <div class="fichas sugerencias" id="i-sugerencias"></div>
+          <input id="i-subcategoria" class="texto" maxlength="40" placeholder="Fiverr, cumpleaños…" autocomplete="off"></div>
+        <div class="campo"><span class="etiqueta" id="i-fecha-t">Cuándo</span>
+          <div class="segmentos" id="i-cuando" role="radiogroup" aria-labelledby="i-fecha-t">
+            <button type="button" role="radio" data-cuando="hoy" aria-checked="true">Hoy</button>
+            <button type="button" role="radio" data-cuando="ayer" aria-checked="false">Ayer</button>
+            <button type="button" role="radio" data-cuando="otro" aria-checked="false">Otro día</button>
+          </div>
+          <input id="i-fecha" class="texto" type="date" aria-label="Fecha" hidden>
+          <small class="ayuda">Se suma a tu ingreso de ese mes y se reparte entre tus bolsillos como el sueldo.</small></div>
+        <button class="accion" type="submit" id="i-revisar">Revisar</button>
+        <button class="suave" type="button" id="i-cancelar" hidden>Cancelar la edición</button>
+        <div class="error" id="i-error" role="alert" hidden></div>
+      </form>
     </section>
 
     <section id="tab-gastos" role="tabpanel" hidden>
-      <div class="titulo-vista"><span class="etiqueta">Toca uno para editarlo o borrarlo</span><h1>Tus gastos</h1></div>
+      <div class="titulo-vista"><span class="etiqueta">Toca uno para editarlo o borrarlo</span><h1>Movimientos</h1></div>
       <div id="lista-gastos"></div>
     </section>
 
     <nav role="tablist" aria-label="Secciones">
       <button role="tab" data-tab="bolsillos" aria-selected="true">Bolsillos</button>
       <button role="tab" data-tab="puedo" aria-selected="false">¿Puedo?</button>
-      <button role="tab" data-tab="gastos" aria-selected="false">Gastos</button>
-      <button role="tab" data-tab="registrar" class="mas" aria-selected="false">+ Gasto</button>
+      <button role="tab" data-tab="gastos" aria-selected="false">Historial</button>
+      <button role="tab" data-tab="registrar" class="mas" aria-selected="false">+ Nuevo</button>
     </nav>
   </main>
 
@@ -355,7 +385,7 @@ const $ = (id) => document.getElementById(id);
 // Mismo formato que el chat (mensajes.py usa ${:,.2f}).
 const dinero = (s) => "$" + Number(s).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Colores por nombre de bolsillo (config/categories.yaml). Uno desconocido sale gris.
-const TINTA = { necesarios: "necesarios", lujos: "lujos", fondo: "fondo-p", ahorro: "ahorro" };
+const TINTA = { necesarios: "necesarios", lujos: "lujos", fondo: "fondo-p", ahorro: "ahorro", ingreso: "ingreso" };
 const ORDEN_GRUPOS = ["necesarios", "lujos", "fondo"];
 
 let opciones = null;
@@ -363,6 +393,10 @@ let pendiente = null;    // Los campos del gasto que se está confirmando.
 const elegida = { p: null, g: null };   // Categoría elegida en cada formulario.
 const bolsilloOtros = { p: null, g: null };   // Con "otros": de qué bolsillo sale.
 let editando = null;     // El gasto del historial que se está editando, o null si es uno nuevo.
+let editandoIngreso = null;
+let pendienteIngreso = null;
+let modo = "gasto";      // Qué registra la pestaña "+ Nuevo": un gasto o un ingreso.
+elegida.i = null;
 
 async function api(ruta, cuerpo) {
   const r = await fetch(ruta, {
@@ -403,7 +437,7 @@ function fechaISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 // --- Pestañas ------------------------------------------------------------------
 function irA(tab) {
-  if (tab === "gastos") cargarGastos().catch((e) => $("lista-gastos").replaceChildren(el("p", "vacio", e.message)));
+  if (tab === "gastos") cargarHistorial().catch((e) => $("lista-gastos").replaceChildren(el("p", "vacio", e.message)));
   document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o.dataset.tab === tab)));
   document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + tab; });
   window.scrollTo({ top: 0 });
@@ -454,7 +488,9 @@ async function cargarBolsillos() {
     reparto.append(s);
   });
   const repartoPie = el("div", "reparto-pie");
-  repartoPie.append(el("span", "etiqueta", `Ingreso ${dinero(p.ingreso)}`), el("span", "etiqueta", "rayado = se aparta"));
+  const extra = Number(p.ingreso_extra) > 0 ? ` · ${dinero(p.ingreso_extra)} extra` : "";
+  repartoPie.append(el("span", "etiqueta", `Ingreso ${dinero(p.ingreso)}${extra}`),
+                    boton("suave", "+ Ingreso", () => { limpiarIngreso(); ponerModo("ingreso"); irA("registrar"); }));
 
   // Sobres: lo apartado primero (cerrado), después los que se gastan.
   const sobres = el("div", "sobres");
@@ -514,7 +550,8 @@ async function cargarBolsillos() {
 
   const notas = el("div", "notas");
   const n1 = el("p"); n1.append(el("i"), "La marca rosa es hoy. Si la barra la pasa, gastas más rápido que el mes.");
-  notas.append(n1);
+  const n2 = el("p"); n2.append(el("i"), "El reparto rayado se aparta. Lo que sumes como ingreso se reparte igual.");
+  notas.append(n1, n2);
   if (Number(p.sin_bolsillo) > 0) {
     notas.append(el("p", "", `Sin bolsillo: ${dinero(p.sin_bolsillo)} (${p.categorias_sin_bolsillo.map(humano).join(", ")})`));
   }
@@ -590,13 +627,14 @@ function bolsilloDe(form) {
   return fondoElegido(form + "-fondo");
 }
 
-function mostrarSugerencias(categoria) {
-  const cont = $("g-sugerencias");
+function mostrarSugerencias(categoria, form = "g") {
+  const cont = $(form + "-sugerencias");
+  const usadas = form === "g" ? opciones.subcategorias : opciones.subcategorias_ingreso;
   cont.replaceChildren();
-  for (const sub of (opciones.subcategorias[categoria] || []).slice(0, 8)) {
+  for (const sub of (usadas[categoria] || []).slice(0, 8)) {
     const f = el("button", "ficha chica", sub);
     f.type = "button";
-    f.addEventListener("click", () => { $("g-subcategoria").value = sub; vibrar("selectionChanged"); });
+    f.addEventListener("click", () => { $(form + "-subcategoria").value = sub; vibrar("selectionChanged"); });
     cont.append(f);
   }
 }
@@ -670,19 +708,48 @@ $("form-puedo").addEventListener("submit", async (ev) => {
 });
 
 // --- Registrar -----------------------------------------------------------------
-let cuando = "hoy";
-document.querySelectorAll("#g-cuando button").forEach((b) => b.addEventListener("click", () => {
-  cuando = b.dataset.cuando;
-  document.querySelectorAll("#g-cuando button").forEach((o) => o.setAttribute("aria-checked", String(o === b)));
-  $("g-fecha").hidden = cuando !== "otro";
-  vibrar("selectionChanged");
-}));
-function fechaElegida() {
-  const hoy = new Date(opciones.hoy + "T12:00:00");
-  if (cuando === "hoy") return opciones.hoy;
-  if (cuando === "ayer") { hoy.setDate(hoy.getDate() - 1); return fechaISO(hoy); }
-  return $("g-fecha").value;
+const cuando = { g: "hoy", i: "hoy" };
+for (const f of ["g", "i"]) {
+  document.querySelectorAll(`#${f}-cuando button`).forEach((b) => b.addEventListener("click", () => {
+    cuando[f] = b.dataset.cuando;
+    document.querySelectorAll(`#${f}-cuando button`).forEach((o) => o.setAttribute("aria-checked", String(o === b)));
+    $(f + "-fecha").hidden = cuando[f] !== "otro";
+    vibrar("selectionChanged");
+  }));
 }
+function fechaElegida(f = "g") {
+  const hoy = new Date(opciones.hoy + "T12:00:00");
+  if (cuando[f] === "hoy") return opciones.hoy;
+  if (cuando[f] === "ayer") { hoy.setDate(hoy.getDate() - 1); return fechaISO(hoy); }
+  return $(f + "-fecha").value;
+}
+// Pone la fecha de un movimiento ya guardado en los botones Hoy / Ayer / Otro día.
+function ponerFecha(f, iso) {
+  const ayer = new Date(opciones.hoy + "T12:00:00");
+  ayer.setDate(ayer.getDate() - 1);
+  const cual = iso === opciones.hoy ? "hoy" : iso === fechaISO(ayer) ? "ayer" : "otro";
+  document.querySelector(`#${f}-cuando [data-cuando="${cual}"]`).click();
+  if (cual === "otro") $(f + "-fecha").value = iso;
+}
+
+// Gasto o ingreso: el mismo lugar, dos formularios.
+function ponerModo(m) {
+  modo = m;
+  document.querySelectorAll("#modo button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.modo === m)));
+  $("form-gasto").hidden = m !== "gasto";
+  $("form-ingreso").hidden = m !== "ingreso";
+  ponerTitulo();
+}
+function ponerTitulo() {
+  const [etiqueta, titulo] = modo === "gasto"
+    ? (editando ? ["Editar gasto", "¿Qué cambia?"] : ["Nuevo gasto", "¿Cuánto gastaste?"])
+    : (editandoIngreso ? ["Editar ingreso", "¿Qué cambia?"] : ["Nuevo ingreso", "¿Cuánto entró?"]);
+  $("g-etiqueta").textContent = etiqueta;
+  $("g-titulo").textContent = titulo;
+  // Mientras se edita no se cambia de tipo: un gasto no se convierte en ingreso.
+  $("modo").hidden = Boolean(editando || editandoIngreso);
+}
+document.querySelectorAll("#modo button").forEach((b) => b.addEventListener("click", () => { ponerModo(b.dataset.modo); vibrar("selectionChanged"); }));
 
 function camposGasto() {
   return {
@@ -761,10 +828,9 @@ function limpiarGasto() {
   document.querySelector('#g-cuando [data-cuando="hoy"]').click();
   $("g-fecha").value = opciones.hoy;
   editando = null;
-  $("g-etiqueta").textContent = "Nuevo gasto";
-  $("g-titulo").textContent = "¿Cuánto gastaste?";
   $("g-revisar").textContent = "Revisar";
   $("g-cancelar").hidden = true;
+  ponerTitulo();
 }
 $("g-cancelar").addEventListener("click", () => { limpiarGasto(); irA("gastos"); });
 
@@ -775,24 +841,30 @@ function recordarSubcategoria(categoria, sub) {
 }
 
 // --- Gastos: historial, editar y borrar ------------------------------------------
-async function cargarGastos() {
-  const { gastos } = await api("/api/gastos");
+async function cargarHistorial() {
+  const [{ gastos }, { ingresos }] = await Promise.all([api("/api/gastos"), api("/api/ingresos")]);
+  // Un solo historial, por fecha: lo que entra y lo que sale, como en un estado de cuenta.
+  const movimientos = [
+    ...ingresos.map((i) => ({ ...i, tipo: "ingreso" })),
+    ...gastos.map((g) => ({ ...g, tipo: "gasto" })),
+  ].sort((a, b) => b.fecha.localeCompare(a.fecha));
   const cont = $("lista-gastos");
   cont.replaceChildren();
-  if (!gastos.length) { cont.append(el("p", "vacio", "Todavía no hay gastos registrados.")); return; }
+  if (!movimientos.length) { cont.append(el("p", "vacio", "Todavía no hay movimientos registrados.")); return; }
   let dia = null;
-  for (const g of gastos) {
-    if (g.fecha !== dia) {
-      dia = g.fecha;
-      cont.append(el("div", "dia etiqueta", fechaLarga(g.fecha)));
+  for (const m of movimientos) {
+    if (m.fecha !== dia) {
+      dia = m.fecha;
+      cont.append(el("div", "dia etiqueta", fechaLarga(m.fecha)));
     }
-    const fila = tenir(el("button", "gasto-fila"), g.bolsillo_nombre);
+    const esIngreso = m.tipo === "ingreso";
+    const fila = tenir(el("button", "gasto-fila"), esIngreso ? "ingreso" : m.bolsillo_nombre);
     fila.type = "button";
     const texto = el("span");
-    texto.append(el("strong", "", g.descripcion),
-                 el("small", "", [humano(g.categoria), g.subcategoria].filter(Boolean).join(" · ")));
-    fila.append(texto, el("span", "cifra", dinero(g.monto)));
-    fila.addEventListener("click", () => verGasto(g));
+    const detalle = [esIngreso ? "Ingreso" : "", humano(m.categoria), m.subcategoria].filter(Boolean).join(" · ");
+    texto.append(el("strong", "", m.descripcion), el("small", "", detalle));
+    fila.append(texto, el("span", "cifra" + (esIngreso ? " mas" : ""), (esIngreso ? "+" : "") + dinero(m.monto)));
+    fila.addEventListener("click", () => (esIngreso ? verIngreso(m) : verGasto(m)));
     cont.append(fila);
   }
 }
@@ -824,6 +896,7 @@ function verGasto(g) {
   abrirHoja(nodos);
 }
 function editarGasto(g) {
+  if (editandoIngreso) limpiarIngreso();
   limpiarGasto();
   editando = g;
   $("g-monto").value = g.monto.replace(".", ",");
@@ -832,15 +905,10 @@ function editarGasto(g) {
   $("g-subcategoria").value = g.subcategoria || "";
   if (g.categoria === opciones.fallback) elegirBolsillo("g", g.bolsillo_elegido);
   else $("g-fondo").checked = Boolean(g.bolsillo_elegido);
-  const hoy = new Date(opciones.hoy + "T12:00:00");
-  hoy.setDate(hoy.getDate() - 1);
-  const cual = g.fecha === opciones.hoy ? "hoy" : g.fecha === fechaISO(hoy) ? "ayer" : "otro";
-  document.querySelector(`#g-cuando [data-cuando="${cual}"]`).click();
-  if (cual === "otro") $("g-fecha").value = g.fecha;
-  $("g-etiqueta").textContent = "Editar gasto";
-  $("g-titulo").textContent = "¿Qué cambia?";
+  ponerFecha("g", g.fecha);
   $("g-revisar").textContent = "Revisar los cambios";
   $("g-cancelar").hidden = false;
+  ponerModo("gasto");
   irA("registrar");
 }
 function confirmarBorrado(g) {
@@ -853,12 +921,152 @@ function confirmarBorrado(g) {
       const listo = el("div", "listo");
       listo.append(impreso("div", "", "Borrado"), el("p", "", "Ya no cuenta en tu presupuesto."));
       $("hoja-cuerpo").replaceChildren(listo, boton("accion", "Listo", cerrarHoja));
-      cargarGastos().catch(() => {});
+      cargarHistorial().catch(() => {});
       cargarBolsillos().catch(() => {});
     } catch (e) { error.textContent = e.message; error.hidden = false; si.disabled = false; }
   });
   $("hoja-cuerpo").replaceChildren(...ticket(g, "¿Borro este gasto?"),
     el("p", "explicacion", `${g.descripcion}, ${fechaLarga(g.fecha).toLowerCase()}.`),
+    si, boton("suave", "No, dejarlo", cerrarHoja), error);
+  vibrar("notificationOccurred", "warning");
+}
+
+// --- Ingresos extra: mismo flujo que un gasto ---------------------------------------
+function llenarCategoriasIngreso() {
+  const grupo = tenir(el("div", "grupo"), "ingreso");
+  grupo.append(el("div", "grupo-nombre etiqueta", "Ingreso extra"));
+  const fichas = el("div", "fichas");
+  for (const c of opciones.categorias_ingreso) {
+    const f = el("button", "ficha", humano(c.nombre));
+    f.type = "button";
+    f.dataset.cat = c.nombre;
+    f.title = c.descripcion;
+    f.setAttribute("role", "radio");
+    f.setAttribute("aria-checked", "false");
+    f.addEventListener("click", () => elegirCategoriaIngreso(c.nombre));
+    fichas.append(f);
+  }
+  grupo.append(fichas);
+  $("i-cats").append(grupo);
+}
+function elegirCategoriaIngreso(nombre) {
+  elegida.i = nombre;
+  $("i-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", String(f.dataset.cat === nombre)));
+  mostrarSugerencias(nombre, "i");
+  vibrar("selectionChanged");
+}
+function ticketIngreso(i, titulo) {
+  const total = el("div", "ticket-total");
+  total.append(impreso("strong", "cifra", "+" + dinero(i.monto)));
+  const sello = el("div", "ticket-bolsillo");
+  sello.append(tenir(el("span", "sello-bolsillo", "Se reparte entre tus bolsillos"), "ingreso"));
+  return [el("div", "etiqueta", titulo), total, sello];
+}
+function filasIngreso(i) {
+  const filas = el("dl", "filas");
+  for (const [k, v] of [["Qué", i.descripcion], ["Categoría", humano(i.categoria)],
+                        ...(i.subcategoria ? [["Subcategoría", i.subcategoria]] : []),
+                        ["Fecha", fechaLarga(i.fecha)]]) {
+    const fila = el("div"); fila.append(el("dt", "", k), el("dd", "", v)); filas.append(fila);
+  }
+  return filas;
+}
+
+$("form-ingreso").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  ocultar("i-error");
+  try {
+    if (!elegida.i) throw new Error("Elige una categoría");
+    const campos = {
+      monto: $("i-monto").value,
+      descripcion: $("i-descripcion").value,
+      categoria: elegida.i,
+      subcategoria: $("i-subcategoria").value,
+      fecha: fechaElegida("i"),
+    };
+    const r = await api("/api/ingresos/previsualizar", campos);   // no guarda nada
+    pendienteIngreso = campos;
+    const error = el("div", "error"); error.id = "i-error-guardar"; error.setAttribute("role", "alert"); error.hidden = true;
+    const si = boton("accion", "Sí, guardar", guardarIngreso); si.id = "i-si";
+    abrirHoja([...ticketIngreso(r.ingreso, editandoIngreso ? "¿Guardo los cambios?" : "¿Guardo este ingreso?"),
+               filasIngreso(r.ingreso), si, boton("suave", "Corregir", cerrarHoja), error],
+              () => { pendienteIngreso = null; });
+  } catch (e) { mostrarError("i-error", e); }
+});
+
+async function guardarIngreso() {
+  if (!pendienteIngreso) return;
+  $("i-si").disabled = true;
+  try {
+    const eraEdicion = Boolean(editandoIngreso);
+    const r = await api("/api/ingresos", { ...pendienteIngreso, confirmado: true, reemplaza: editandoIngreso ? editandoIngreso.id : null });
+    if (r.ingreso.subcategoria) {
+      const previas = (opciones.subcategorias_ingreso[r.ingreso.categoria] || []).filter((s) => s.toLowerCase() !== r.ingreso.subcategoria.toLowerCase());
+      opciones.subcategorias_ingreso[r.ingreso.categoria] = [r.ingreso.subcategoria, ...previas];
+    }
+    pendienteIngreso = null;
+    const listo = el("div", "listo");
+    listo.append(impreso("div", "", eraEdicion ? "Corregido" : "Guardado"), el("p", "", r.linea || "Quedó registrado."));
+    vibrar("notificationOccurred", "success");
+    $("hoja-cuerpo").replaceChildren(listo,
+      boton("accion", "Ver bolsillos", () => { cerrarHoja(); limpiarIngreso(); irA("bolsillos"); }),
+      boton("suave", "Ver historial", () => { cerrarHoja(); limpiarIngreso(); irA("gastos"); }));
+    alCerrar = limpiarIngreso;
+    cargarBolsillos().catch(() => {});
+  } catch (e) {
+    mostrarError("i-error-guardar", e);
+    $("i-si").disabled = false;
+  }
+}
+function limpiarIngreso() {
+  $("form-ingreso").reset();
+  elegida.i = null;
+  $("i-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", "false"));
+  $("i-sugerencias").replaceChildren();
+  document.querySelector('#i-cuando [data-cuando="hoy"]').click();
+  $("i-fecha").value = opciones.hoy;
+  editandoIngreso = null;
+  $("i-revisar").textContent = "Revisar";
+  $("i-cancelar").hidden = true;
+  ponerTitulo();
+}
+$("i-cancelar").addEventListener("click", () => { limpiarIngreso(); irA("gastos"); });
+
+function verIngreso(i) {
+  abrirHoja([...ticketIngreso(i, "Ingreso"), filasIngreso(i),
+             boton("accion", "Editar", () => { cerrarHoja(); setTimeout(() => editarIngreso(i), 400); }),
+             boton("suave peligro", "Borrar", () => confirmarBorradoIngreso(i))]);
+}
+function editarIngreso(i) {
+  if (editando) limpiarGasto();
+  limpiarIngreso();
+  editandoIngreso = i;
+  $("i-monto").value = i.monto.replace(".", ",");
+  $("i-descripcion").value = i.descripcion;
+  elegirCategoriaIngreso(i.categoria);
+  $("i-subcategoria").value = i.subcategoria || "";
+  ponerFecha("i", i.fecha);
+  $("i-revisar").textContent = "Revisar los cambios";
+  $("i-cancelar").hidden = false;
+  ponerModo("ingreso");
+  irA("registrar");
+}
+function confirmarBorradoIngreso(i) {
+  const error = el("div", "error"); error.setAttribute("role", "alert"); error.hidden = true;
+  const si = boton("accion peligro", "Sí, borrar", async () => {
+    si.disabled = true;
+    try {
+      await api(`/api/ingresos/${i.id}/anular`, { confirmado: true });
+      vibrar("notificationOccurred", "success");
+      const listo = el("div", "listo");
+      listo.append(impreso("div", "", "Borrado"), el("p", "", "Ya no suma a tu ingreso del mes."));
+      $("hoja-cuerpo").replaceChildren(listo, boton("accion", "Listo", cerrarHoja));
+      cargarHistorial().catch(() => {});
+      cargarBolsillos().catch(() => {});
+    } catch (e) { error.textContent = e.message; error.hidden = false; si.disabled = false; }
+  });
+  $("hoja-cuerpo").replaceChildren(...ticketIngreso(i, "¿Borro este ingreso?"),
+    el("p", "explicacion", `${i.descripcion}, ${fechaLarga(i.fecha).toLowerCase()}.`),
     si, boton("suave", "No, dejarlo", cerrarHoja), error);
   vibrar("notificationOccurred", "warning");
 }
@@ -893,9 +1101,9 @@ async function iniciar() {
     llenarCategorias("g");
     llenarBolsillosOtros("p");
     llenarBolsillosOtros("g");
+    llenarCategoriasIngreso();
     prepararFondo();
-    $("g-fecha").value = opciones.hoy;
-    $("g-fecha").max = opciones.hoy;
+    for (const f of ["g", "i"]) { $(f + "-fecha").value = opciones.hoy; $(f + "-fecha").max = opciones.hoy; }
     await cargarBolsillos();
     ocultar("cargando");
     $("app").hidden = false;

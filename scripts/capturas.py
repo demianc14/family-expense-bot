@@ -33,7 +33,12 @@ from PIL import Image
 from family_expense_bot.app.api import ServiciosApp, crear_app
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
-from family_expense_bot.storage.repository import RepositorioGastos, crear_engine
+from family_expense_bot.storage.repository import (
+    IngresoNuevo,
+    RepositorioGastos,
+    RepositorioIngresos,
+    crear_engine,
+)
 
 RAIZ = Path(__file__).resolve().parents[1]
 SALIDA = RAIZ / "docs" / "img"
@@ -54,6 +59,15 @@ GASTOS_SINTETICOS = [
     ("40.00", "personal", "curso de inglés", 2),
 ]
 
+INGRESO_SINTETICO = IngresoNuevo(
+    monto=Decimal("150.00"),
+    categoria="trabajo_extra",
+    subcategoria=None,
+    persona="demian",
+    fecha=HOY.replace(day=9),
+    descripcion="diseño de un logo",
+)
+
 # Escenas: qué hace la página antes de la captura. Corre cuando la app ya cargó.
 ESCENAS = {
     "bolsillos": "",
@@ -66,7 +80,11 @@ ESCENAS = {
     "confirmar": """
         tab('registrar'); $('g-monto').value = '12.50'; $('g-descripcion').value = 'almuerzo';
         cat('g', 'comida_fuera'); $('form-gasto').requestSubmit();""",
-    "gastos": "tab('gastos');",
+    "ingreso": """
+        tab('registrar'); document.querySelector('#modo [data-modo=ingreso]').click();
+        $('i-monto').value = '80,50'; $('i-descripcion').value = 'venta de una silla';
+        document.querySelector('#i-cats [data-cat=venta]').click();""",
+    "historial": "tab('gastos');",
 }
 
 
@@ -138,10 +156,14 @@ def _puerto_libre() -> int:
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        repo = _sembrar(f"sqlite:///{Path(tmp) / 'demo.db'}")
+        url = f"sqlite:///{Path(tmp) / 'demo.db'}"
+        repo = _sembrar(url)
+        ingresos = RepositorioIngresos(crear_engine(url))
+        ingresos.guardar(INGRESO_SINTETICO, registrado_por=ID_DEMO)
         app = crear_app(
             ServiciosApp(
                 repositorio=repo,
+                ingresos_extra=ingresos,
                 taxonomia=cargar_taxonomia(),
                 bot_token=TOKEN,
                 usuarios={ID_DEMO: "demian"},

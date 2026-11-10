@@ -39,6 +39,7 @@ from family_expense_bot.bot import mensajes
 from family_expense_bot.dashboard.presupuesto import (
     estado_tras_gasto,
     evaluar_gasto,
+    extras_del_mes,
     resumen_presupuesto,
 )
 from family_expense_bot.dashboard.report import inicio_y_fin_utc, rango_del_mes, resumen_mensual
@@ -50,6 +51,7 @@ from family_expense_bot.storage.repository import (
     GastoRegistrado,
     RepositorioExtracciones,
     RepositorioGastos,
+    RepositorioIngresos,
 )
 
 log = logging.getLogger(__name__)
@@ -80,6 +82,9 @@ class Servicios:
 
     ingresos: Mapping[str, Decimal] = field(default_factory=lambda: MappingProxyType({}))
     """Rol → ingreso mensual. Solo quien está acá tiene presupuesto."""
+
+    ingresos_extra: RepositorioIngresos | None = None
+    """Los ingresos registrados en la Mini App: se suman al fijo en su mes."""
 
     def __post_init__(self) -> None:
         # Falla al arrancar, no cuando esa persona escriba por primera vez.
@@ -278,6 +283,14 @@ def _bolsillo(servicios: Servicios, gasto: GastoExtraido) -> str | None:
     return etiquetas.get(nombre or "", "ninguno")
 
 
+def _extra(servicios: Servicios, persona: str, anio: int, mes: int) -> Decimal:
+    """Lo registrado como ingreso extra ese mes. Cero si no hay repositorio."""
+    if servicios.ingresos_extra is None:
+        return Decimal(0)
+    desde, hasta = rango_del_mes(anio, mes)
+    return extras_del_mes(servicios.ingresos_extra.listar(desde, hasta), persona, anio, mes)
+
+
 def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> str | None:
     """Cómo quedó el bolsillo del mes del gasto. Un fallo acá no tapa el "Guardado"."""
     ingreso = servicios.ingresos.get(registrado.atribuido_a)
@@ -290,6 +303,9 @@ def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> s
             servicios.taxonomia,
             registrado,
             ingreso,
+            _extra(
+                servicios, registrado.atribuido_a, registrado.fecha.year, registrado.fecha.month
+            ),
         )
         return mensajes.linea_de_bolsillo(estado, registrado.fecha.month)
     except Exception:
@@ -330,6 +346,7 @@ async def presupuesto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         ingreso,
         hoy.year,
         hoy.month,
+        _extra(servicios, remitente, hoy.year, hoy.month),
     )
     await update.effective_message.reply_text(mensajes.presupuesto(resumen))
 
@@ -374,6 +391,7 @@ async def consultar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ingreso,
         hoy.year,
         hoy.month,
+        _extra(servicios, remitente, hoy.year, hoy.month),
     )
     bolsillo = servicios.taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
     consulta = evaluar_gasto(resumen, servicios.taxonomia, bolsillo, gasto.monto, hoy)

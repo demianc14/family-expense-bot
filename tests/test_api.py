@@ -14,7 +14,11 @@ from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_pres
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
 from family_expense_bot.storage.models import Base
-from family_expense_bot.storage.repository import RepositorioExtracciones, RepositorioGastos
+from family_expense_bot.storage.repository import (
+    RepositorioExtracciones,
+    RepositorioGastos,
+    RepositorioIngresos,
+)
 from tests.test_auth_webapp import TOKEN, init_data
 
 TAXONOMIA = cargar_taxonomia()
@@ -37,9 +41,15 @@ def repo(engine: Engine) -> RepositorioGastos:
 
 
 @pytest.fixture
-def cliente(repo: RepositorioGastos) -> TestClient:
+def repo_ingresos(engine: Engine) -> RepositorioIngresos:
+    return RepositorioIngresos(engine)
+
+
+@pytest.fixture
+def cliente(repo: RepositorioGastos, repo_ingresos: RepositorioIngresos) -> TestClient:
     servicios = ServiciosApp(
         repositorio=repo,
+        ingresos_extra=repo_ingresos,
         taxonomia=TAXONOMIA,
         bot_token=TOKEN,
         usuarios={DEMIAN: "demian", MAMA: "mama"},
@@ -468,3 +478,108 @@ def test_no_se_puede_borrar_un_gasto_ajeno(cliente: TestClient, repo: Repositori
     )
     assert r.status_code == 404
     assert [g.id for g in repo.listar()] == [de_mama]
+
+
+# --- ingresos extra -------------------------------------------------------------------
+
+
+def _ingreso(**cambios: Any) -> dict[str, Any]:
+    return {
+        "monto": "150",
+        "categoria": "trabajo_extra",
+        "fecha": HOY.isoformat(),
+        "descripcion": "un logo",
+    } | cambios
+
+
+def test_previsualizar_ingreso_no_escribe(
+    cliente: TestClient, repo_ingresos: RepositorioIngresos
+) -> None:
+    r = cliente.post("/api/ingresos/previsualizar", json=_ingreso(), headers=_como(DEMIAN))
+    assert r.status_code == 200
+    assert r.json()["ingreso"]["monto"] == "150.00"
+    assert repo_ingresos.listar() == []
+
+
+def test_un_ingreso_sin_confirmar_no_se_guarda(
+    cliente: TestClient, repo_ingresos: RepositorioIngresos
+) -> None:
+    assert cliente.post("/api/ingresos", json=_ingreso(), headers=_como(DEMIAN)).status_code == 422
+    assert repo_ingresos.listar() == []
+
+
+def test_un_ingreso_sube_el_presupuesto_del_mes(cliente: TestClient) -> None:
+    antes = cliente.get("/api/presupuesto", headers=_como(DEMIAN)).json()
+    r = cliente.post("/api/ingresos", json=_ingreso(confirmado=True), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    assert (
+        r.json()["linea"]
+        == "Tu ingreso de octubre queda en $1,350.00 y se reparte en tus bolsillos."
+    )
+    despues = cliente.get("/api/presupuesto", headers=_como(DEMIAN)).json()
+    assert (antes["ingreso"], despues["ingreso"]) == ("1200.00", "1350.00")
+    assert despues["ingreso_extra"] == "150.00"
+    lujos = next(b for b in despues["bolsillos"] if b["nombre"] == "lujos")
+    assert lujos["asignado"] == "270.00"  # 20% de 1350
+
+
+def test_puedo_usa_el_ingreso_con_extras(cliente: TestClient) -> None:
+    """Lujos tiene 240; con 150 extra pasa a 270 y un gasto de 250 ya no se pasa."""
+    consulta = {"monto": "250", "categoria": "entretenimiento"}
+    assert (
+        cliente.post("/api/puedo", json=consulta, headers=_como(DEMIAN)).json()["veredicto"] == "no"
+    )
+    cliente.post("/api/ingresos", json=_ingreso(confirmado=True), headers=_como(DEMIAN))
+    assert (
+        cliente.post("/api/puedo", json=consulta, headers=_como(DEMIAN)).json()["veredicto"] != "no"
+    )
+
+
+def test_editar_y_borrar_un_ingreso(
+    cliente: TestClient, repo_ingresos: RepositorioIngresos
+) -> None:
+    viejo = cliente.post("/api/ingresos", json=_ingreso(confirmado=True), headers=_como(DEMIAN))
+    r = cliente.post(
+        "/api/ingresos",
+        json=_ingreso(monto="200", confirmado=True, reemplaza=viejo.json()["id"]),
+        headers=_como(DEMIAN),
+    )
+    assert r.status_code == 201
+    [actual] = repo_ingresos.listar()
+    assert actual.monto == Decimal("200")
+    lista = cliente.get("/api/ingresos", headers=_como(DEMIAN)).json()["ingresos"]
+    assert [i["id"] for i in lista] == [actual.id]
+
+    borrar = cliente.post(
+        f"/api/ingresos/{actual.id}/anular", json={"confirmado": True}, headers=_como(DEMIAN)
+    )
+    assert borrar.status_code == 200
+    assert repo_ingresos.listar() == []
+    assert cliente.get("/api/presupuesto", headers=_como(DEMIAN)).json()["ingreso"] == "1200.00"
+
+
+def test_los_ingresos_de_otra_persona_no_se_ven_ni_se_tocan(
+    cliente: TestClient, repo_ingresos: RepositorioIngresos
+) -> None:
+    de_mama = cliente.post("/api/ingresos", json=_ingreso(confirmado=True), headers=_como(MAMA))
+    id_mama = de_mama.json()["id"]
+    assert cliente.get("/api/ingresos", headers=_como(DEMIAN)).json()["ingresos"] == []
+    editar = cliente.post(
+        "/api/ingresos", json=_ingreso(confirmado=True, reemplaza=id_mama), headers=_como(DEMIAN)
+    )
+    assert editar.status_code == 404
+    borrar = cliente.post(
+        f"/api/ingresos/{id_mama}/anular", json={"confirmado": True}, headers=_como(DEMIAN)
+    )
+    assert borrar.status_code == 404
+    assert [i.id for i in repo_ingresos.listar()] == [id_mama]
+    # Y no le suben el presupuesto a demian.
+    assert cliente.get("/api/presupuesto", headers=_como(DEMIAN)).json()["ingreso"] == "1200.00"
+
+
+def test_opciones_trae_las_categorias_de_ingreso(cliente: TestClient) -> None:
+    datos = cliente.get("/api/opciones", headers=_como(DEMIAN)).json()
+    assert [c["nombre"] for c in datos["categorias_ingreso"]] == [
+        c.nombre for c in TAXONOMIA.ingresos
+    ]
+    assert datos["subcategorias_ingreso"] == {}
