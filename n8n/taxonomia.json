@@ -317,5 +317,31 @@
         ]
       }
     ]
-  }
+  },
+  "ingresos": [
+    {
+      "nombre": "trabajo_extra",
+      "descripcion": "Trabajos puntuales, freelance, horas extra."
+    },
+    {
+      "nombre": "bono",
+      "descripcion": "Bonos, utilidades, décimos."
+    },
+    {
+      "nombre": "regalo",
+      "descripcion": "Dinero que te regalaron."
+    },
+    {
+      "nombre": "venta",
+      "descripcion": "Algo que vendiste."
+    },
+    {
+      "nombre": "reembolso",
+      "descripcion": "Te devolvieron plata. Si es de un gasto de este mes, mejor edítalo o bórralo."
+    },
+    {
+      "nombre": "otros",
+      "descripcion": "Lo que no encaja en las demás."
+    }
+  ]
 }

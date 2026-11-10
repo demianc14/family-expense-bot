@@ -10,6 +10,9 @@ suyos: un gasto de la etapa familiar atribuido a otra persona no aparece.
 Editar es anular y guardar otro (`RepositorioGastos.reemplazar`), así que el
 historial de qué cambió queda en la base.
 
+Los ingresos extra siguen las mismas reglas (revisar, "Sí, guardar", editar,
+borrar) y se suman al ingreso fijo del mes en el presupuesto.
+
 Los montos viajan como texto con dos decimales, nunca como float.
 """
 
@@ -34,21 +37,30 @@ from family_expense_bot.dashboard.presupuesto import (
     ResumenPresupuesto,
     estado_tras_gasto,
     evaluar_gasto,
+    extras_del_mes,
     resumen_presupuesto,
 )
 from family_expense_bot.dashboard.report import rango_del_mes
 from family_expense_bot.extraction.categorias import Taxonomia, validar_roles
 from family_expense_bot.extraction.formulario import (
     CamposFormulario,
+    CamposIngreso,
     FormularioInvalido,
     armar_gasto,
+    armar_ingreso,
     bolsillo_destino,
     leer_categoria,
     leer_monto,
     leer_subcategoria,
 )
 from family_expense_bot.extraction.schema import GastoExtraido
-from family_expense_bot.storage.repository import GastoRegistrado, RepositorioGastos
+from family_expense_bot.storage.repository import (
+    GastoRegistrado,
+    IngresoNuevo,
+    IngresoRegistrado,
+    RepositorioGastos,
+    RepositorioIngresos,
+)
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +76,7 @@ class ServiciosApp:
     """Todo lo que las rutas necesitan, inyectado. No hay LLM: la app no lo usa."""
 
     repositorio: RepositorioGastos
+    ingresos_extra: RepositorioIngresos
     taxonomia: Taxonomia
     bot_token: str
     """Con él se verifica la firma del initData. Nunca sale de este proceso."""
@@ -98,6 +111,11 @@ class Guardar(CamposFormulario):
 
     reemplaza: int | None = None
     """Si es una edición, el id del gasto que este reemplaza."""
+
+
+class GuardarIngreso(CamposIngreso):
+    confirmado: Literal[True]
+    reemplaza: int | None = None
 
 
 class Anular(BaseModel):
@@ -137,6 +155,16 @@ def _gasto(gasto: GastoExtraido, subcategoria: str | None) -> dict[str, Any]:
         "subcategoria": subcategoria,
         "fecha": gasto.fecha.isoformat(),
         "descripcion": gasto.descripcion,
+    }
+
+
+def _ingreso(ingreso: IngresoNuevo) -> dict[str, Any]:
+    return {
+        "monto": _dinero(ingreso.monto),
+        "categoria": ingreso.categoria,
+        "subcategoria": ingreso.subcategoria,
+        "fecha": ingreso.fecha.isoformat(),
+        "descripcion": ingreso.descripcion,
     }
 
 
@@ -189,6 +217,10 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             "editable": taxonomia.contiene(gasto.categoria),
         }
 
+    def extra(rol: str, anio: int, mes: int) -> Decimal:
+        desde, hasta = rango_del_mes(anio, mes)
+        return extras_del_mes(servicios.ingresos_extra.listar(desde, hasta), rol, anio, mes)
+
     def resumen_del_mes(rol: str) -> ResumenPresupuesto:
         ingreso = servicios.ingresos.get(rol)
         if ingreso is None:
@@ -202,6 +234,14 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             ingreso,
             hoy.year,
             hoy.month,
+            extra(rol, hoy.year, hoy.month),
+        )
+
+    def ingreso_propio(ingreso: IngresoRegistrado, quien: Identidad) -> bool:
+        return (
+            not ingreso.anulado
+            and ingreso.registrado_por == quien.id
+            and ingreso.persona == quien.rol
         )
 
     @app.exception_handler(FormularioInvalido)
@@ -236,6 +276,10 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             ],
             # `fallback` no tiene bolsillo propio: el formulario pide uno de estos.
             "fallback": taxonomia.fallback,
+            "categorias_ingreso": [
+                {"nombre": c.nombre, "descripcion": c.descripcion} for c in taxonomia.ingresos
+            ],
+            "subcategorias_ingreso": servicios.ingresos_extra.subcategorias_usadas(quien.id),
             "bolsillos_para_fallback": [
                 {"nombre": b.nombre, "etiqueta": b.etiqueta}
                 for b in taxonomia.bolsillos
@@ -267,6 +311,7 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             "anio": resumen.anio,
             "mes": resumen.mes,
             "ingreso": _dinero(resumen.ingreso),
+            "ingreso_extra": _dinero(resumen.ingreso_extra),
             "dias_restantes": calendar.monthrange(hoy.year, hoy.month)[1] - hoy.day,
             "bolsillos": [_estado(b) for b in resumen.bolsillos],
             "sin_bolsillo": _dinero(resumen.sin_bolsillo),
@@ -340,6 +385,58 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             "linea": _linea_de_bolsillo(nuevo),
         }
 
+    # --- ingresos extra -------------------------------------------------------------
+
+    @app.get("/api/ingresos")
+    def ingresos(quien: Quien) -> dict[str, Any]:
+        propios = [i for i in servicios.ingresos_extra.listar() if ingreso_propio(i, quien)]
+        return {
+            "ingresos": [_ingreso(i) | {"id": i.id} for i in propios[:HISTORIAL]],
+        }
+
+    @app.post("/api/ingresos/previsualizar")
+    def previsualizar_ingreso(campos: CamposIngreso, quien: Quien) -> dict[str, Any]:
+        ingreso = armar_ingreso(campos, quien.rol, taxonomia, servicios.hoy())
+        return {"ingreso": _ingreso(ingreso)}
+
+    @app.post("/api/ingresos", status_code=201)
+    def guardar_ingreso(campos: GuardarIngreso, quien: Quien) -> dict[str, Any]:
+        ingreso = armar_ingreso(campos, quien.rol, taxonomia, servicios.hoy())
+        repo = servicios.ingresos_extra
+        if campos.reemplaza is not None:
+            viejo = repo.obtener(campos.reemplaza)
+            if viejo is None or not ingreso_propio(viejo, quien):
+                raise HTTPException(404, "Ese ingreso no existe o ya se borró: no cambié nada.")
+        try:
+            if campos.reemplaza is None:
+                nuevo: IngresoRegistrado | None = repo.guardar(ingreso, registrado_por=quien.id)
+            else:
+                nuevo = repo.reemplazar(campos.reemplaza, ingreso, registrado_por=quien.id)
+        except Exception as e:
+            log.exception("Falló el guardado de un ingreso confirmado desde la Mini App")
+            raise HTTPException(500, "No pude guardar el ingreso: no quedó registrado.") from e
+        if nuevo is None:  # lo borraron entre la verificación y ahora
+            raise HTTPException(404, "Ese ingreso no existe o ya se borró: no cambié nada.")
+        return {"id": nuevo.id, "ingreso": _ingreso(nuevo), "linea": _linea_de_ingreso(nuevo)}
+
+    @app.post("/api/ingresos/{id_ingreso}/anular")
+    def anular_ingreso(id_ingreso: int, _: Anular, quien: Quien) -> dict[str, Any]:
+        ingreso = servicios.ingresos_extra.obtener(id_ingreso)
+        if ingreso is None or not ingreso_propio(ingreso, quien):
+            raise HTTPException(404, "Ese ingreso no existe o ya se borró")
+        if not servicios.ingresos_extra.anular(id_ingreso, "borrado desde la Mini App"):
+            raise HTTPException(404, "Ese ingreso no existe o ya se borró")
+        return {"id": id_ingreso}
+
+    def _linea_de_ingreso(ingreso: IngresoRegistrado) -> str | None:
+        """Cuánto queda el ingreso de ese mes. None si la persona no tiene presupuesto."""
+        fijo = servicios.ingresos.get(ingreso.persona)
+        if fijo is None:
+            return None
+        total = fijo + extra(ingreso.persona, ingreso.fecha.year, ingreso.fecha.month)
+        mes = mensajes.MESES[ingreso.fecha.month - 1]
+        return f"Tu ingreso de {mes} queda en ${total:,.2f} y se reparte en tus bolsillos."
+
     def _bolsillo(gasto: GastoExtraido) -> str | None:
         """Etiqueta del bolsillo contra el que cuenta, si quien lo asume tiene presupuesto."""
         if gasto.atribuido_a not in servicios.ingresos:
@@ -359,6 +456,7 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
                 taxonomia,
                 registrado,
                 ingreso,
+                extra(registrado.atribuido_a, registrado.fecha.year, registrado.fecha.month),
             )
             return mensajes.linea_de_bolsillo(estado, registrado.fecha.month)
         except Exception:

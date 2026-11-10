@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from family_expense_bot.extraction.schema import GastoExtraido
 from family_expense_bot.storage.dinero import a_centavos, a_decimal
-from family_expense_bot.storage.models import Base, Extraccion, Gasto
+from family_expense_bot.storage.models import Base, Extraccion, Gasto, Ingreso
 
 
 def _como_utc(momento: datetime) -> datetime:
@@ -299,3 +299,132 @@ class RepositorioExtracciones:
         )
         with self._sesion() as sesion:
             return list(sesion.scalars(consulta))
+
+
+class IngresoNuevo(BaseModel):
+    """Un ingreso extra ya validado y confirmado, listo para guardar."""
+
+    model_config = ConfigDict(frozen=True)
+
+    monto: Decimal
+    categoria: str
+    subcategoria: str | None
+    persona: str
+    fecha: date
+    descripcion: str
+
+
+class IngresoRegistrado(IngresoNuevo):
+    id: int
+    registrado_por: int
+    creado_en: datetime
+    anulado: bool
+
+    @classmethod
+    def desde_fila(cls, fila: Ingreso) -> "IngresoRegistrado":
+        return cls(
+            id=fila.id,
+            monto=a_decimal(fila.monto_centavos),
+            categoria=fila.categoria,
+            subcategoria=fila.subcategoria,
+            persona=fila.persona,
+            fecha=fila.fecha,
+            descripcion=fila.descripcion,
+            registrado_por=fila.registrado_por,
+            creado_en=_como_utc(fila.creado_en),
+            anulado=fila.anulado_en is not None,
+        )
+
+
+class RepositorioIngresos:
+    """Ingresos extra. Mismas reglas que los gastos: nada se borra, editar es reemplazar."""
+
+    def __init__(self, engine: Engine) -> None:
+        self._sesion = sessionmaker(engine, expire_on_commit=False)
+
+    def guardar(self, ingreso: IngresoNuevo, registrado_por: int) -> IngresoRegistrado:
+        fila = self._fila(ingreso, registrado_por)
+        with self._sesion.begin() as sesion:
+            sesion.add(fila)
+        return IngresoRegistrado.desde_fila(fila)
+
+    def obtener(self, id_ingreso: int) -> IngresoRegistrado | None:
+        with self._sesion() as sesion:
+            fila = sesion.get(Ingreso, id_ingreso)
+            return IngresoRegistrado.desde_fila(fila) if fila else None
+
+    def listar(
+        self, desde: date | None = None, hasta: date | None = None
+    ) -> Sequence[IngresoRegistrado]:
+        """Los vigentes (no anulados), el más reciente primero."""
+        consulta = (
+            select(Ingreso)
+            .where(Ingreso.anulado_en.is_(None))
+            .order_by(Ingreso.fecha.desc(), Ingreso.id.desc())
+        )
+        if desde is not None:
+            consulta = consulta.where(Ingreso.fecha >= desde)
+        if hasta is not None:
+            consulta = consulta.where(Ingreso.fecha <= hasta)
+        with self._sesion() as sesion:
+            return [IngresoRegistrado.desde_fila(f) for f in sesion.scalars(consulta)]
+
+    def anular(self, id_ingreso: int, motivo: str) -> bool:
+        if not motivo.strip():
+            raise ValueError("Anular un ingreso exige un motivo")
+        with self._sesion.begin() as sesion:
+            fila = sesion.get(Ingreso, id_ingreso)
+            if fila is None or fila.anulado_en is not None:
+                return False
+            fila.anulado_en = datetime.now(UTC)
+            fila.motivo_anulacion = motivo.strip()
+            return True
+
+    def reemplazar(
+        self, id_ingreso: int, ingreso: IngresoNuevo, registrado_por: int
+    ) -> IngresoRegistrado | None:
+        """Como `RepositorioGastos.reemplazar`: anula el viejo y guarda el nuevo, todo o nada."""
+        with self._sesion.begin() as sesion:
+            viejo = sesion.get(Ingreso, id_ingreso)
+            if viejo is None or viejo.anulado_en is not None:
+                return None
+            if viejo.registrado_por != registrado_por:
+                return None
+            nuevo = self._fila(ingreso, registrado_por)
+            sesion.add(nuevo)
+            sesion.flush()
+            viejo.anulado_en = datetime.now(UTC)
+            viejo.motivo_anulacion = f"editado → #{nuevo.id}"
+        return IngresoRegistrado.desde_fila(nuevo)
+
+    def subcategorias_usadas(self, registrado_por: int) -> dict[str, list[str]]:
+        consulta = (
+            select(Ingreso.categoria, Ingreso.subcategoria)
+            .where(Ingreso.registrado_por == registrado_por)
+            .where(Ingreso.subcategoria.is_not(None))
+            .where(Ingreso.anulado_en.is_(None))
+            .order_by(Ingreso.creado_en.desc(), Ingreso.id.desc())
+        )
+        usadas: dict[str, list[str]] = {}
+        vistas: set[tuple[str, str]] = set()
+        with self._sesion() as sesion:
+            for categoria, subcategoria in sesion.execute(consulta):
+                if subcategoria is None:
+                    continue
+                clave = (categoria, subcategoria.casefold())
+                if clave not in vistas:
+                    vistas.add(clave)
+                    usadas.setdefault(categoria, []).append(subcategoria)
+        return usadas
+
+    @staticmethod
+    def _fila(ingreso: IngresoNuevo, registrado_por: int) -> Ingreso:
+        return Ingreso(
+            monto_centavos=a_centavos(ingreso.monto),
+            categoria=ingreso.categoria,
+            subcategoria=ingreso.subcategoria,
+            persona=ingreso.persona,
+            fecha=ingreso.fecha,
+            descripcion=ingreso.descripcion,
+            registrado_por=registrado_por,
+        )

@@ -84,6 +84,27 @@ categorias:
     candidata: true
 
 # ---------------------------------------------------------------------------
+# Ingresos extra
+# ---------------------------------------------------------------------------
+# Se registran en la Mini App, se SUMAN al ingreso fijo de .env
+# (INGRESOS_MENSUALES) del mes de su fecha y se reparten 30/30/20/20 como el
+# sueldo. No hay "sueldo" a propósito: ya es el ingreso fijo, y registrarlo lo
+# contaría dos veces.
+ingresos:
+  - nombre: trabajo_extra
+    descripcion: "Trabajos puntuales, freelance, horas extra."
+  - nombre: bono
+    descripcion: "Bonos, utilidades, décimos."
+  - nombre: regalo
+    descripcion: "Dinero que te regalaron."
+  - nombre: venta
+    descripcion: "Algo que vendiste."
+  - nombre: reembolso
+    descripcion: "Te devolvieron plata. Si es de un gasto de este mes, mejor edítalo o bórralo."
+  - nombre: otros
+    descripcion: "Lo que no encaja en las demás."
+
+# ---------------------------------------------------------------------------
 # Atribuciones: quién asume el costo
 # ---------------------------------------------------------------------------
 # Por defecto el gasto se atribuye a quien escribe el mensaje, con confianza

@@ -1,4 +1,4 @@
-"""Esquema SQL. Solo gastos ya confirmados por una persona.
+"""Esquema SQL. Solo gastos e ingresos ya confirmados por una persona.
 
 Las extracciones sin confirmar no llegan acá: viven en memoria mientras el bot
 espera la respuesta, y si se rechazan se descartan.
@@ -62,6 +62,31 @@ class Gasto(Base):
     calidad, porque ahí nadie leyó nada."""
 
     # Borrado lógico: nada desaparece, se marca.
+    anulado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    motivo_anulacion: Mapped[str | None] = mapped_column(String(200), default=None)
+
+
+class Ingreso(Base):
+    """Un ingreso extra confirmado en la Mini App. Se suma al fijo de .env en su mes."""
+
+    __tablename__ = "ingresos"
+    __table_args__ = (
+        CheckConstraint("monto_centavos > 0", name="ingreso_positivo"),
+        CheckConstraint(
+            "(anulado_en IS NULL) = (motivo_anulacion IS NULL)", name="ingreso_anulacion_completa"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    monto_centavos: Mapped[int]
+    categoria: Mapped[str] = mapped_column(String(50), index=True)
+    subcategoria: Mapped[str | None] = mapped_column(String(40), default=None)
+    persona: Mapped[str] = mapped_column(String(20), index=True)
+    """De quién es el ingreso: el rol de quien lo registró en su app."""
+    fecha: Mapped[date] = mapped_column(Date, index=True)
+    descripcion: Mapped[str] = mapped_column(String(500))
+    registrado_por: Mapped[int] = mapped_column(BigInteger, index=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
     anulado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     motivo_anulacion: Mapped[str | None] = mapped_column(String(200), default=None)
 

@@ -1,8 +1,10 @@
 """Presupuesto mensual por bolsillos (30/30/20/20).
 
 Funciones puras sobre lo que devuelve el repositorio: nada de SQL ni de
-Telegram acá. El reparto vive en `config/categories.yaml`; el ingreso de cada
-persona, en `.env` (INGRESOS_MENSUALES), porque es un dato personal.
+Telegram acá. El reparto vive en `config/categories.yaml`; el ingreso fijo de
+cada persona, en `.env` (INGRESOS_MENSUALES), porque es un dato personal. Los
+ingresos extra que se registran en la Mini App se suman al fijo en su mes, y la
+suma se reparte con los mismos porcentajes.
 """
 
 import calendar
@@ -16,7 +18,7 @@ from pydantic import BaseModel, ConfigDict
 from family_expense_bot.dashboard.report import rango_del_mes
 from family_expense_bot.extraction.categorias import Bolsillo, Taxonomia
 from family_expense_bot.storage.dinero import a_centavos, a_decimal
-from family_expense_bot.storage.repository import GastoRegistrado
+from family_expense_bot.storage.repository import GastoRegistrado, IngresoRegistrado
 
 
 class EstadoBolsillo(BaseModel):
@@ -47,6 +49,11 @@ class ResumenPresupuesto(BaseModel):
     anio: int
     mes: int
     ingreso: Decimal
+    """Lo que se reparte: el fijo más los extras del mes."""
+
+    ingreso_extra: Decimal = Decimal(0)
+    """La parte de `ingreso` que vino de ingresos registrados ese mes."""
+
     bolsillos: tuple[EstadoBolsillo, ...]
     sin_bolsillo: Decimal
     """Gastos de la persona que no cuentan contra ningún bolsillo (otros, mesada)."""
@@ -71,6 +78,21 @@ def repartir(ingreso: Decimal, bolsillos: Sequence[Bolsillo]) -> list[Decimal]:
     return [a_decimal(p) for p in partes]
 
 
+def extras_del_mes(
+    ingresos: Sequence[IngresoRegistrado], persona: str, anio: int, mes: int
+) -> Decimal:
+    """Lo que suman los ingresos extra vigentes de `persona` con fecha en ese mes."""
+    desde, hasta = rango_del_mes(anio, mes)
+    return sum(
+        (
+            i.monto
+            for i in ingresos
+            if i.persona == persona and not i.anulado and desde <= i.fecha <= hasta
+        ),
+        Decimal(0),
+    )
+
+
 def resumen_presupuesto(
     gastos: Sequence[GastoRegistrado],
     taxonomia: Taxonomia,
@@ -78,12 +100,15 @@ def resumen_presupuesto(
     ingreso: Decimal,
     anio: int,
     mes: int,
+    extra: Decimal = Decimal(0),
 ) -> ResumenPresupuesto:
     """Cuánto lleva gastado `persona` en cada bolsillo durante el mes.
 
     Solo cuentan los gastos atribuidos a esa persona (quien asume el costo), del
-    mes pedido. `gastos` puede traer de más: se filtra acá.
+    mes pedido. `gastos` puede traer de más: se filtra acá. `ingreso` es el fijo
+    y `extra`, lo registrado ese mes (`extras_del_mes`): se reparte la suma.
     """
+    ingreso = ingreso + extra
     desde, hasta = rango_del_mes(anio, mes)
     suyos = [g for g in gastos if g.atribuido_a == persona and desde <= g.fecha <= hasta]
 
@@ -113,6 +138,7 @@ def resumen_presupuesto(
         anio=anio,
         mes=mes,
         ingreso=ingreso,
+        ingreso_extra=extra,
         bolsillos=estados,
         sin_bolsillo=sum(gastado.get(None, []), Decimal(0)),
         categorias_sin_bolsillo=tuple(categorias_sueltas),
@@ -124,10 +150,11 @@ def estado_tras_gasto(
     taxonomia: Taxonomia,
     gasto: GastoRegistrado,
     ingreso: Decimal,
+    extra: Decimal = Decimal(0),
 ) -> EstadoBolsillo | None:
     """Cómo quedó, en el mes del gasto, el bolsillo contra el que cuenta. None si en ninguno."""
     resumen = resumen_presupuesto(
-        gastos, taxonomia, gasto.atribuido_a, ingreso, gasto.fecha.year, gasto.fecha.month
+        gastos, taxonomia, gasto.atribuido_a, ingreso, gasto.fecha.year, gasto.fecha.month, extra
     )
     nombre = taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
     return resumen.bolsillo(nombre) if nombre else None

@@ -173,6 +173,10 @@ esquema (`src/family_expense_bot/storage/`):
   subcategoría no decide nada, así que puede escribirse libre. Va fuera del
   contrato de extracción (`GastoExtraido`): no es algo que el LLM lea, y
   meterla ahí habría roto la paridad con n8n sin aportar nada.
+- **Los ingresos extra se suman al fijo, no lo reemplazan** (10-nov-2026).
+  Reemplazarlo era más fiel, pero el mes arrancaría en $0 hasta registrar el
+  sueldo, y "¿puedo?" diría que no a todo. Van en su propia tabla, no en
+  `gastos`: un ingreso no tiene bolsillo, atribución ni confianza del LLM.
 
 ## Privacidad
 

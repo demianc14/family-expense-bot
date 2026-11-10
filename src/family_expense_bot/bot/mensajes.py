@@ -200,7 +200,13 @@ def reporte(resumen: ResumenMensual) -> str:
 def presupuesto(resumen: ResumenPresupuesto) -> str:
     lineas = [
         f"Presupuesto de {MESES[resumen.mes - 1]} {resumen.anio}",
-        f"Ingreso: ${resumen.ingreso:,.2f}",
+        f"Ingreso: ${resumen.ingreso:,.2f}"
+        + (
+            f" (${resumen.ingreso - resumen.ingreso_extra:,.2f} fijo"
+            f" + ${resumen.ingreso_extra:,.2f} extra)"
+            if resumen.ingreso_extra
+            else ""
+        ),
         "",
     ]
     for b in resumen.bolsillos:

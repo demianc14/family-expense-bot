@@ -130,6 +130,10 @@ Pedidas por Demian; detalle en docs/mini-app.md y docs/decisiones.md:
   a necesarios/lujos: "¿puedo?" los ofrecería como alternativa al fondo.
 - **Editar = anular + crear** en una transacción (`reemplazar`); borrar = anular.
   Solo gastos que registró y son de quien abre la app.
+- **Ingresos extra** (tabla `ingresos`, categorías en `ingresos:` del yaml): se
+  **suman** al fijo de `.env` en su mes y se reparten 30/30/20/20. Sin categoría
+  "sueldo" (duplicaría el fijo). Mismo flujo que los gastos: revisar, sí, editar,
+  borrar. `resumen_presupuesto(..., extra=0)` da lo de siempre: n8n no los ve.
 
 ## Arquitectura
 
