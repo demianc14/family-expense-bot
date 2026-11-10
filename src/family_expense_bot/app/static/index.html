@@ -188,6 +188,13 @@
   .segmentos button { border: 0; background: none; min-height: 42px; border-radius: 11px; font-weight: 600; font-size: 15px; color: var(--tinta-2); }
   .segmentos button[aria-checked="true"] { background: var(--tinta); color: var(--fondo); }
   .texto[type="date"] { margin-top: 8px; font-family: var(--mono); font-size: 16px; }
+  /* "Otros" no tiene sobre propio: el bolsillo elegido toma su tinta. */
+  .segmentos.bolsillos button[aria-checked="true"] { background: var(--c); color: var(--s); }
+  .ayuda { display: block; margin-top: 8px; color: var(--tinta-2); font-size: 13px; }
+  .opcional { text-transform: none; letter-spacing: 0; opacity: .8; }
+  .sugerencias { margin-bottom: 8px; }
+  .sugerencias:empty { display: none; }
+  .ficha.chica { min-height: 36px; padding: 0 12px; font-size: 14px; }
 
   .interruptor { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding: 14px 16px; border-radius: 16px; background: var(--superficie); border: 1.5px solid var(--linea); cursor: pointer; }
   .interruptor small { display: block; color: var(--tinta-2); font-size: 13px; }
@@ -209,6 +216,22 @@
   .accion:disabled { opacity: .5; }
   .suave { width: 100%; min-height: 48px; margin-top: 10px; border: 1.5px solid var(--linea); border-radius: 16px; background: none; font-weight: 600; }
   .error { color: var(--mal); font-size: 14px; font-weight: 600; margin-top: 14px; }
+  .suave.peligro { color: var(--mal); }
+  .accion.peligro { background: var(--mal); color: #fff; box-shadow: 4px 4px 0 var(--tinta); }
+  .accion.peligro:active { box-shadow: 1px 1px 0 var(--tinta); }
+
+  /* --- Historial: un renglón por gasto, con la tinta de su bolsillo ------------- */
+  .dia { margin: 24px 0 2px; }
+  .gasto-fila {
+    all: unset; box-sizing: border-box; display: grid; grid-template-columns: 4px 1fr auto; gap: 0 12px;
+    align-items: center; width: 100%; min-height: 60px; padding: 11px 0; border-bottom: 1.5px dashed var(--linea); cursor: pointer;
+  }
+  .gasto-fila::before { content: ""; align-self: stretch; border-radius: 2px; background: var(--c); }
+  .gasto-fila:focus-visible { outline: 2.5px solid var(--rosa); outline-offset: 2px; border-radius: 8px; }
+  .gasto-fila strong { display: block; font-weight: 650; overflow-wrap: anywhere; }
+  .gasto-fila small { display: block; color: var(--tinta-2); font-size: 13px; }
+  .gasto-fila .cifra { font: 800 19px var(--display); font-variation-settings: var(--ancho); letter-spacing: -.02em; }
+  .vacio { color: var(--tinta-2); margin-top: 26px; }
 
   /* --- Hoja que sube desde abajo: confirmación y veredicto ------------------- */
   .velo { position: fixed; inset: 0; z-index: 30; background: rgb(10 11 9 / .5); opacity: 0; transition: opacity .25s; }
@@ -246,8 +269,8 @@
     box-shadow: 0 12px 30px -10px rgb(0 0 0 / .45);
   }
   nav button {
-    border: 0; background: none; color: var(--fondo); opacity: .62; min-height: 46px; padding: 0 16px;
-    border-radius: 16px; font: 700 14.5px var(--texto); white-space: nowrap; transition: opacity .15s, background .15s;
+    border: 0; background: none; color: var(--fondo); opacity: .62; min-height: 46px; padding: 0 12px;
+    border-radius: 16px; font: 700 14px var(--texto); white-space: nowrap; transition: opacity .15s, background .15s;
   }
   nav button[aria-selected="true"] { opacity: 1; background: color-mix(in srgb, var(--fondo) 16%, transparent); }
   nav button.mas { opacity: 1; background: var(--rosa); color: #141613; }
@@ -272,6 +295,9 @@
       <form id="form-puedo" novalidate>
         <label class="monto-grande"><span>$</span><input id="p-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
         <div class="campo"><span class="etiqueta" id="p-cat-t">¿En qué?</span><div id="p-cats" role="radiogroup" aria-labelledby="p-cat-t"></div></div>
+        <div class="campo" id="p-bolsillo-campo" hidden><span class="etiqueta" id="p-bol-t">¿De qué bolsillo sale?</span>
+          <div class="segmentos bolsillos" id="p-bolsillo" role="radiogroup" aria-labelledby="p-bol-t"></div>
+          <small class="ayuda">Otros no tiene bolsillo propio: elige contra cuál cuenta.</small></div>
         <label class="interruptor" data-fondo hidden><span><strong></strong><small>Cuenta contra el fondo, no contra su bolsillo</small></span><input type="checkbox" id="p-fondo" role="switch"></label>
         <button class="accion" type="submit">Consultar</button>
         <div class="error" id="p-error" role="alert" hidden></div>
@@ -279,12 +305,18 @@
     </section>
 
     <section id="tab-registrar" role="tabpanel" hidden>
-      <div class="titulo-vista"><span class="etiqueta">Nuevo gasto</span><h1>¿Cuánto gastaste?</h1></div>
+      <div class="titulo-vista"><span class="etiqueta" id="g-etiqueta">Nuevo gasto</span><h1 id="g-titulo">¿Cuánto gastaste?</h1></div>
       <form id="form-gasto" novalidate>
         <label class="monto-grande"><span>$</span><input id="g-monto" class="cifra" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Monto"></label>
         <div class="campo"><label class="etiqueta" for="g-descripcion">Qué fue</label>
           <input id="g-descripcion" class="texto" maxlength="200" placeholder="almuerzo, gasolina…" autocomplete="off"></div>
         <div class="campo"><span class="etiqueta" id="g-cat-t">Categoría</span><div id="g-cats" role="radiogroup" aria-labelledby="g-cat-t"></div></div>
+        <div class="campo" id="g-bolsillo-campo" hidden><span class="etiqueta" id="g-bol-t">¿De qué bolsillo sale?</span>
+          <div class="segmentos bolsillos" id="g-bolsillo" role="radiogroup" aria-labelledby="g-bol-t"></div>
+          <small class="ayuda">Otros no tiene bolsillo propio: elige contra cuál cuenta.</small></div>
+        <div class="campo"><label class="etiqueta" for="g-subcategoria">Subcategoría <span class="opcional">· opcional</span></label>
+          <div class="fichas sugerencias" id="g-sugerencias"></div>
+          <input id="g-subcategoria" class="texto" maxlength="40" placeholder="Tipti, gasolinera…" autocomplete="off"></div>
         <div class="campo"><span class="etiqueta" id="g-fecha-t">Cuándo</span>
           <div class="segmentos" id="g-cuando" role="radiogroup" aria-labelledby="g-fecha-t">
             <button type="button" role="radio" data-cuando="hoy" aria-checked="true">Hoy</button>
@@ -293,14 +325,21 @@
           </div>
           <input id="g-fecha" class="texto" type="date" aria-label="Fecha" hidden></div>
         <label class="interruptor" data-fondo hidden><span><strong></strong><small>Cuenta contra el fondo, no contra su bolsillo</small></span><input type="checkbox" id="g-fondo" role="switch"></label>
-        <button class="accion" type="submit">Revisar</button>
+        <button class="accion" type="submit" id="g-revisar">Revisar</button>
+        <button class="suave" type="button" id="g-cancelar" hidden>Cancelar la edición</button>
         <div class="error" id="g-error" role="alert" hidden></div>
       </form>
+    </section>
+
+    <section id="tab-gastos" role="tabpanel" hidden>
+      <div class="titulo-vista"><span class="etiqueta">Toca uno para editarlo o borrarlo</span><h1>Tus gastos</h1></div>
+      <div id="lista-gastos"></div>
     </section>
 
     <nav role="tablist" aria-label="Secciones">
       <button role="tab" data-tab="bolsillos" aria-selected="true">Bolsillos</button>
       <button role="tab" data-tab="puedo" aria-selected="false">¿Puedo?</button>
+      <button role="tab" data-tab="gastos" aria-selected="false">Gastos</button>
       <button role="tab" data-tab="registrar" class="mas" aria-selected="false">+ Gasto</button>
     </nav>
   </main>
@@ -322,6 +361,8 @@ const ORDEN_GRUPOS = ["necesarios", "lujos", "fondo"];
 let opciones = null;
 let pendiente = null;    // Los campos del gasto que se está confirmando.
 const elegida = { p: null, g: null };   // Categoría elegida en cada formulario.
+const bolsilloOtros = { p: null, g: null };   // Con "otros": de qué bolsillo sale.
+let editando = null;     // El gasto del historial que se está editando, o null si es uno nuevo.
 
 async function api(ruta, cuerpo) {
   const r = await fetch(ruta, {
@@ -362,6 +403,7 @@ function fechaISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 // --- Pestañas ------------------------------------------------------------------
 function irA(tab) {
+  if (tab === "gastos") cargarGastos().catch((e) => $("lista-gastos").replaceChildren(el("p", "vacio", e.message)));
   document.querySelectorAll("nav button").forEach((o) => o.setAttribute("aria-selected", String(o.dataset.tab === tab)));
   document.querySelectorAll("[role=tabpanel]").forEach((p) => { p.hidden = p.id !== "tab-" + tab; });
   window.scrollTo({ top: 0 });
@@ -514,7 +556,49 @@ function llenarCategorias(form) {
 function elegirCategoria(form, nombre) {
   elegida[form] = nombre;
   $(form + "-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", String(f.dataset.cat === nombre)));
+  // "Otros" no tiene sobre: se elige el bolsillo ahí mismo, y el interruptor del fondo sobra.
+  const esOtros = nombre === opciones.fallback;
+  $(form + "-bolsillo-campo").hidden = !esOtros;
+  $(form + "-fondo").closest("label").hidden = esOtros || !opciones.bolsillos_con_marcador[0];
+  if (form === "g") mostrarSugerencias(nombre);
   vibrar("selectionChanged");
+}
+
+function llenarBolsillosOtros(form) {
+  const cont = $(form + "-bolsillo");
+  cont.style.gridTemplateColumns = `repeat(${opciones.bolsillos_para_fallback.length}, 1fr)`;
+  for (const b of opciones.bolsillos_para_fallback) {
+    const op = tenir(el("button", "", b.etiqueta), b.nombre);
+    op.type = "button";
+    op.dataset.bolsillo = b.nombre;
+    op.setAttribute("role", "radio");
+    op.setAttribute("aria-checked", "false");
+    op.addEventListener("click", () => { elegirBolsillo(form, b.nombre); vibrar("selectionChanged"); });
+    cont.append(op);
+  }
+}
+function elegirBolsillo(form, nombre) {
+  bolsilloOtros[form] = nombre;
+  $(form + "-bolsillo").querySelectorAll("button").forEach((o) => o.setAttribute("aria-checked", String(o.dataset.bolsillo === nombre)));
+}
+// Lo que viaja como `bolsillo`: con "otros", el elegido; si no, el interruptor del fondo.
+function bolsilloDe(form) {
+  if (elegida[form] === opciones.fallback) {
+    if (!bolsilloOtros[form]) throw new Error("Elige de qué bolsillo sale este gasto");
+    return bolsilloOtros[form];
+  }
+  return fondoElegido(form + "-fondo");
+}
+
+function mostrarSugerencias(categoria) {
+  const cont = $("g-sugerencias");
+  cont.replaceChildren();
+  for (const sub of (opciones.subcategorias[categoria] || []).slice(0, 8)) {
+    const f = el("button", "ficha chica", sub);
+    f.type = "button";
+    f.addEventListener("click", () => { $("g-subcategoria").value = sub; vibrar("selectionChanged"); });
+    cont.append(f);
+  }
 }
 
 function prepararFondo() {
@@ -560,7 +644,7 @@ $("form-puedo").addEventListener("submit", async (ev) => {
   ocultar("p-error");
   try {
     if (!elegida.p) throw new Error("Elige en qué sería el gasto");
-    const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: elegida.p, bolsillo: fondoElegido("p-fondo") });
+    const r = await api("/api/puedo", { monto: $("p-monto").value, categoria: elegida.p, bolsillo: bolsilloDe("p") });
     const [palabra, tinta, bajada] = VEREDICTO[r.veredicto];
     const banda = tenir(el("div", "veredicto"), tinta);
     banda.append(el("span", "etiqueta", `${dinero(r.monto)} en ${humano(elegida.p)}`), el("span", "palabra", palabra), el("p", "", bajada));
@@ -571,7 +655,8 @@ $("form-puedo").addEventListener("submit", async (ev) => {
       if (r.alternativa) {
         nodos.push(el("p", "explicacion", `En tu ${r.alternativa.etiqueta.toLowerCase()} sí alcanza: quedan ${dinero(r.alternativa.disponible)}.`));
         nodos.push(boton("accion", `Probar sacándolo de ${r.alternativa.etiqueta.toLowerCase()}`, () => {
-          $("p-fondo").checked = true; cerrarHoja(); setTimeout(() => $("form-puedo").requestSubmit(), 400);
+          if (elegida.p === opciones.fallback) elegirBolsillo("p", r.alternativa.nombre); else $("p-fondo").checked = true;
+          cerrarHoja(); setTimeout(() => $("form-puedo").requestSubmit(), 400);
         }));
       }
     } else if (b) {
@@ -604,8 +689,9 @@ function camposGasto() {
     monto: $("g-monto").value,
     descripcion: $("g-descripcion").value,
     categoria: elegida.g || "",
+    subcategoria: $("g-subcategoria").value,
     fecha: fechaElegida(),
-    bolsillo: fondoElegido("g-fondo"),
+    bolsillo: bolsilloDe("g"),
   };
 }
 
@@ -621,12 +707,13 @@ $("form-gasto").addEventListener("submit", async (ev) => {
     const fecha = new Date(r.gasto.fecha + "T12:00:00");
     const filas = el("dl", "filas");
     for (const [k, v] of [["Qué", r.gasto.descripcion], ["Categoría", humano(r.gasto.categoria)],
+                          ...(r.gasto.subcategoria ? [["Subcategoría", r.gasto.subcategoria]] : []),
                           ["Fecha", `${fecha.getDate()} de ${MESES[fecha.getMonth()]}`]]) {
       const fila = el("div"); fila.append(el("dt", "", k), el("dd", "", v)); filas.append(fila);
     }
     const total = el("div", "ticket-total");
     total.append(impreso("strong", "cifra", dinero(r.gasto.monto)));
-    const nodos = [el("div", "etiqueta", "¿Guardo este gasto?"), total];
+    const nodos = [el("div", "etiqueta", editando ? "¿Guardo los cambios?" : "¿Guardo este gasto?"), total];
     if (r.bolsillo) {
       const sello = el("div", "ticket-bolsillo");
       const nombre = campos.bolsillo || (cat && cat.bolsillo_nombre);
@@ -644,13 +731,17 @@ async function guardar() {
   if (!pendiente) return;
   $("g-si").disabled = true;
   try {
-    const r = await api("/api/gastos", { ...pendiente, confirmado: true });
+    const eraEdicion = Boolean(editando);
+    const r = await api("/api/gastos", { ...pendiente, confirmado: true, reemplaza: editando ? editando.id : null });
+    recordarSubcategoria(pendiente.categoria, r.gasto.subcategoria);
     pendiente = null;
     const listo = el("div", "listo");
-    listo.append(impreso("div", "", "Guardado"), el("p", "", r.linea || "Quedó registrado."));
+    listo.append(impreso("div", "", eraEdicion ? "Corregido" : "Guardado"), el("p", "", r.linea || "Quedó registrado."));
     vibrar("notificationOccurred", "success");
     $("hoja-cuerpo").replaceChildren(listo,
-      boton("accion", "Registrar otro", () => { cerrarHoja(); limpiarGasto(); }),
+      eraEdicion
+        ? boton("accion", "Ver mis gastos", () => { cerrarHoja(); limpiarGasto(); irA("gastos"); })
+        : boton("accion", "Registrar otro", () => { cerrarHoja(); limpiarGasto(); }),
       boton("suave", "Ver bolsillos", () => { cerrarHoja(); limpiarGasto(); irA("bolsillos"); }));
     alCerrar = limpiarGasto;
     cargarBolsillos().catch(() => {});
@@ -662,9 +753,114 @@ async function guardar() {
 function limpiarGasto() {
   $("form-gasto").reset();
   elegida.g = null;
+  elegirBolsillo("g", null);
   $("g-cats").querySelectorAll(".ficha").forEach((f) => f.setAttribute("aria-checked", "false"));
+  $("g-bolsillo-campo").hidden = true;
+  $("g-fondo").closest("label").hidden = !opciones.bolsillos_con_marcador[0];
+  $("g-sugerencias").replaceChildren();
   document.querySelector('#g-cuando [data-cuando="hoy"]').click();
   $("g-fecha").value = opciones.hoy;
+  editando = null;
+  $("g-etiqueta").textContent = "Nuevo gasto";
+  $("g-titulo").textContent = "¿Cuánto gastaste?";
+  $("g-revisar").textContent = "Revisar";
+  $("g-cancelar").hidden = true;
+}
+$("g-cancelar").addEventListener("click", () => { limpiarGasto(); irA("gastos"); });
+
+function recordarSubcategoria(categoria, sub) {
+  if (!sub) return;
+  const previas = (opciones.subcategorias[categoria] || []).filter((s) => s.toLowerCase() !== sub.toLowerCase());
+  opciones.subcategorias[categoria] = [sub, ...previas];
+}
+
+// --- Gastos: historial, editar y borrar ------------------------------------------
+async function cargarGastos() {
+  const { gastos } = await api("/api/gastos");
+  const cont = $("lista-gastos");
+  cont.replaceChildren();
+  if (!gastos.length) { cont.append(el("p", "vacio", "Todavía no hay gastos registrados.")); return; }
+  let dia = null;
+  for (const g of gastos) {
+    if (g.fecha !== dia) {
+      dia = g.fecha;
+      cont.append(el("div", "dia etiqueta", fechaLarga(g.fecha)));
+    }
+    const fila = tenir(el("button", "gasto-fila"), g.bolsillo_nombre);
+    fila.type = "button";
+    const texto = el("span");
+    texto.append(el("strong", "", g.descripcion),
+                 el("small", "", [humano(g.categoria), g.subcategoria].filter(Boolean).join(" · ")));
+    fila.append(texto, el("span", "cifra", dinero(g.monto)));
+    fila.addEventListener("click", () => verGasto(g));
+    cont.append(fila);
+  }
+}
+function fechaLarga(iso) {
+  if (iso === opciones.hoy) return "Hoy";
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()} de ${MESES[d.getMonth()]}`;
+}
+function ticket(g, titulo) {
+  const total = el("div", "ticket-total");
+  total.append(impreso("strong", "cifra", dinero(g.monto)));
+  const nodos = [el("div", "etiqueta", titulo), total];
+  const sello = el("div", "ticket-bolsillo");
+  sello.append(tenir(el("span", "sello-bolsillo", g.bolsillo ? `Cuenta contra ${g.bolsillo}` : "No cuenta en ningún bolsillo"), g.bolsillo_nombre));
+  nodos.push(sello);
+  return nodos;
+}
+function verGasto(g) {
+  const filas = el("dl", "filas");
+  for (const [k, v] of [["Qué", g.descripcion], ["Categoría", humano(g.categoria)],
+                        ...(g.subcategoria ? [["Subcategoría", g.subcategoria]] : []),
+                        ["Fecha", fechaLarga(g.fecha)], ["Entró por", g.origen === "chat" ? "el chat" : "la app"]]) {
+    const fila = el("div"); fila.append(el("dt", "", k), el("dd", "", v)); filas.append(fila);
+  }
+  const nodos = [...ticket(g, "Gasto"), filas];
+  if (g.editable) nodos.push(boton("accion", "Editar", () => { cerrarHoja(); setTimeout(() => editarGasto(g), 400); }));
+  else nodos.push(el("p", "pie", "Su categoría ya no está activa: se puede borrar, pero no editar."));
+  nodos.push(boton("suave peligro", "Borrar", () => confirmarBorrado(g)));
+  abrirHoja(nodos);
+}
+function editarGasto(g) {
+  limpiarGasto();
+  editando = g;
+  $("g-monto").value = g.monto.replace(".", ",");
+  $("g-descripcion").value = g.descripcion;
+  elegirCategoria("g", g.categoria);
+  $("g-subcategoria").value = g.subcategoria || "";
+  if (g.categoria === opciones.fallback) elegirBolsillo("g", g.bolsillo_elegido);
+  else $("g-fondo").checked = Boolean(g.bolsillo_elegido);
+  const hoy = new Date(opciones.hoy + "T12:00:00");
+  hoy.setDate(hoy.getDate() - 1);
+  const cual = g.fecha === opciones.hoy ? "hoy" : g.fecha === fechaISO(hoy) ? "ayer" : "otro";
+  document.querySelector(`#g-cuando [data-cuando="${cual}"]`).click();
+  if (cual === "otro") $("g-fecha").value = g.fecha;
+  $("g-etiqueta").textContent = "Editar gasto";
+  $("g-titulo").textContent = "¿Qué cambia?";
+  $("g-revisar").textContent = "Revisar los cambios";
+  $("g-cancelar").hidden = false;
+  irA("registrar");
+}
+function confirmarBorrado(g) {
+  const error = el("div", "error"); error.setAttribute("role", "alert"); error.hidden = true;
+  const si = boton("accion peligro", "Sí, borrar", async () => {
+    si.disabled = true;
+    try {
+      await api(`/api/gastos/${g.id}/anular`, { confirmado: true });
+      vibrar("notificationOccurred", "success");
+      const listo = el("div", "listo");
+      listo.append(impreso("div", "", "Borrado"), el("p", "", "Ya no cuenta en tu presupuesto."));
+      $("hoja-cuerpo").replaceChildren(listo, boton("accion", "Listo", cerrarHoja));
+      cargarGastos().catch(() => {});
+      cargarBolsillos().catch(() => {});
+    } catch (e) { error.textContent = e.message; error.hidden = false; si.disabled = false; }
+  });
+  $("hoja-cuerpo").replaceChildren(...ticket(g, "¿Borro este gasto?"),
+    el("p", "explicacion", `${g.descripcion}, ${fechaLarga(g.fecha).toLowerCase()}.`),
+    si, boton("suave", "No, dejarlo", cerrarHoja), error);
+  vibrar("notificationOccurred", "warning");
 }
 
 // --- Tema: Telegram decide claro u oscuro; las tintas son nuestras --------------
@@ -695,6 +891,8 @@ async function iniciar() {
     opciones = await api("/api/opciones");
     llenarCategorias("p");
     llenarCategorias("g");
+    llenarBolsillosOtros("p");
+    llenarBolsillosOtros("g");
     prepararFondo();
     $("g-fecha").value = opciones.hoy;
     $("g-fecha").max = opciones.hoy;

@@ -39,6 +39,8 @@ class Gasto(Base):
 
     fecha: Mapped[date] = mapped_column(Date, index=True)
     descripcion: Mapped[str] = mapped_column(String(500))
+    subcategoria: Mapped[str | None] = mapped_column(String(40), default=None)
+    """Etiqueta libre de la Mini App ("Tipti" dentro de alimentacion). No decide el bolsillo."""
     texto_original: Mapped[str] = mapped_column(Text)
 
     registrado_por: Mapped[int] = mapped_column(BigInteger, index=True)

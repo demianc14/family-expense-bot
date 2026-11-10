@@ -160,7 +160,7 @@ def test_exportar_csv_escribe_encabezado_y_filas(tmp_path: Path) -> None:
     ruta = exportar_csv([_gasto("15.50", "transporte")], tmp_path / "sub" / "gastos.csv")
 
     lineas = ruta.read_text(encoding="utf-8").splitlines()
-    assert lineas[0].startswith("id,fecha,categoria,atribuido_a,monto")
+    assert lineas[0].startswith("id,fecha,categoria,subcategoria,atribuido_a,monto")
     assert "15.50" in lineas[1]
     assert "transporte" in lineas[1]
 

@@ -66,6 +66,7 @@ ESCENAS = {
     "confirmar": """
         tab('registrar'); $('g-monto').value = '12.50'; $('g-descripcion').value = 'almuerzo';
         cat('g', 'comida_fuera'); $('form-gasto').requestSubmit();""",
+    "gastos": "tab('gastos');",
 }
 
 
@@ -191,7 +192,7 @@ def main() -> None:
             cuadros.append(Image.open(ruta).convert("RGB").crop((0, 0, 2 * ANCHO, 2 * ALTO)))
         servidor.should_exit = True
 
-    # PNG: las cuatro pantallas lado a lado. GIF: las mismas, una tras otra.
+    # PNG: las pantallas lado a lado. GIF: las mismas, una tras otra.
     margen = 24
     mosaico = Image.new(
         "RGB",

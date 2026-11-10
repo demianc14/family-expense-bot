@@ -159,10 +159,20 @@ esquema (`src/family_expense_bot/storage/`):
   no agrega columnas a las existentes, así que una base vieja arrancaría normal
   y se caería en el primer insert, en medio de una conversación. Ahora el bot
   no arranca y dice qué columnas faltan. Las columnas agregadas después de
-  tener datos reales (hoy solo `origen`) tienen migración: `--migrar` las
-  agrega con su default, y correrla dos veces no hace nada.
+  tener datos reales (`origen` y `subcategoria`) tienen migración: `--migrar`
+  las agrega con su default, y correrla dos veces no hace nada.
 - **Se guarda por dónde entró cada gasto** (`origen`: `chat` o `formulario`).
   Todo lo anterior a la Mini App queda como `chat`.
+- **Editar es anular y crear otro** (10-nov-2026). Sobrescribir el gasto era
+  más simple, pero borraba qué decía antes. Así, el viejo queda anulado con el
+  motivo `editado → #<nuevo>`, y lo que el reporte ya ignora (los anulados)
+  sigue funcionando sin cambios.
+- **La subcategoría es una etiqueta libre, no taxonomía** (10-nov-2026). Las
+  categorías deciden el bolsillo y viven en el yaml público; dejar que la app
+  cree categorías habría puesto lógica del presupuesto en la base. La
+  subcategoría no decide nada, así que puede escribirse libre. Va fuera del
+  contrato de extracción (`GastoExtraido`): no es algo que el LLM lea, y
+  meterla ahí habría roto la paridad con n8n sin aportar nada.
 
 ## Privacidad
 

@@ -117,6 +117,20 @@ capa de I/O, sin lógica de negocio nueva en las rutas. Lo que no cambia:
   vive en `docs/` y la versión n8n en `n8n/README.md`. Las capturas se regeneran
   con `scripts/capturas.py`, siempre con datos sintéticos.
 
+## Decisiones de la Mini App (resueltas 2026-11-10)
+
+Pedidas por Demian; detalle en docs/mini-app.md y docs/decisiones.md:
+
+- **Montos con coma o punto** para los centavos; sin separador de miles ("1,200"
+  se rechaza, no se adivina).
+- **Subcategoría = etiqueta libre** en `gastos.subcategoria`, fuera de
+  `GastoExtraido`. No decide el bolsillo; las categorías siguen siendo del yaml.
+- **`otros` pide bolsillo en la app** y se guarda como marcador en el texto
+  (`marcadores_otros` del yaml), que solo vale para `otros`. No darle `marcadores`
+  a necesarios/lujos: "¿puedo?" los ofrecería como alternativa al fondo.
+- **Editar = anular + crear** en una transacción (`reemplazar`); borrar = anular.
+  Solo gastos que registró y son de quien abre la app.
+
 ## Arquitectura
 
 ```

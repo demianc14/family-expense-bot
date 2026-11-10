@@ -35,6 +35,12 @@ INGRESOS_MENSUALES=demian:1200
   su categoría, salvo que el mensaje traiga un marcador de otro bolsillo ("30
   de un libro, del fondo"). Es la misma regla que para la casa: el código busca
   la frase en el texto, el LLM no decide.
+- **`otros` toma el bolsillo que se le diga.** No tiene uno propio, así que la
+  Mini App pide elegirlo y lo guarda como frase en el texto (`marcadores_otros`
+  del yaml: "de necesarios", "de lujos"). Esas frases solo valen para `otros`:
+  "pan, de lujos" sigue contando en Necesarios. Son raras a propósito, para que
+  "un reloj de lujo" no mueva nada. En el chat también funcionan ("15 de una
+  cosa, de lujos"), y n8n aplica la misma regla.
 - **Solo cuentan tus gastos:** los atribuidos a la persona con ingreso. Un gasto
   de la casa o de otra persona no toca tu presupuesto aunque lo registres tú.
 - **Dónde se ve:** la confirmación dice contra qué bolsillo cuenta el gasto; el
@@ -93,5 +99,7 @@ cuatro porcentajes en `config/categories.yaml`; la validación exige que sumen 1
 
 Limitaciones: el ingreso es fijo (si un mes cobras distinto, hay que cambiar
 `.env`), el ahorro no se registra (el bot no sabe si de verdad lo apartaste),
-y las categorías que no están en ningún bolsillo (`otros`, `mesada`) se
-muestran aparte como "sin bolsillo" en vez de repartirse.
+y las categorías que no están en ningún bolsillo (`mesada`, y `otros` cuando
+no trae un `marcadores_otros`) se muestran aparte como "sin bolsillo" en vez de
+repartirse. En el chat, un gasto de `otros` sin frase sigue quedando ahí: el
+bot no pregunta el bolsillo.

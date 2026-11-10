@@ -290,11 +290,16 @@ function crearTaxonomia(datos) {
     /**
      * Contra qué bolsillo cuenta un gasto, o null (categorias.py: bolsillo_de).
      * Un marcador ("del fondo") gana sobre la categoría si apunta a un solo bolsillo.
+     * La categoría de respaldo no tiene bolsillo: lo toma de `marcadores_otros`.
      */
     bolsilloDe: (categoria, texto) => {
       const porMarcador = bolsillos.filter((b) => mencionaAlguna(texto, b.marcadores));
       if (porMarcador.length === 1) return porMarcador[0].nombre;
       const deCategoria = bolsillos.find((b) => b.categorias.includes(categoria));
+      if (!deCategoria && categoria === datos.fallback) {
+        const elegidos = bolsillos.filter((b) => mencionaAlguna(texto, b.marcadores_otros || []));
+        if (elegidos.length === 1) return elegidos[0].nombre;
+      }
       return deCategoria ? deCategoria.nombre : null;
     },
   };

@@ -5,6 +5,11 @@ mismas funciones que usa el bot: `resumen_presupuesto`, `evaluar_gasto` y
 `RepositorioGastos.guardar`. Lo único propio de la app es el formulario, que
 vive en `extraction/formulario.py` y se testea sin levantar esto.
 
+Editar y borrar solo tocan gastos que registró quien abre la app y que son
+suyos: un gasto de la etapa familiar atribuido a otra persona no aparece.
+Editar es anular y guardar otro (`RepositorioGastos.reemplazar`), así que el
+historial de qué cambió queda en la base.
+
 Los montos viajan como texto con dos decimales, nunca como float.
 """
 
@@ -40,6 +45,7 @@ from family_expense_bot.extraction.formulario import (
     bolsillo_destino,
     leer_categoria,
     leer_monto,
+    leer_subcategoria,
 )
 from family_expense_bot.extraction.schema import GastoExtraido
 from family_expense_bot.storage.repository import GastoRegistrado, RepositorioGastos
@@ -90,6 +96,20 @@ class Guardar(CamposFormulario):
     confirmado: Literal[True]
     """La persona vio el resumen y tocó "Sí, guardar". Sin esto no se guarda."""
 
+    reemplaza: int | None = None
+    """Si es una edición, el id del gasto que este reemplaza."""
+
+
+class Anular(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    confirmado: Literal[True]
+    """La persona tocó "Sí, borrar"."""
+
+
+HISTORIAL = 60
+"""Cuántos gastos muestra la pestaña Gastos. Para una persona son varias semanas."""
+
 
 def _dinero(monto: Decimal) -> str:
     return f"{monto:.2f}"
@@ -109,11 +129,12 @@ def _estado(estado: EstadoBolsillo) -> dict[str, Any]:
     }
 
 
-def _gasto(gasto: GastoExtraido) -> dict[str, Any]:
+def _gasto(gasto: GastoExtraido, subcategoria: str | None) -> dict[str, Any]:
     assert gasto.monto is not None and gasto.fecha is not None
     return {
         "monto": _dinero(gasto.monto),
         "categoria": gasto.categoria,
+        "subcategoria": subcategoria,
         "fecha": gasto.fecha.isoformat(),
         "descripcion": gasto.descripcion,
     }
@@ -141,6 +162,32 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
         return Identidad(id_telegram, rol)
 
     Quien = Annotated[Identidad, Depends(identidad)]
+
+    def es_suyo(gasto: GastoRegistrado, quien: Identidad) -> bool:
+        return (
+            not gasto.anulado
+            and gasto.registrado_por == quien.id
+            and gasto.atribuido_a == quien.rol
+        )
+
+    def registrado(gasto: GastoRegistrado) -> dict[str, Any]:
+        """Un gasto del historial, con lo necesario para mostrarlo y para editarlo."""
+        propio = taxonomia.bolsillo_de(gasto.categoria, "")
+        destino = taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
+        return {
+            "id": gasto.id,
+            "monto": _dinero(gasto.monto),
+            "categoria": gasto.categoria,
+            "subcategoria": gasto.subcategoria,
+            "fecha": gasto.fecha.isoformat(),
+            "descripcion": gasto.descripcion,
+            "origen": gasto.origen,
+            "bolsillo_nombre": destino,
+            "bolsillo": etiquetas_bolsillo.get(destino or ""),
+            # El que eligió la persona con un marcador, si no es el de la categoría.
+            "bolsillo_elegido": destino if destino != propio else None,
+            "editable": taxonomia.contiene(gasto.categoria),
+        }
 
     def resumen_del_mes(rol: str) -> ResumenPresupuesto:
         ingreso = servicios.ingresos.get(rol)
@@ -187,7 +234,30 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
                 for b in taxonomia.bolsillos
                 if b.marcadores
             ],
+            # `fallback` no tiene bolsillo propio: el formulario pide uno de estos.
+            "fallback": taxonomia.fallback,
+            "bolsillos_para_fallback": [
+                {"nombre": b.nombre, "etiqueta": b.etiqueta}
+                for b in taxonomia.bolsillos
+                if b.marcadores_otros or b.marcadores
+            ],
+            "subcategorias": servicios.repositorio.subcategorias_usadas(quien.id),
         }
+
+    @app.get("/api/gastos")
+    def historial(quien: Quien) -> dict[str, Any]:
+        """Los últimos gastos de quien abre la app, el más reciente primero."""
+        propios = [g for g in servicios.repositorio.listar() if es_suyo(g, quien)]
+        return {"gastos": [registrado(g) for g in propios[:HISTORIAL]]}
+
+    @app.post("/api/gastos/{id_gasto}/anular")
+    def anular(id_gasto: int, _: Anular, quien: Quien) -> dict[str, Any]:
+        gasto = servicios.repositorio.obtener(id_gasto)
+        if gasto is None or not es_suyo(gasto, quien):
+            raise HTTPException(404, "Ese gasto no existe o ya se borró")
+        if not servicios.repositorio.anular(id_gasto, "borrado desde la Mini App"):
+            raise HTTPException(404, "Ese gasto no existe o ya se borró")
+        return {"id": id_gasto}
 
     @app.get("/api/presupuesto")
     def presupuesto(quien: Quien) -> dict[str, Any]:
@@ -230,24 +300,44 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
     def previsualizar(campos: CamposFormulario, quien: Quien) -> dict[str, Any]:
         """Lo que se guardaría. No escribe nada: guardar exige el sí de la persona."""
         gasto = armar_gasto(campos, quien.rol, taxonomia, servicios.hoy())
-        return {"gasto": _gasto(gasto), "bolsillo": _bolsillo(gasto)}
+        subcategoria = leer_subcategoria(campos.subcategoria)
+        return {"gasto": _gasto(gasto, subcategoria), "bolsillo": _bolsillo(gasto)}
 
     @app.post("/api/gastos", status_code=201)
     def guardar(campos: Guardar, quien: Quien) -> dict[str, Any]:
         # Se valida todo de nuevo: no se confía en lo que dijo el preview.
         gasto = armar_gasto(campos, quien.rol, taxonomia, servicios.hoy())
+        subcategoria = leer_subcategoria(campos.subcategoria)
+        if campos.reemplaza is not None:
+            viejo = servicios.repositorio.obtener(campos.reemplaza)
+            if viejo is None or not es_suyo(viejo, quien):
+                raise HTTPException(404, "Ese gasto no existe o ya se borró: no cambié nada.")
         try:
-            registrado = servicios.repositorio.guardar(
-                gasto, registrado_por=quien.id, origen=ORIGEN
-            )
+            if campos.reemplaza is None:
+                nuevo = servicios.repositorio.guardar(
+                    gasto, registrado_por=quien.id, origen=ORIGEN, subcategoria=subcategoria
+                )
+            else:
+                reemplazo = servicios.repositorio.reemplazar(
+                    campos.reemplaza,
+                    gasto,
+                    registrado_por=quien.id,
+                    origen=ORIGEN,
+                    subcategoria=subcategoria,
+                )
+                if reemplazo is None:  # lo borraron entre la verificación y ahora
+                    raise HTTPException(404, "Ese gasto no existe o ya se borró: no cambié nada.")
+                nuevo = reemplazo
+        except HTTPException:
+            raise
         except Exception as e:
             log.exception("Falló el guardado de un gasto confirmado desde la Mini App")
             raise HTTPException(500, "No pude guardar el gasto: no quedó registrado.") from e
         # No se registra en `extracciones`: no hubo lectura del LLM que medir.
         return {
-            "id": registrado.id,
-            "gasto": _gasto(gasto),
-            "linea": _linea_de_bolsillo(registrado),
+            "id": nuevo.id,
+            "gasto": _gasto(gasto, subcategoria),
+            "linea": _linea_de_bolsillo(nuevo),
         }
 
     def _bolsillo(gasto: GastoExtraido) -> str | None:
