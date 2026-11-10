@@ -72,12 +72,20 @@ class Presupuesto(BaseModel):
     bolsillos: list[Bolsillo]
 
 
+class CategoriaIngreso(BaseModel):
+    nombre: str
+    descripcion: str
+
+
 class Taxonomia(BaseModel):
     categorias: list[Categoria]
     fallback: str
     atribuciones: list[Atribucion]
     presupuesto: Presupuesto | None = None
     """Cómo se reparte el ingreso mensual. Los montos de ingreso viven en .env."""
+
+    ingresos: list[CategoriaIngreso] = []
+    """Categorías de los ingresos extra que se registran en la Mini App."""
 
     @model_validator(mode="after")
     def _consistente(self) -> "Taxonomia":
@@ -90,6 +98,7 @@ class Taxonomia(BaseModel):
             )
         _sin_duplicados("categoría", [c.nombre for c in self.categorias])
         _sin_duplicados("atribución", [a.nombre for a in self.atribuciones])
+        _sin_duplicados("categoría de ingreso", [c.nombre for c in self.ingresos])
 
         compartidas = [a for a in self.atribuciones if a.compartida]
         if len(compartidas) != 1:
@@ -203,6 +212,9 @@ class Taxonomia(BaseModel):
     def personas(self) -> tuple[str, ...]:
         """Atribuciones que pueden ser remitentes. La compartida nunca escribe."""
         return tuple(a.nombre for a in self.atribuciones if not a.compartida)
+
+    def contiene_ingreso(self, nombre: str | None) -> bool:
+        return nombre is not None and nombre.strip().lower() in {c.nombre for c in self.ingresos}
 
     @property
     def nombres_atribucion(self) -> tuple[str, ...]:

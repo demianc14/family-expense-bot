@@ -31,6 +31,7 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 - [x] Subcategoría libre, con sugerencias de las ya usadas.
 - [x] "Otros" pide de qué bolsillo sale (`marcadores_otros`, con paridad en n8n).
 - [x] Pestaña Gastos: editar (anular + crear) y borrar con confirmación.
+- [x] Ingresos extra: se suman al fijo y se reparten 30/30/20/20; mismo flujo que los gastos.
 - [ ] En la Mac: respaldo, `--migrar` y `docker compose up -d --build` (ver `docs/mini-app.md`).
 
 ## Fase C. Cerrar la evaluación (semana 1)

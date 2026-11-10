@@ -31,12 +31,23 @@ mismo bot. Tiene cuatro pestañas:
 - **¿Puedo?:** monto y categoría, y el veredicto de `evaluar_gasto`, la misma
   regla del ritmo que `/puedo`. Como no hay texto libre, **no pasa por el LLM** ni
   gasta cuota. Si el bolsillo no alcanza pero el fondo sí, ofrece probar desde el fondo.
-- **Gastos:** tus últimos 60 gastos, agrupados por día y con la tinta de su
-  bolsillo. Al tocar uno se ve el detalle, y desde ahí se **edita** o se **borra**.
-- **Registrar:** un formulario campo por campo, para cuando escribir una
-  frase es más lento que llenar cuatro casillas. La **subcategoría** es opcional
-  ("Tipti" dentro de Alimentación), y la app sugiere las que ya usaste en esa
-  categoría. Si eliges **Otros**, pide de qué bolsillo sale.
+- **Historial:** tus últimos 60 gastos y 60 ingresos, juntos y agrupados por
+  día. Los gastos llevan la tinta de su bolsillo; los ingresos van en verde y
+  con "+". Al tocar uno se ve el detalle, y desde ahí se **edita** o se **borra**.
+- **+ Nuevo:** un formulario campo por campo, para cuando escribir una frase es
+  más lento que llenar cuatro casillas. Arriba se elige **Gasto** o **Ingreso**.
+  La **subcategoría** es opcional ("Tipti" dentro de Alimentación), y la app
+  sugiere las que ya usaste en esa categoría. Si eliges **Otros**, pide de qué
+  bolsillo sale.
+
+**Ingresos extra.** Un trabajo puntual, un bono o un regalo se registran con el
+mismo flujo que un gasto: Revisar, "Sí, guardar", y después editar o borrar
+desde el historial. Se **suman al ingreso fijo** de `.env` en el mes de su fecha
+y se reparten 30/30/20/20 como el sueldo, así que los bolsillos, "¿puedo?" y
+`/presupuesto` en el chat los ven. Las categorías viven en `config/categories.yaml`
+(`ingresos:`), y no hay "sueldo" a propósito: ya es el ingreso fijo, y
+registrarlo lo contaría dos veces. En Bolsillos, "+ Ingreso" abre el formulario
+directo.
 
 **Editar y borrar sin perder historia.** Editar abre el mismo formulario con el
 gasto cargado, y guardar pasa por "Revisar los cambios" y "Sí, guardar", como un
@@ -156,5 +167,9 @@ Limitaciones:
 - **Editar crea un gasto nuevo**, con `origen = formulario` aunque el original
   haya entrado por el chat. El reporte de calidad no cambia hacia atrás: la
   lectura del LLM ya quedó medida en `extracciones` cuando se confirmó.
+- **Los ingresos extra solo existen en la app y en el bot de Python.** La
+  versión n8n no los ve: su presupuesto sigue saliendo solo del fijo.
+- **Un ingreso no se reparte distinto.** Siempre 30/30/20/20; no hay forma de
+  mandar un regalo entero al ahorro.
 - **La subcategoría solo existe en la app.** El chat no la pide y el LLM nunca
   la llena; el presupuesto y el bot la ignoran. Va en el export CSV.

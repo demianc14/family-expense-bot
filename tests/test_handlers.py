@@ -661,6 +661,28 @@ async def test_presupuesto_del_que_escribe(engine: Engine) -> None:
     assert "Ingreso: $1,200.00" in texto
 
 
+async def test_presupuesto_suma_los_ingresos_extra_del_mes(engine: Engine) -> None:
+    from family_expense_bot.storage.repository import IngresoNuevo, RepositorioIngresos
+
+    extras = RepositorioIngresos(engine)
+    extras.guardar(
+        IngresoNuevo(
+            monto=Decimal("150"),
+            categoria="regalo",
+            subcategoria=None,
+            persona="demian",
+            fecha=date.today(),
+            descripcion="x",
+        ),
+        registrado_por=DEMIAN,
+    )
+    servicios = _servicios_con(engine, ingresos=INGRESOS, ingresos_extra=extras)
+    update = _update("/presupuesto", user_id=DEMIAN)
+    await presupuesto(update, _contexto(servicios))
+    texto = update.effective_message.reply_text.await_args.args[0]
+    assert "Ingreso: $1,350.00 ($1,200.00 fijo + $150.00 extra)" in texto
+
+
 async def test_presupuesto_sin_ingreso_lo_explica(engine: Engine) -> None:
     servicios = _servicios_con(engine, ingresos=INGRESOS)
     update = _update("/presupuesto", user_id=MAMA)

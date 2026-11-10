@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict
 from family_expense_bot.extraction.categorias import Taxonomia
 from family_expense_bot.extraction.parser import ANTIGUEDAD_MAXIMA
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
+from family_expense_bot.storage.repository import IngresoNuevo
 
 LARGO_MAXIMO_DESCRIPCION = 200
 LARGO_MAXIMO_SUBCATEGORIA = 40
@@ -104,19 +105,8 @@ def armar_gasto(
 ) -> GastoExtraido:
     monto = leer_monto(campos.monto)
     categoria = leer_categoria(campos.categoria, taxonomia)
-
-    if campos.fecha > hoy:
-        raise FormularioInvalido(f"La fecha {campos.fecha} está en el futuro")
-    if hoy - campos.fecha > ANTIGUEDAD_MAXIMA:
-        raise FormularioInvalido(f"La fecha {campos.fecha} tiene más de un año")
-
-    descripcion = " ".join(campos.descripcion.split())
-    if not descripcion:
-        raise FormularioInvalido("Escribe una descripción corta (ej. almuerzo, gasolina)")
-    if len(descripcion) > LARGO_MAXIMO_DESCRIPCION:
-        raise FormularioInvalido(
-            f"La descripción es muy larga (máximo {LARGO_MAXIMO_DESCRIPCION} caracteres)"
-        )
+    _leer_fecha(campos.fecha, hoy)
+    descripcion = _leer_descripcion(campos.descripcion, "almuerzo, gasolina")
 
     bolsillo_destino(categoria, campos.bolsillo, taxonomia)  # `otros` exige un bolsillo
     marcador = _marcador(campos.bolsillo, taxonomia, categoria)
@@ -133,6 +123,56 @@ def armar_gasto(
         confianza_fecha=Confianza.ALTA,
         confianza_atribuido_a=Confianza.ALTA,
     )
+
+
+class CamposIngreso(BaseModel):
+    """Un ingreso extra desde la Mini App. Sin bolsillo: se reparte como el sueldo."""
+
+    model_config = ConfigDict(frozen=True)
+
+    monto: str
+    categoria: str
+    fecha: date
+    descripcion: str
+    subcategoria: str | None = None
+
+
+def armar_ingreso(
+    campos: CamposIngreso, persona: str, taxonomia: Taxonomia, hoy: date
+) -> IngresoNuevo:
+    """Mismas reglas que un gasto: monto estricto, fecha razonable y descripción corta.
+
+    El ingreso es siempre de quien lo registra, igual que los gastos de la app.
+    """
+    if not taxonomia.contiene_ingreso(campos.categoria):
+        raise FormularioInvalido(f"{campos.categoria!r} no es una categoría de ingreso")
+    return IngresoNuevo(
+        monto=leer_monto(campos.monto),
+        categoria=campos.categoria.strip().lower(),
+        subcategoria=leer_subcategoria(campos.subcategoria),
+        persona=persona,
+        fecha=_leer_fecha(campos.fecha, hoy),
+        descripcion=_leer_descripcion(campos.descripcion, "un trabajo extra, un regalo"),
+    )
+
+
+def _leer_fecha(fecha: date, hoy: date) -> date:
+    if fecha > hoy:
+        raise FormularioInvalido(f"La fecha {fecha} está en el futuro")
+    if hoy - fecha > ANTIGUEDAD_MAXIMA:
+        raise FormularioInvalido(f"La fecha {fecha} tiene más de un año")
+    return fecha
+
+
+def _leer_descripcion(crudo: str, ejemplo: str) -> str:
+    descripcion = " ".join(crudo.split())
+    if not descripcion:
+        raise FormularioInvalido(f"Escribe una descripción corta (ej. {ejemplo})")
+    if len(descripcion) > LARGO_MAXIMO_DESCRIPCION:
+        raise FormularioInvalido(
+            f"La descripción es muy larga (máximo {LARGO_MAXIMO_DESCRIPCION} caracteres)"
+        )
+    return descripcion
 
 
 def _marcador(bolsillo: str | None, taxonomia: Taxonomia, categoria: str) -> str:

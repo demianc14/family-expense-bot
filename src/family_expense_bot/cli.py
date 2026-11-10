@@ -30,6 +30,7 @@ from family_expense_bot.storage.repository import (
     EsquemaDesactualizado,
     RepositorioExtracciones,
     RepositorioGastos,
+    RepositorioIngresos,
     crear_engine,
     migrar,
 )
@@ -163,6 +164,7 @@ def main() -> None:
             taxonomia=cargar_taxonomia(),
             usuarios=settings.usuarios,
             ingresos=settings.ingresos,
+            ingresos_extra=RepositorioIngresos(engine),
         )
     except (ValueError, EsquemaDesactualizado) as e:
         # Errores de configuración: se explican en una línea, sin traceback.
@@ -182,7 +184,8 @@ def main() -> None:
 def _levantar_app(settings: Settings, token: str, host: str, puerto: int) -> None:
     try:
         servicios = ServiciosApp(
-            repositorio=RepositorioGastos(crear_engine(settings.database_url)),
+            repositorio=RepositorioGastos(engine := crear_engine(settings.database_url)),
+            ingresos_extra=RepositorioIngresos(engine),
             taxonomia=cargar_taxonomia(),
             bot_token=token,
             usuarios=settings.usuarios,
