@@ -147,6 +147,18 @@ Casos ya vistos:
   - **Se cortó la red** a las 11:23 y el bot quedó trabado en errores de DNS
     (`Temporary failure in name resolution`), aunque el contenedor seguía
     "Up". Reiniciarlo (`docker compose up -d`) lo destraba.
+  - **Al desinstalar Docker Desktop quedaron enlaces rotos** en
+    `~/.docker/cli-plugins/` (apuntan a `Docker.app`), así que `docker compose`
+    dejó de existir ("unknown command"). Mientras tanto se puede usar el de
+    OrbStack: `~/.orbstack/bin/docker-compose`. Y si el llavero de macOS no
+    acepta la clave, el build falla en "error getting credentials"; la imagen
+    base es pública, así que alcanza con `docker pull python:3.12-slim` y
+    construir con `DOCKER_BUILDKIT=0 docker build -t family-expense-bot:local .`
+    usando una config de Docker sin `credsStore`.
+  - **Ojo con el orden al migrar:** `run` no acepta `--no-build`, y si la
+    migración no corre, el bot nuevo no arranca y lo dice: "No arranco: …
+    le faltan: gastos.subcategoria". Es lo esperado; se corre `--migrar` y se
+    levanta de nuevo.
   - **Tailscale estaba detenido** (`tailscale status` → `Tailscale is stopped`),
     así que la URL pública no llegaba a la Mac aunque la app respondiera en
     local. Se arregla abriendo la app de Tailscale y conectándola; `funnel --bg`
