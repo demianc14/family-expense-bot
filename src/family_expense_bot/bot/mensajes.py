@@ -7,6 +7,7 @@ alguien decide si guardar un gasto. Por eso lo dudoso se marca, no se esconde.
 from collections.abc import Collection, Mapping
 
 from family_expense_bot.dashboard.presupuesto import (
+    Alerta,
     Consulta,
     EstadoBolsillo,
     ResumenPresupuesto,
@@ -105,6 +106,23 @@ def linea_de_bolsillo(estado: EstadoBolsillo | None, mes: int) -> str:
             f"(llevas ${estado.gastado:,.2f} de ${estado.asignado:,.2f})."
         )
     return f"{nombre}: quedan ${estado.disponible:,.2f} de ${estado.asignado:,.2f}."
+
+
+def alerta_bolsillo(alerta: Alerta, mes: int) -> str:
+    """El aviso que llega solo cuando un gasto cruza un umbral del bolsillo."""
+    estado = alerta.bolsillo
+    nombre = f"{estado.etiqueta} de {MESES[mes - 1]}"
+    llevas = f"llevas ${estado.gastado:,.2f} de ${estado.asignado:,.2f}"
+    if alerta.umbral >= 100:
+        exceso = f" (${-estado.disponible:,.2f} de más)" if estado.excedido else ""
+        return f"🚨 Llegaste al tope en {nombre}: {llevas}{exceso}."
+    dias = (
+        "el día que falta"
+        if alerta.dias_restantes == 1
+        else f"los {alerta.dias_restantes} días que faltan"
+    )
+    resto = f" Quedan ${estado.disponible:,.2f} para {dias}." if alerta.dias_restantes else ""
+    return f"🔔 {nombre} llegó al {alerta.umbral}%: {llevas}.{resto}"
 
 
 def descartado() -> str:

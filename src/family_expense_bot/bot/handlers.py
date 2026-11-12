@@ -37,6 +37,7 @@ from telegram.ext import (
 
 from family_expense_bot.bot import mensajes
 from family_expense_bot.dashboard.presupuesto import (
+    alerta_tras_gasto,
     estado_tras_gasto,
     evaluar_gasto,
     extras_del_mes,
@@ -85,6 +86,9 @@ class Servicios:
 
     ingresos_extra: RepositorioIngresos | None = None
     """Los ingresos registrados en la Mini App: se suman al fijo en su mes."""
+
+    hoy: Callable[[], date] = date.today
+    """Para decidir si un gasto es del mes en curso (las alertas no avisan por otro mes)."""
 
     def __post_init__(self) -> None:
         # Falla al arrancar, no cuando esa persona escriba por primera vez.
@@ -269,9 +273,11 @@ async def responder_confirmacion(update: Update, context: ContextTypes.DEFAULT_T
         await consulta.edit_message_text(mensajes.error_al_guardar())
         return
     servicios.extracciones.registrar(pendiente.original, confirmada=True, corregida=fue_corregido)
-    await consulta.edit_message_text(
-        mensajes.guardado(registrado, etiquetas, _estado_del_bolsillo(servicios, registrado))
-    )
+    linea, alerta = _tras_guardar(servicios, registrado, servicios.hoy())
+    await consulta.edit_message_text(mensajes.guardado(registrado, etiquetas, linea))
+    if alerta is not None and update.effective_chat is not None:
+        # Mensaje aparte, no una línea más del "Guardado": así llega como notificación.
+        await context.bot.send_message(update.effective_chat.id, alerta)
 
 
 def _bolsillo(servicios: Servicios, gasto: GastoExtraido) -> str | None:
@@ -291,11 +297,16 @@ def _extra(servicios: Servicios, persona: str, anio: int, mes: int) -> Decimal:
     return extras_del_mes(servicios.ingresos_extra.listar(desde, hasta), persona, anio, mes)
 
 
-def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> str | None:
-    """Cómo quedó el bolsillo del mes del gasto. Un fallo acá no tapa el "Guardado"."""
+def _tras_guardar(
+    servicios: Servicios, registrado: GastoRegistrado, hoy: date
+) -> tuple[str | None, str | None]:
+    """La línea del bolsillo para el "Guardado" y, si cruzó un umbral, la alerta.
+
+    Un fallo acá no tapa el "Guardado": sale sin línea y sin alerta.
+    """
     ingreso = servicios.ingresos.get(registrado.atribuido_a)
     if ingreso is None:
-        return None
+        return None, None
     try:
         desde, hasta = rango_del_mes(registrado.fecha.year, registrado.fecha.month)
         estado = estado_tras_gasto(
@@ -307,10 +318,14 @@ def _estado_del_bolsillo(servicios: Servicios, registrado: GastoRegistrado) -> s
                 servicios, registrado.atribuido_a, registrado.fecha.year, registrado.fecha.month
             ),
         )
-        return mensajes.linea_de_bolsillo(estado, registrado.fecha.month)
+        alerta = alerta_tras_gasto(estado, registrado, servicios.taxonomia.alertas, hoy)
+        return (
+            mensajes.linea_de_bolsillo(estado, registrado.fecha.month),
+            mensajes.alerta_bolsillo(alerta, registrado.fecha.month) if alerta else None,
+        )
     except Exception:
         log.exception("No se pudo calcular el presupuesto después de guardar")
-        return None
+        return None, None
 
 
 async def avisar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

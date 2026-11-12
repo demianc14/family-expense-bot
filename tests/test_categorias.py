@@ -352,3 +352,25 @@ def test_otros_toma_el_bolsillo_solo_si_el_marcador_apunta_a_uno() -> None:
     assert TAXONOMIA.bolsillo_de("otros", "cosa de necesarios y de lujos") is None
     # "del fondo" sigue ganando, como en cualquier categoría.
     assert TAXONOMIA.bolsillo_de("otros", "cosa del fondo") == "fondo"
+
+
+def test_el_yaml_real_avisa_al_80_y_al_100() -> None:
+    assert TAXONOMIA.alertas == (80, 100)
+
+
+def test_sin_alertas_no_se_avisa_nunca() -> None:
+    assert _con_presupuesto(BOLSILLOS_MINIMOS).alertas == ()
+
+
+@pytest.mark.parametrize(
+    ("alertas", "error"),
+    [
+        ([100, 80], "de menor a mayor"),
+        ([80, 80], "de menor a mayor"),
+        ([0, 80], "entre 1 y 100"),
+        ([80, 120], "entre 1 y 100"),
+    ],
+)
+def test_alertas_invalidas_no_cargan(alertas: list[int], error: str) -> None:
+    with pytest.raises(ValidationError, match=error):
+        _taxonomia(presupuesto={"bolsillos": BOLSILLOS_MINIMOS, "alertas": alertas})

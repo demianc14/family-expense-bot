@@ -10,6 +10,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import StaticPool
 
 from family_expense_bot.app.api import ServiciosApp, crear_app
+from family_expense_bot.bot import envio
 from family_expense_bot.dashboard.presupuesto import evaluar_gasto, resumen_presupuesto
 from family_expense_bot.extraction.categorias import cargar_taxonomia
 from family_expense_bot.extraction.schema import Confianza, GastoExtraido
@@ -46,7 +47,17 @@ def repo_ingresos(engine: Engine) -> RepositorioIngresos:
 
 
 @pytest.fixture
-def cliente(repo: RepositorioGastos, repo_ingresos: RepositorioIngresos) -> TestClient:
+def avisos() -> list[tuple[int, str]]:
+    """Lo que la app mandó al chat de Telegram."""
+    return []
+
+
+@pytest.fixture
+def cliente(
+    repo: RepositorioGastos,
+    repo_ingresos: RepositorioIngresos,
+    avisos: list[tuple[int, str]],
+) -> TestClient:
     servicios = ServiciosApp(
         repositorio=repo,
         ingresos_extra=repo_ingresos,
@@ -56,6 +67,7 @@ def cliente(repo: RepositorioGastos, repo_ingresos: RepositorioIngresos) -> Test
         ingresos={"demian": Decimal("1200")},
         hoy=lambda: HOY,
         ahora=lambda: AHORA,
+        notificar=lambda chat_id, texto: avisos.append((chat_id, texto)),
     )
     return TestClient(crear_app(servicios))
 
@@ -583,3 +595,125 @@ def test_opciones_trae_las_categorias_de_ingreso(cliente: TestClient) -> None:
         c.nombre for c in TAXONOMIA.ingresos
     ]
     assert datos["subcategorias_ingreso"] == {}
+
+
+# --- alertas ---------------------------------------------------------------------
+# Lujos con 1200 de ingreso: 240 asignados, el 80% son 192.
+
+
+def test_cruzar_el_80_avisa_al_chat_de_quien_guarda(
+    cliente: TestClient, repo: RepositorioGastos, avisos: list[tuple[int, str]]
+) -> None:
+    _ya_guardado(repo, "180", "comida_fuera")
+    r = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    [(chat_id, texto)] = avisos
+    assert chat_id == DEMIAN
+    assert texto.startswith("🔔 Lujos de octubre llegó al 80%: llevas $192.50 de $240.00.")
+
+
+def test_sin_cruzar_no_avisa(cliente: TestClient, avisos: list[tuple[int, str]]) -> None:
+    r = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    assert avisos == []
+
+
+def test_la_alerta_usa_el_presupuesto_con_ingresos_extra(
+    cliente: TestClient, repo: RepositorioGastos, avisos: list[tuple[int, str]]
+) -> None:
+    """Con 150 extra, Lujos pasa de 240 a 270 y el 80% de 192 a 216: igual que en Bolsillos."""
+    _ya_guardado(repo, "180", "comida_fuera")
+    r = cliente.post("/api/ingresos", json=_ingreso(confirmado=True), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    _guardar_por_app(cliente)  # 192.50: cruzaría el 80% de 240, no el de 270
+    assert avisos == []
+    _guardar_por_app(cliente, monto="25")  # 217.50 de 270.00
+    [(_, texto)] = avisos
+    assert texto.startswith("🔔 Lujos de octubre llegó al 80%: llevas $217.50 de $270.00.")
+    presupuesto = cliente.get("/api/presupuesto", headers=_como(DEMIAN)).json()
+    [lujos] = [b for b in presupuesto["bolsillos"] if b["nombre"] == "lujos"]
+    assert (lujos["gastado"], lujos["asignado"]) == ("217.50", "270.00")
+
+
+def test_un_reinicio_no_reenvia_una_alerta_ya_enviada(
+    cliente: TestClient,
+    repo: RepositorioGastos,
+    repo_ingresos: RepositorioIngresos,
+    avisos: list[tuple[int, str]],
+) -> None:
+    _ya_guardado(repo, "180", "comida_fuera")
+    _guardar_por_app(cliente)
+    assert len(avisos) == 1
+    # Otro proceso sobre la misma base: no hay estado de alertas que perder ni que repetir.
+    reiniciado = TestClient(
+        crear_app(
+            ServiciosApp(
+                repositorio=repo,
+                ingresos_extra=repo_ingresos,
+                taxonomia=TAXONOMIA,
+                bot_token=TOKEN,
+                usuarios={DEMIAN: "demian"},
+                ingresos={"demian": Decimal("1200")},
+                hoy=lambda: HOY,
+                ahora=lambda: AHORA,
+                notificar=lambda chat_id, texto: avisos.append((chat_id, texto)),
+            )
+        )
+    )
+    assert reiniciado.get("/api/presupuesto", headers=_como(DEMIAN)).status_code == 200
+    _guardar_por_app(reiniciado, monto="5")  # sigue entre el 80% y el 100%
+    assert len(avisos) == 1
+
+
+def test_editar_no_repite_la_alerta_pero_si_avisa_un_cruce_nuevo(
+    cliente: TestClient, repo: RepositorioGastos, avisos: list[tuple[int, str]]
+) -> None:
+    _ya_guardado(repo, "180", "comida_fuera")
+    id_gasto = _guardar_por_app(cliente)  # 192.50: cruza el 80%
+    assert len(avisos) == 1
+    id_gasto = _guardar_por_app(cliente, descripcion="almuerzo con Ana", reemplaza=id_gasto)
+    assert len(avisos) == 1, "corregir la descripción no cambia el bolsillo"
+    _guardar_por_app(cliente, monto="70", reemplaza=id_gasto)  # 250 de 240
+    assert len(avisos) == 2
+    assert avisos[1][1].startswith("🚨 Llegaste al tope en Lujos de octubre: llevas $250.00")
+
+
+def test_si_falla_el_aviso_el_gasto_queda_guardado(
+    repo: RepositorioGastos, repo_ingresos: RepositorioIngresos
+) -> None:
+    def romper(chat_id: int, texto: str) -> None:
+        raise RuntimeError("Telegram caído")
+
+    _ya_guardado(repo, "180", "comida_fuera")
+    servicios = ServiciosApp(
+        repositorio=repo,
+        ingresos_extra=repo_ingresos,
+        taxonomia=TAXONOMIA,
+        bot_token=TOKEN,
+        usuarios={DEMIAN: "demian"},
+        ingresos={"demian": Decimal("1200")},
+        hoy=lambda: HOY,
+        ahora=lambda: AHORA,
+        notificar=romper,
+    )
+    # El aviso corre después de responder: su error no le llega a quien guardó.
+    cliente = TestClient(crear_app(servicios), raise_server_exceptions=False)
+    r = cliente.post("/api/gastos", json=_gasto(confirmado=True), headers=_como(DEMIAN))
+    assert r.status_code == 201
+    assert len(repo.listar()) == 2
+
+
+def test_enviar_no_explota_si_telegram_falla(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    class BotCaido:
+        def __init__(self, token: str) -> None: ...
+
+        async def __aenter__(self) -> "BotCaido":
+            raise RuntimeError("sin red")
+
+        async def __aexit__(self, *_: object) -> None: ...
+
+    monkeypatch.setattr(envio, "Bot", BotCaido)
+    envio.enviar(TOKEN, DEMIAN, "hola")
+    assert "No se pudo mandar la alerta al chat" in caplog.text

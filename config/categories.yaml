@@ -244,3 +244,7 @@ presupuesto:
       categorias: [comida_fuera, entretenimiento, extras, ropa]
       marcadores_otros:
         - de lujos
+
+  # Al guardar un gasto que hace cruzar uno de estos porcentajes de su bolsillo,
+  # el bot avisa en el chat. Si cruza dos de una vez, avisa solo el más alto.
+  alertas: [80, 100]

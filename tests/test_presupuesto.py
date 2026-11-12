@@ -6,8 +6,12 @@ from typing import Any
 
 import pytest
 
+from family_expense_bot.bot import mensajes
 from family_expense_bot.dashboard.presupuesto import (
+    Alerta,
     Veredicto,
+    alerta_tras_gasto,
+    estado_tras_gasto,
     evaluar_gasto,
     repartir,
     resumen_presupuesto,
@@ -183,3 +187,74 @@ def test_una_categoria_sin_bolsillo_no_se_puede_evaluar() -> None:
     c = _consulta("10", "otros")
     assert c.veredicto is Veredicto.SIN_BOLSILLO
     assert c.bolsillo is None
+
+
+# --- alertas ---------------------------------------------------------------------
+# Lujos con 1200 de ingreso: 240 asignados, el 80% son 192.
+
+
+def _alerta(
+    previo: str, monto: str, categoria: str = "comida_fuera", hoy: date = HOY
+) -> Alerta | None:
+    gastos = [_gasto(monto, categoria, id=2)]
+    if previo != "0":
+        gastos.append(_gasto(previo, categoria, id=1))
+    estado = estado_tras_gasto(gastos, TAXONOMIA, gastos[0], Decimal("1200"))
+    return alerta_tras_gasto(estado, gastos[0], TAXONOMIA.alertas, hoy)
+
+
+def test_avisa_al_cruzar_el_80() -> None:
+    alerta = _alerta("168", "36")  # 70% → 85%
+    assert alerta is not None
+    assert alerta.umbral == 80
+    assert alerta.bolsillo.nombre == "lujos"
+    assert alerta.dias_restantes == 15
+
+
+def test_llegar_justo_al_80_cuenta_como_cruzado() -> None:
+    alerta = _alerta("168", "24")  # 192.00 de 240.00
+    assert alerta is not None and alerta.umbral == 80
+
+
+def test_si_ya_estaba_arriba_no_vuelve_a_avisar() -> None:
+    assert _alerta("204", "12") is None  # 85% → 90%
+
+
+def test_por_debajo_del_80_no_avisa() -> None:
+    assert _alerta("100", "50") is None
+
+
+def test_si_cruza_dos_umbrales_avisa_solo_el_mas_alto() -> None:
+    alerta = _alerta("168", "84")  # 70% → 105%
+    assert alerta is not None and alerta.umbral == 100
+
+
+def test_un_gasto_de_otro_mes_no_avisa() -> None:
+    assert _alerta("168", "36", hoy=date(2026, 11, 2)) is None
+
+
+def test_un_gasto_sin_bolsillo_no_avisa() -> None:
+    assert _alerta("0", "500", categoria="otros") is None
+
+
+def test_sin_umbrales_no_avisa() -> None:
+    gasto = _gasto("230", "comida_fuera")
+    estado = estado_tras_gasto([gasto], TAXONOMIA, gasto, Decimal("1200"))
+    assert alerta_tras_gasto(estado, gasto, (), HOY) is None
+
+
+def test_texto_de_la_alerta_del_80() -> None:
+    alerta = _alerta("168", "36")
+    assert alerta is not None
+    assert mensajes.alerta_bolsillo(alerta, 10) == (
+        "🔔 Lujos de octubre llegó al 80%: llevas $204.00 de $240.00. "
+        "Quedan $36.00 para los 15 días que faltan."
+    )
+
+
+def test_texto_de_la_alerta_al_pasarse() -> None:
+    alerta = _alerta("168", "84")
+    assert alerta is not None
+    assert mensajes.alerta_bolsillo(alerta, 10) == (
+        "🚨 Llegaste al tope en Lujos de octubre: llevas $252.00 de $240.00 ($12.00 de más)."
+    )
