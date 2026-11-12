@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "family-expense-bot"
 version = "0.0.1"
-description = "Bot de Telegram para registrar gastos familiares desde texto libre, con extracción estructurada y confirmación humana."
+description = "Finanzas personales desde Telegram: gastos en texto libre con extracción verificada por código, confirmación humana y presupuesto por bolsillos."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

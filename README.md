@@ -1,6 +1,6 @@
-# family-expense-bot
+# personal-finance-bot
 
-[![CI](https://github.com/demianc14/family-expense-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/demianc14/family-expense-bot/actions/workflows/ci.yml)
+[![CI](https://github.com/demianc14/personal-finance-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/demianc14/personal-finance-bot/actions/workflows/ci.yml)
 
 Finanzas personales desde Telegram. Escribes "pagué 18 del almuerzo", un LLM
 gratuito extrae el gasto, el código lo verifica campo por campo y **nada se
@@ -55,8 +55,9 @@ o `/reporte`.
 
 Empezó como un bot para que mis papás registraran gastos. Funcionó, pero ellos
 siguieron con sus plantillas de Excel, así que esa etapa quedó cerrada en
-[`v1.0-bot-familiar`](https://github.com/demianc14/family-expense-bot/releases/tag/v1.0-bot-familiar).
-Hoy es mi herramienta personal. La historia completa está en
+[`v1.0-bot-familiar`](https://github.com/demianc14/personal-finance-bot/releases/tag/v1.0-bot-familiar).
+Hoy es mi herramienta personal, y por eso el repo dejó de llamarse
+`family-expense-bot` (el comando conserva ese nombre). La historia completa está en
 [Cómo cambió el proyecto](docs/decisiones.md#cómo-cambió-el-proyecto).
 
 **Docs:** [Decisiones y limitaciones](docs/decisiones.md) ·
