@@ -52,7 +52,8 @@ INGRESOS_MENSUALES=demian:1200
   de la casa o de otra persona no toca tu presupuesto aunque lo registres tú.
 - **Dónde se ve:** la confirmación dice contra qué bolsillo cuenta el gasto; el
   aviso de guardado dice cuánto queda en ese bolsillo del mes (o cuánto te
-  pasaste); `/presupuesto` muestra los cuatro.
+  pasaste); `/presupuesto` muestra los cuatro. Al cruzar el 80% o el 100%,
+  llega además una [alerta](#alertas).
 - **Sin cambios en la base.** El bolsillo se calcula al leer, a partir de la
   categoría y del texto ya guardados. Una base existente funciona sin migrar;
   la contracara es que si cambias el reparto en el yaml, los meses pasados se
@@ -84,6 +85,35 @@ definió, no asesoría financiera. La regla del ritmo es estricta a principio de
 mes: el día 2 casi cualquier gasto grande sale "difiérelo", porque todavía
 faltan casi todos los días. Es a propósito (gastar parejo), pero conviene
 saberlo.
+
+## Alertas
+
+Al guardar un gasto que hace cruzar el 80% de su bolsillo, el bot manda un
+mensaje aparte al chat, y otro al llegar al 100%. Se guarde por el chat o por la Mini App,
+el aviso llega igual, como notificación de Telegram:
+
+> *"🔔 Lujos de octubre llegó al 80%: llevas $204.00 de $240.00. Quedan $36.00
+> para los 15 días que faltan."* (datos sintéticos)
+
+- **Los umbrales son config**: `alertas: [80, 100]` en `config/categories.yaml`.
+  Una lista vacía apaga los avisos.
+- **Avisa al cruzar, no al estar arriba.** El cruce sale del antes y el después
+  del mismo gasto (`alerta_tras_gasto`), sin guardar estado: un reinicio no
+  repite avisos, y quien ya iba en 85% no vuelve a recibir el del 80%. Si un
+  gasto cruza los dos umbrales de una vez, llega solo el del 100%.
+- **El porcentaje es sobre el presupuesto con ingresos extra.** La alerta usa
+  el mismo `resumen_presupuesto` que la pestaña Bolsillos: con $150 extra,
+  Lujos pasa de $240 a $270 y el 80% de $192 a $216.
+- **Editar no repite un aviso.** Al editar, el "antes" es el bolsillo con el
+  gasto viejo (`ya_contaba`): corregir la descripción no avisa; subir el monto
+  hasta cruzar otro umbral, sí.
+- **Solo el mes en curso.** Un gasto atrasado del mes anterior no avisa:
+  ese mes ya cerró y el aviso no serviría de nada.
+- **Desde la Mini App, el aviso sale después de responder.** Si Telegram falla,
+  queda en el log y el gasto igual está guardado.
+
+Limitación: anular un gasto no "desavisa". Si el gasto que cruzó el 80% se
+anula, la alerta ya llegó y no se corrige.
 
 ## De dónde sale el reparto
 

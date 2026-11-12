@@ -316,6 +316,10 @@
           "de lujos"
         ]
       }
+    ],
+    "alertas": [
+      80,
+      100
     ]
   },
   "ingresos": [

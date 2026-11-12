@@ -26,7 +26,7 @@ from importlib.resources import files
 from types import MappingProxyType
 from typing import Annotated, Any, Literal, NamedTuple
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 
@@ -35,10 +35,12 @@ from family_expense_bot.bot import mensajes
 from family_expense_bot.dashboard.presupuesto import (
     EstadoBolsillo,
     ResumenPresupuesto,
+    alerta_tras_gasto,
     estado_tras_gasto,
     evaluar_gasto,
     extras_del_mes,
     resumen_presupuesto,
+    ya_contaba,
 )
 from family_expense_bot.dashboard.report import rango_del_mes
 from family_expense_bot.extraction.categorias import Taxonomia, validar_roles
@@ -87,6 +89,8 @@ class ServiciosApp:
     ingresos: Mapping[str, Decimal] = field(default_factory=lambda: MappingProxyType({}))
     hoy: Callable[[], date] = date.today
     ahora: Callable[[], datetime] = _ahora
+    notificar: Callable[[int, str], None] | None = None
+    """Manda un mensaje al chat de Telegram (ID, texto). None = la app no avisa."""
 
     def __post_init__(self) -> None:
         validar_roles(self.taxonomia, self.usuarios, self.ingresos)
@@ -349,10 +353,11 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
         return {"gasto": _gasto(gasto, subcategoria), "bolsillo": _bolsillo(gasto)}
 
     @app.post("/api/gastos", status_code=201)
-    def guardar(campos: Guardar, quien: Quien) -> dict[str, Any]:
+    def guardar(campos: Guardar, quien: Quien, tareas: BackgroundTasks) -> dict[str, Any]:
         # Se valida todo de nuevo: no se confía en lo que dijo el preview.
         gasto = armar_gasto(campos, quien.rol, taxonomia, servicios.hoy())
         subcategoria = leer_subcategoria(campos.subcategoria)
+        viejo: GastoRegistrado | None = None
         if campos.reemplaza is not None:
             viejo = servicios.repositorio.obtener(campos.reemplaza)
             if viejo is None or not es_suyo(viejo, quien):
@@ -379,11 +384,12 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
             log.exception("Falló el guardado de un gasto confirmado desde la Mini App")
             raise HTTPException(500, "No pude guardar el gasto: no quedó registrado.") from e
         # No se registra en `extracciones`: no hubo lectura del LLM que medir.
-        return {
-            "id": nuevo.id,
-            "gasto": _gasto(gasto, subcategoria),
-            "linea": _linea_de_bolsillo(nuevo),
-        }
+        linea, alerta = _tras_guardar(nuevo, viejo)
+        if alerta is not None and servicios.notificar is not None:
+            # Después de responder: el 201 no espera a Telegram, y si el envío
+            # falla el gasto igual quedó guardado.
+            tareas.add_task(servicios.notificar, quien.id, alerta)
+        return {"id": nuevo.id, "gasto": _gasto(gasto, subcategoria), "linea": linea}
 
     # --- ingresos extra -------------------------------------------------------------
 
@@ -444,11 +450,18 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
         nombre = taxonomia.bolsillo_de(gasto.categoria, gasto.texto_original)
         return etiquetas_bolsillo.get(nombre or "", "ninguno")
 
-    def _linea_de_bolsillo(registrado: GastoRegistrado) -> str | None:
-        """Cómo quedó el bolsillo. Un fallo acá no tapa que el gasto sí se guardó."""
+    def _tras_guardar(
+        registrado: GastoRegistrado, reemplazado: GastoRegistrado | None = None
+    ) -> tuple[str | None, str | None]:
+        """La línea del bolsillo y, si cruzó un umbral, la alerta. Igual que en el bot.
+
+        Al editar, el cruce se mide contra cómo estaba el bolsillo con el gasto
+        viejo: corregir una descripción no repite un aviso. Un fallo acá no tapa
+        que el gasto sí se guardó.
+        """
         ingreso = servicios.ingresos.get(registrado.atribuido_a)
         if ingreso is None:
-            return None
+            return None, None
         try:
             desde, hasta = rango_del_mes(registrado.fecha.year, registrado.fecha.month)
             estado = estado_tras_gasto(
@@ -458,9 +471,19 @@ def crear_app(servicios: ServiciosApp) -> FastAPI:
                 ingreso,
                 extra(registrado.atribuido_a, registrado.fecha.year, registrado.fecha.month),
             )
-            return mensajes.linea_de_bolsillo(estado, registrado.fecha.month)
+            alerta = alerta_tras_gasto(
+                estado,
+                registrado,
+                taxonomia.alertas,
+                servicios.hoy(),
+                ya_contaba=ya_contaba(taxonomia, reemplazado, registrado),
+            )
+            return (
+                mensajes.linea_de_bolsillo(estado, registrado.fecha.month),
+                mensajes.alerta_bolsillo(alerta, registrado.fecha.month) if alerta else None,
+            )
         except Exception:
             log.exception("No se pudo calcular el presupuesto después de guardar")
-            return None
+            return None, None
 
     return app
