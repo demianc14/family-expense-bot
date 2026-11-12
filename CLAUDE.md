@@ -1,25 +1,36 @@
-# family-expense-bot — Brief de Proyecto para Claude Code
+# personal-finance-bot — Brief de Proyecto para Claude Code
 
 > Guarda este archivo como `CLAUDE.md` en la raíz de este repo (distinto del
 > repo de `internship-matcher`). Claude Code lo lee automáticamente al
 > iniciar sesión ahí.
+>
+> El repo se llamó `family-expense-bot` hasta el 2026-11-11. El paquete
+> (`family_expense_bot`) y el comando (`family-expense-bot`) conservan ese
+> nombre a propósito: ver `docs/decisiones.md`.
 
 ## Rol de Claude Code en este proyecto
 
 Ingeniero de datos/backend construyendo esto junto a Demian. Este proyecto
-maneja **dinero real de terceros** (sus papás) — eso cambia el estándar de
-rigor respecto a un proyecto de datos abiertos: nada se persiste sin que el
-dato tenga confianza suficiente o confirmación humana. Antes de escribir
-código en cada fase, propone el diseño y espera confirmación si algo es
-ambiguo.
+maneja **dinero real** (hoy el de Demian; en su primera etapa, el de sus
+papás) — eso cambia el estándar de rigor respecto a un proyecto de datos
+abiertos: nada se persiste sin que el dato tenga confianza suficiente o
+confirmación humana. Antes de escribir código en cada fase, propone el diseño
+y espera confirmación si algo es ambiguo.
 
 ## Objetivo
 
-Bot de Telegram donde mis papás registran gastos igual que ya lo hacen hoy
-(mensaje de texto libre, ej. "200 dólares mercado"), y el sistema extrae
-{monto, categoría, fecha, descripción} con un LLM gratuito, pide
-confirmación, y lo guarda para generar un reporte mensual — sin pedirles
-que aprendan una herramienta nueva.
+Herramienta de finanzas personales de Demian sobre Telegram, con una sola
+historia de producto: **captura verificada → conciliación en SQL → análisis
+en Power BI**. Se escribe un gasto en texto libre (ej. "200 dólares
+mercado") o se llena el formulario de la Mini App; el sistema extrae {monto,
+categoría, fecha, descripción} con un LLM gratuito, el código lo verifica,
+pide confirmación y lo guarda. Encima hay un presupuesto 30/30/20/20 por
+bolsillos y, como función nueva, la conciliación contra estados de cuenta
+(Fase G de `ROADMAP.md`).
+
+Empezó como un bot para que sus papás registraran gastos sin aprender una
+herramienta nueva; esa etapa se cerró en `v1.0-bot-familiar` (ver "Decisión
+de rumbo" abajo).
 
 **No es un chatbot conversacional genérico ni una app de finanzas
 completa.** Es una tubería: captura → extracción estructurada con
@@ -174,7 +185,7 @@ tests/                   # fixtures de mensajes; el LLM siempre mockeado
 
 ## Estado
 
-El plan vigente y el estado para retomar están en `ROADMAP.md` (fases A a F).
+El plan vigente y el estado para retomar están en `ROADMAP.md` (tareas en orden y fases A a G).
 Las fases de abajo son las originales del bot familiar, ya cerradas en
 `v1.0-bot-familiar`; se dejan como historia.
 

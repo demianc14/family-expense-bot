@@ -15,6 +15,16 @@ Cómo cambió el proyecto, cómo se decide si un gasto es confiable, cómo se gu
 | 16-oct | ¿Puedo gastar esto? | La consulta antes de gastar, con la regla del ritmo del mes calculada por código. |
 | 20-oct | Hallazgo de adopción | Mis papás no usan Telegram, y para ellos registrar gastos así es más tedioso que lo que ya hacen: llevan sus finanzas en Excel, con plantillas propias de presupuesto y gastos. El bot no les sirve. |
 | 20-oct → | App personal | El usuario real soy yo. El núcleo (verificación, presupuesto, "¿puedo?") sigue igual, con una interfaz para el celular encima. |
+| 11-nov | Nombre nuevo | El repo pasa de `family-expense-bot` a `personal-finance-bot`, y entra la conciliación de estados de cuenta: captura verificada, conciliación en SQL y análisis en Power BI. |
+
+**Por qué cambió el nombre, y qué no cambió.** "Family" quedó de la primera
+etapa; hoy el usuario soy yo. Se renombró solo el repo de GitHub, que redirige
+el nombre viejo. El paquete `family_expense_bot` y el comando
+`family-expense-bot` **no** se renombran: tocaría todos los imports, el
+`Dockerfile`, la imagen y el proyecto de `docker compose` que ya corre en la
+Mac, y los comandos de cada doc, sin nada visible a cambio. Tampoco cambia la
+versión n8n, que está congelada. El tag `v1.0-bot-familiar` conserva su nombre:
+es historia.
 
 **Por qué se cerró la etapa familiar.** No fue un problema técnico. Desde el
 principio, el plan listaba como limitación que el sistema dependía de que
