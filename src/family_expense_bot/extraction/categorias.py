@@ -72,6 +72,14 @@ class Presupuesto(BaseModel):
     bolsillos: list[Bolsillo]
 
 
+class NoEsGasto(BaseModel):
+    """Frases que delatan una devolución o un ingreso ("me devolvieron")."""
+
+    marcadores: list[str] = []
+    salvo_despues_de: list[str] = []
+    """El marcador no cuenta tras una de estas palabras ("lo que me devolvieron")."""
+
+
 class CategoriaIngreso(BaseModel):
     nombre: str
     descripcion: str
@@ -86,6 +94,9 @@ class Taxonomia(BaseModel):
 
     ingresos: list[CategoriaIngreso] = []
     """Categorías de los ingresos extra que se registran en la Mini App."""
+
+    no_es_gasto: NoEsGasto = NoEsGasto()
+    """Marcadores de devolución o ingreso: el mensaje no cuenta un gasto."""
 
     @model_validator(mode="after")
     def _consistente(self) -> "Taxonomia":
@@ -194,6 +205,21 @@ class Taxonomia(BaseModel):
 
     def contiene(self, nombre: str | None) -> bool:
         return nombre is not None and nombre.strip().lower() in self.nombres
+
+    def parece_no_gasto(self, texto: str) -> bool:
+        """¿El mensaje dice que entró plata ("me devolvieron 20") en vez de salir?
+
+        Un marcador después de "que" no cuenta: "pagué lo que me devolvieron"
+        habla de un gasto hecho con esa plata.
+        """
+        normalizado = normalizar(texto)
+        salvo = {normalizar(p) for p in self.no_es_gasto.salvo_despues_de}
+        for marcador in self.no_es_gasto.marcadores:
+            for m in re.finditer(rf"\b{re.escape(normalizar(marcador))}\b", normalizado):
+                anterior = re.search(r"(\w+)\W*$", normalizado[: m.start()])
+                if anterior is None or anterior.group(1) not in salvo:
+                    return True
+        return False
 
     def describir_para_prompt(self) -> str:
         return "\n".join(

@@ -11,7 +11,7 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **En `main` (9a583c1, 11-nov):** Fases A y B completas; Fase C con la evaluación hecha, flash descartado, `--desde-corrida` y la mejora 1; Mini App con coma decimal, subcategoría, bolsillo para `otros`, editar y borrar, e ingresos extra (PRs #13 a #15); docs de la caída del 10-nov (PRs #16 y #17).
 - **Verificado el 11-nov en `main`:** `pytest` 519 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
 - **D1 (PR #7, rama `fase-d-alertas`):** rebaseada sobre `main` el 11-nov, con la alerta calculada sobre el presupuesto que incluye ingresos extra, sin repetir avisos al editar ni al reiniciar. `pytest` 545 pasan en la rama. Falta subirla y mergear.
-- **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; dudó cuando debía en 24 de 26 (falta la devolución contada como gasto).
+- **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; dudó cuando debía en 25 de 26 (falta "cosas en el Kywi").
 - **Renombre (PR #19):** nombre elegido, `personal-finance-bot`. Los enlaces del repo ya están cambiados en la PR; falta renombrar en GitHub y mergearla.
 - **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
 
@@ -58,9 +58,9 @@ Una rama y una PR por tarea. Lo marcado **DECIDE DEMIAN** no se hace sin su resp
 
 ### 3. Mejora 2 de la Fase C: devoluciones e ingresos no son gasto
 
-- [ ] Decidir dónde se resuelve (DECIDE DEMIAN). Propuesta: solo código, con marcadores de "no es gasto" en el yaml, medido con `--desde-corrida` y 0 llamadas; el prompt solo si eso deja casos sin cubrir.
-- [ ] Medir antes y después contra el banco de 84 casos.
-- [ ] Fila en la tabla "antes → después" de `docs/evaluacion.md`. Si no mejora, no se mergea y se documenta.
+- [x] Decidir dónde se resuelve: solo código, con marcadores de "no es gasto" en el yaml (decidido por Demian el 12-nov). El prompt no se toca.
+- [x] Medir antes y después contra el banco de 84 casos: 24 → 25 de 26, 0 llamadas.
+- [x] Fila en la tabla "antes → después" de `docs/evaluacion.md`, con los falsos positivos medidos aparte.
 
 ### 4. Conciliación de estados de cuenta (Fase G, fases 0 a 2)
 
@@ -118,7 +118,7 @@ Principios, además de los de `CLAUDE.md`:
 - [x] Banco de 84 casos y `--evaluar` con errores silenciosos separados.
 - [x] flash-lite medido; flash descartado por cuota y latencia.
 - [x] Mejora 1: `otros` nunca con confianza alta. Medida antes y después.
-- [ ] Mejora 2: devoluciones e ingresos (tarea 3).
+- [x] Mejora 2: devoluciones no son gasto (tarea 3). Los ingresos por "me pagaron" quedaron fuera: chocan con "mi papá me pagó el semestre".
 - Mejoras 3 (separar `personal` de `educacion`) y 4 (timeout más corto con un reintento): si hay tiempo.
 
 Regla: cada mejora es una PR chica; si el número empeora, se descarta y se documenta.
@@ -156,7 +156,7 @@ Decidido el 10-nov: tool use, RAG y agentes van al proyecto del asistente acadé
 - [x] Tabla de evaluación con números reales.
 - [x] Historial sin datos personales.
 - [ ] Repo renombrado y enlaces al día.
-- [ ] Tabla "antes → después" de las mejoras de la Fase C, con la mejora 2.
+- [x] Tabla "antes → después" de las mejoras de la Fase C, con la mejora 2.
 - [ ] Al menos una automatización que actúa sin que se pida (D1).
 - [ ] Conciliación con invariante de saldo probado y precisión/recall medidos.
 - [ ] Dashboard Power BI con datos sintéticos en el repo (PDF + capturas).

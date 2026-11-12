@@ -15,6 +15,7 @@ from family_expense_bot.extraction.schema import Confianza, GastoExtraido, Nota,
 from family_expense_bot.extraction.verificacion import monto_respaldado_por_texto, parsear_monto
 
 ANTIGUEDAD_MAXIMA = timedelta(days=365)
+NOTA_NO_ES_GASTO = "Parece una devolución o un ingreso, no un gasto. ¿Seguro que es un gasto?"
 
 _COMO_SE_LLAMA = {
     "monto": "el monto",
@@ -91,6 +92,11 @@ def extraer(
     notas: list[Nota] = []
     monto, confianza_monto = _verificar_monto(respuesta, texto, notas)
     categoria, confianza_categoria = _verificar_categoria(respuesta, taxonomia, notas)
+    if taxonomia.parece_no_gasto(texto):
+        # Igual que `casa` y "del fondo": lo decide el texto, no el LLM. No se
+        # descarta nada: se pregunta, porque el marcador puede equivocarse.
+        notas.append(Nota(campo="categoria", texto=NOTA_NO_ES_GASTO))
+        confianza_categoria = Confianza.BAJA
     fecha, confianza_fecha = _verificar_fecha(respuesta, hoy, notas)
     atribuido_a, confianza_atribuido_a = _verificar_atribucion(
         respuesta, texto, remitente, taxonomia, notas
