@@ -18,6 +18,8 @@
 const CAMPOS = ["monto", "categoria", "fecha", "atribuido_a"];
 const CONFIANZAS = ["alta", "media", "baja"];
 const ANTIGUEDAD_MAXIMA_DIAS = 365;
+const NOTA_NO_ES_GASTO =
+  "Parece una devolución o un ingreso, no un gasto. ¿Seguro que es un gasto?";
 
 const COMO_SE_LLAMA = {
   monto: "el monto",
@@ -82,6 +84,12 @@ function normalizar(texto) {
 function contieneFrase(textoNormalizado, frase) {
   const patron = new RegExp(BORDE + escaparRegex(normalizar(frase)) + BORDE, "u");
   return patron.test(textoNormalizado);
+}
+
+/** Dónde empieza cada aparición de la frase, como palabras completas. */
+function posicionesDeFrase(textoNormalizado, frase) {
+  const patron = new RegExp(BORDE + escaparRegex(normalizar(frase)) + BORDE, "gu");
+  return [...textoNormalizado.matchAll(patron)].map((m) => m.index);
 }
 
 // --- Montos (verificacion.py) -----------------------------------------------
@@ -259,6 +267,21 @@ function crearTaxonomia(datos) {
     return mencionaAlguna(texto, compartida.marcadores);
   }
 
+  const noEsGasto = datos.no_es_gasto || { marcadores: [], salvo_despues_de: [] };
+  const salvoDespuesDe = noEsGasto.salvo_despues_de.map(normalizar);
+
+  /** categorias.py: parece_no_gasto. Un marcador después de "que" no cuenta. */
+  function pareceNoGasto(texto) {
+    const normalizado = normalizar(texto);
+    for (const marcador of noEsGasto.marcadores) {
+      for (const inicio of posicionesDeFrase(normalizado, marcador)) {
+        const anterior = /([\p{L}\p{N}_]+)[^\p{L}\p{N}_]*$/u.exec(normalizado.slice(0, inicio));
+        if (anterior === null || !salvoDespuesDe.includes(anterior[1])) return true;
+      }
+    }
+    return false;
+  }
+
   const bolsillos = datos.presupuesto ? datos.presupuesto.bolsillos : [];
 
   return {
@@ -281,6 +304,7 @@ function crearTaxonomia(datos) {
     expresiones,
     mencionaA,
     mencionaGastoCompartido,
+    pareceNoGasto,
     /** Resolución determinista de parentescos: "mi hija" según quién escribe. */
     personasEn: (cita, remitente) =>
       personas.filter((p) => p !== remitente && mencionaA(p, remitente, cita)),
@@ -482,7 +506,12 @@ function verificarGasto({ respuesta, texto, remitente, hoy, taxonomia }) {
   const r = validarRespuesta(respuesta);
   const notas = [];
   const [monto, confianzaMonto] = verificarMontoDe(r, texto, notas);
-  const [categoria, confianzaCategoria] = verificarCategoriaDe(r, taxonomia, notas);
+  let [categoria, confianzaCategoria] = verificarCategoriaDe(r, taxonomia, notas);
+  if (taxonomia.pareceNoGasto(texto)) {
+    // Lo decide el texto, no el LLM (parser.py). Se pregunta, no se descarta.
+    notas.push({ campo: "categoria", texto: NOTA_NO_ES_GASTO });
+    confianzaCategoria = "baja";
+  }
   const [fecha, confianzaFecha] = verificarFechaDe(r, diaDeHoy, notas);
   const [atribuidoA, confianzaAtribucion] = resolverAtribucion(
     r,

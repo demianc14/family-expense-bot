@@ -35,6 +35,7 @@ const FUNCIONES = {
   personas_en: (cita, remitente) => taxonomia.personasEn(cita, remitente),
   menciona_gasto_compartido: (texto) => taxonomia.mencionaGastoCompartido(texto),
   es_compartida: (cita) => taxonomia.esCompartida(cita),
+  parece_no_gasto: (texto) => taxonomia.pareceNoGasto(texto),
   contiene: (nombre) => taxonomia.contiene(nombre),
   describir_para_prompt: () => taxonomia.describirParaPrompt(),
   verificar_gasto: (respuesta, texto, remitente, hoy) =>

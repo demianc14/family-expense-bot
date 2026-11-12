@@ -1,0 +1,38 @@
+# Mensajes sintéticos para la regla "no es gasto" (config/categories.yaml:
+# no_es_gasto). El LLM simulado siempre responde como si fuera un gasto claro,
+# con confianza alta: lo que se prueba es si el texto solo basta para frenarlo.
+#
+# `es_gasto`: lo que una persona diría del mensaje.
+# `dispara`: si la regla lo marca. Lo ideal es dispara == not es_gasto; los
+#   casos donde no coincide son límites conocidos y se cuentan en
+#   docs/evaluacion.md (test_no_es_gasto.py fija los números).
+
+# --- no son gasto: la regla tiene que marcarlos ------------------------------
+
+- { id: devolucion_camisa, remitente: mama, texto: "me devolvieron 20 de una camisa", monto: "20", categoria: ropa, es_gasto: false, dispara: true }
+- { id: reembolso_seguro, remitente: papa, texto: "me reembolsaron 15 del seguro", monto: "15", categoria: extras, es_gasto: false, dispara: true }
+- { id: banco_devolvio, remitente: demian, texto: "el banco me devolvió 12", monto: "12", categoria: deudas_cuotas, es_gasto: false, dispara: true }
+- { id: devolvio_sin_tilde, remitente: demian, texto: "la tienda me devolvio 30 de los zapatos", monto: "30", categoria: ropa, es_gasto: false, dispara: true }
+- { id: reintegro, remitente: mama, texto: "Me reintegraron 40 de la matrícula", monto: "40", categoria: educacion, es_gasto: false, dispara: true }
+- { id: ingreso_trabajito, remitente: papa, texto: "me pagaron 500 de un trabajito", monto: "500", categoria: extras, es_gasto: false, dispara: false } # límite: "me pagaron" quedó fuera, choca con "mi papá me pagó el semestre"
+- { id: ingreso_deposito, remitente: demian, texto: "me depositaron 300", monto: "300", categoria: extras, es_gasto: false, dispara: true }
+- { id: ingreso_transferencia, remitente: hermana, texto: "mi papá me transfirió 50", monto: "50", categoria: mesada, es_gasto: false, dispara: false } # límite: "me transfirió" no está en la lista
+- { id: devolucion_sustantivo, remitente: mama, texto: "devolución de la camisa 20", monto: "20", categoria: ropa, es_gasto: false, dispara: false } # límite: los sustantivos sueltos quedaron fuera
+- { id: devolucion_tras_que, remitente: papa, texto: "dice que me devolvieron 20 de la camisa", monto: "20", categoria: ropa, es_gasto: false, dispara: false } # límite: la excepción del "que"
+
+# --- sí son gasto: la regla NO tiene que marcarlos ---------------------------
+
+- { id: pague_lo_prestado, remitente: demian, texto: "pagué lo que me prestaron, 50", monto: "50", categoria: deudas_cuotas, es_gasto: true, dispara: false }
+- { id: pague_con_lo_devuelto, remitente: demian, texto: "le pagué 40 a mi hermana con lo que me devolvió el banco", monto: "40", categoria: deudas_cuotas, es_gasto: true, dispara: false }
+- { id: compre_con_lo_devuelto, remitente: mama, texto: "con lo que me devolvieron compré una camisa de 20", monto: "20", categoria: ropa, es_gasto: true, dispara: false }
+- { id: gaste_lo_que_me_pagaron, remitente: papa, texto: "gasté 30 en gasolina de lo que me pagaron", monto: "30", categoria: transporte, es_gasto: true, dispara: false }
+- { id: yo_devolvi_plata, remitente: demian, texto: "le devolví 30 a mi hermana", monto: "30", categoria: deudas_cuotas, es_gasto: true, dispara: false }
+- { id: devolvi_y_compre, remitente: mama, texto: "devolví la camisa y compré otra de 25", monto: "25", categoria: ropa, es_gasto: true, dispara: false }
+- { id: costo_de_la_devolucion, remitente: hermana, texto: "pagué 5 por la devolución del paquete", monto: "5", categoria: extras, es_gasto: true, dispara: false }
+- { id: pague_prestamo, remitente: papa, texto: "pagué 100 del préstamo", monto: "100", categoria: deudas_cuotas, es_gasto: true, dispara: false }
+- { id: pago_simple, remitente: demian, texto: "pagué 15 dólares de taxi ayer", monto: "15", categoria: transporte, es_gasto: true, dispara: false }
+- { id: yo_pague_a_otro, remitente: mama, texto: "le pagué 20 al jardinero", monto: "20", categoria: hogar, es_gasto: true, dispara: false }
+- { id: dame_no_es_me, remitente: papa, texto: "dame pagaron... no, pagué 8 de parqueo", monto: "8", categoria: transporte, es_gasto: true, dispara: false }
+- { id: otro_me_pago_el_semestre, remitente: hermana, texto: "mi papá me pagó el semestre, 900", monto: "900", categoria: educacion, es_gasto: true, dispara: false }
+- { id: otros_me_pagaron_la_matricula, remitente: demian, texto: "mis papás me pagaron la matrícula, 300", monto: "300", categoria: educacion, es_gasto: true, dispara: false }
+- { id: vuelto_mal_devuelto, remitente: demian, texto: "me devolvieron mal el vuelto, pagué 20 de taxi", monto: "20", categoria: transporte, es_gasto: true, dispara: true } # falso positivo conocido: cuesta una pregunta

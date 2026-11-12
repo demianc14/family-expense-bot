@@ -105,6 +105,33 @@ ingresos:
     descripcion: "Lo que no encaja en las demás."
 
 # ---------------------------------------------------------------------------
+# Lo que no es un gasto
+# ---------------------------------------------------------------------------
+# Una devolución o un ingreso escritos en el chat no son un gasto. Como con la
+# casa y "del fondo", lo decide el texto y no el LLM: si el mensaje trae uno de
+# estos marcadores, la categoría queda con confianza baja y el bot pregunta
+# antes de guardar. No bloquea: si sí era un gasto, se confirma y listo.
+#
+# Frases con "me", no palabras sueltas: "pagué 5 por la devolución del paquete"
+# y "le devolví 30 a mi hermana" son gastos. "me prestaron" queda fuera a
+# propósito. "me pagó" y "me pagaron" también: "mi papá me pagó el semestre" es
+# un gasto que asumió otra persona, y la regla lo frenaba (docs/evaluacion.md).
+#
+# `salvo_despues_de`: el marcador no cuenta si la palabra anterior es una de
+# estas. "Le pagué a mi hermana lo que me devolvió el banco" es un gasto.
+no_es_gasto:
+  marcadores:
+    - me devolvieron
+    - me devolvió
+    - me reembolsaron
+    - me reembolsó
+    - me reintegraron
+    - me depositaron
+    - me transfirieron
+  salvo_despues_de:
+    - que
+
+# ---------------------------------------------------------------------------
 # Atribuciones: quién asume el costo
 # ---------------------------------------------------------------------------
 # Por defecto el gasto se atribuye a quien escribe el mensaje, con confianza

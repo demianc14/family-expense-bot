@@ -327,6 +327,26 @@ def test_compuerta_sobre_las_fixtures() -> None:
     comparar("verificar_gasto", entradas, _extraer_py)
 
 
+def test_no_es_gasto_marca_lo_mismo() -> None:
+    casos = yaml.safe_load((Path(__file__).parent / "fixtures" / "no_es_gasto.yaml").read_text())
+    textos = (
+        [c["texto"] for c in casos]
+        + TEXTOS_RAROS
+        + ["que me devolvieron", "que, me devolvió", "QUE  me reembolsó"]
+    )
+    comparar("parece_no_gasto", [[t] for t in textos], TAXONOMIA.parece_no_gasto)
+    entradas = [
+        [
+            BASE_LLM | {"monto": c["monto"], "categoria": c["categoria"]},
+            c["texto"],
+            c["remitente"],
+            HOY.isoformat(),
+        ]
+        for c in casos
+    ]
+    comparar("verificar_gasto", entradas, _extraer_py)
+
+
 # La batería de docs/decisiones.md, con la cita que devolvería un LLM que sigue el prompt.
 # Lo que se prueba acá es la resolución, no al LLM.
 BATERIA_README = [

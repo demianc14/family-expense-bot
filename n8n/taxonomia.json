@@ -347,5 +347,19 @@
       "nombre": "otros",
       "descripcion": "Lo que no encaja en las demás."
     }
-  ]
+  ],
+  "no_es_gasto": {
+    "marcadores": [
+      "me devolvieron",
+      "me devolvió",
+      "me reembolsaron",
+      "me reembolsó",
+      "me reintegraron",
+      "me depositaron",
+      "me transfirieron"
+    ],
+    "salvo_despues_de": [
+      "que"
+    ]
+  }
 }
