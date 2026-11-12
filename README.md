@@ -17,9 +17,9 @@ y una Mini App para verlo en el celular.
   lo resuelve. → [decisiones](docs/decisiones.md)
 - **Una métrica de calidad honesta.** Se mide sobre *todos* los intentos, no solo
   sobre los gastos guardados, porque sobre esos daría 100% siempre. → [calidad](docs/calidad.md)
-- **Evaluado contra 84 mensajes etiquetados.** Lo que se mide son los errores
+- **Evaluado contra 104 mensajes etiquetados.** Lo que se mide son los errores
   *silenciosos* (equivocado y con confianza alta): con flash-lite, 0 en monto y en
-  fecha, y 2 de 75 en categoría. → [evaluación](docs/evaluacion.md)
+  fecha, 2 de 82 en categoría y 2 de 99 en de quién es el gasto. → [evaluación](docs/evaluacion.md)
 - **"¿Puedo gastar esto?" lo decide el código**, con el ritmo del mes. Los saldos
   nunca pasan por el LLM. → [presupuesto](docs/presupuesto.md)
 - **La misma lógica dos veces:** un pipeline en Python y un agente en n8n, con
