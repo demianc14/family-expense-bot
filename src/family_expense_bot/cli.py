@@ -111,7 +111,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--migrar",
         action="store_true",
-        help="Agrega a una base existente las columnas nuevas del esquema. Respáldala antes.",
+        help="Agrega a una base existente las tablas y columnas nuevas del esquema. "
+        "Respáldala antes.",
     )
     return parser
 
