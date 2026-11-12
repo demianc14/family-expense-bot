@@ -6,12 +6,13 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 
 > Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una tarea a la vez, y cada una termina con una PR y una evidencia (tabla, test o captura).
 
-## Estado al 2026-11-11 (para retomar)
+## Estado al 2026-11-12 (para retomar)
 
 - **En `main` (9a583c1, 11-nov):** Fases A y B completas; Fase C con la evaluación hecha, flash descartado, `--desde-corrida` y la mejora 1; Mini App con coma decimal, subcategoría, bolsillo para `otros`, editar y borrar, e ingresos extra (PRs #13 a #15); docs de la caída del 10-nov (PRs #16 y #17).
 - **Verificado el 11-nov en `main`:** `pytest` 519 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
 - **D1 (PR #7, rama `fase-d-alertas`):** rebaseada sobre `main` el 11-nov, con la alerta calculada sobre el presupuesto que incluye ingresos extra, sin repetir avisos al editar ni al reiniciar. `pytest` 545 pasan en la rama. Falta subirla y mergear.
 - **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; dudó cuando debía en 24 de 26 (falta la devolución contada como gasto).
+- **Renombre (PR #19):** nombre elegido, `personal-finance-bot`. Los enlaces del repo ya están cambiados en la PR; falta renombrar en GitHub y mergearla.
 - **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
 
 ### Operación
@@ -37,14 +38,15 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 
 ## Tareas, en orden
 
-Una rama y una PR por tarea. Lo marcado **DECIDE DEMIAN** no se hace sin su respuesta.
+Una rama y una PR por tarea. Lo marcado **DECIDE DEMIAN** no se hace sin su respuesta. Las reglas de trabajo completas están en `CLAUDE.md`.
 
-### 1. Renombrar el repo (DECIDE DEMIAN el nombre)
+### 1. Renombrar el repo a `personal-finance-bot`
 
-- [ ] Demian elige el nombre y renombra en GitHub (Settings → General).
-- [ ] Enlaces al día dentro del repo: título y primera línea del README, badge de CI, enlaces a releases y tags, `CLAUDE.md` (Objetivo y Rol), `description` de `pyproject.toml` y menciones en `docs/`.
-- [ ] El paquete `family_expense_bot` y el comando `family-expense-bot` **no** se renombran: cambio grande sin valor visible. Queda como decisión en `docs/decisiones.md`.
-- [ ] Lista para Demian de los enlaces de fuera del repo (CV, LinkedIn, README del perfil, brief del portafolio).
+- [x] Demian eligió el nombre (11-nov).
+- [x] Enlaces al día dentro del repo: título del README, badge de CI, enlace al release, `CLAUDE.md` (Objetivo y Rol) y `description` de `pyproject.toml` (PR #19).
+- [x] El paquete `family_expense_bot` y el comando `family-expense-bot` **no** se renombran: cambio grande sin valor visible. Decisión en `docs/decisiones.md` (PR #19).
+- [ ] Demian renombra en GitHub (Settings → General) y después se mergea la PR #19.
+- [ ] Demian cambia los enlaces de fuera del repo: CV, LinkedIn, README del perfil de GitHub y brief del portafolio.
 
 ### 2. Mergear D1 (alertas al 80 % y 100 %)
 
@@ -52,11 +54,11 @@ Una rama y una PR por tarea. Lo marcado **DECIDE DEMIAN** no se hace sin su resp
 - [x] Test: la alerta y la Mini App usan el mismo presupuesto con ingresos extra.
 - [x] Test: un reinicio no reenvía una alerta ya enviada.
 - [x] Editar un gasto no repite el aviso (el "antes" incluye el gasto reemplazado).
-- [ ] PR #7 verde y mergeada.
+- [ ] Subir la rama rebaseada (`git push --force-with-lease`, lo corre Demian), PR #7 verde y mergeada.
 
 ### 3. Mejora 2 de la Fase C: devoluciones e ingresos no son gasto
 
-- [ ] Decidir dónde se resuelve (prompt, verificación o los dos).
+- [ ] Decidir dónde se resuelve (DECIDE DEMIAN). Propuesta: solo código, con marcadores de "no es gasto" en el yaml, medido con `--desde-corrida` y 0 llamadas; el prompt solo si eso deja casos sin cubrir.
 - [ ] Medir antes y después contra el banco de 84 casos.
 - [ ] Fila en la tabla "antes → después" de `docs/evaluacion.md`. Si no mejora, no se mergea y se documenta.
 
