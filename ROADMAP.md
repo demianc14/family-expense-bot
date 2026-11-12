@@ -2,16 +2,18 @@
 
 Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, está medido y hace algo útil sin que se lo pidan. Tesis: *el LLM propone, el código verifica*.
 
-> Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una fase a la vez, y cada fase termina con una PR y una evidencia (tabla, test o captura).
+El repo cuenta una sola historia de producto: **captura verificada → conciliación en SQL → análisis en Power BI**.
 
-## Estado al 2026-11-09 (para retomar)
+> Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una tarea a la vez, y cada una termina con una PR y una evidencia (tabla, test o captura).
 
-- **En `main` (fe3c704, 9-nov):** Fases A y B completas; Fase C con la evaluación hecha, flash cerrado como descartado, `--desde-corrida` y la mejora 1 (PRs #6, #8, #9, #10); el bot verifica `APP_URL` al arrancar (PR #11); hosting con Tailscale Funnel; Mini App con validación firmada de `initData` y allowlist.
-- **Verificado el 9-nov en `main`:** `pytest` 452 pasan, `ruff` y `mypy` sin errores. La CI corre en Python 3.12 y 3.14 con historial completo y Node.
-- **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; 4 de 26 casos que debían dudar no dudaron (devolución como gasto, `otros` con confianza alta).
-- **Flash:** 15 de 84 casos (`evals/corridas/gemini-3.5-flash-64386658.jsonl`); el plan gratuito da 20 requests/día y ya se descartó para producción por latencia y cuota. **Decisión: no se completa.** Se deja la corrida parcial documentada.
-- **Sin mergear:** la rama `fase-d-alertas` tiene D1 hecho (alertas al 80 % y 100 %, también desde la Mini App; ver `docs/presupuesto.md#alertas`). Espera a que se cierre la Fase C.
-- **Lo que falta para el perfil objetivo:** una automatización que actúe sola (Fase D) y, opcionalmente, un paso de agente con herramientas (Fase F). Hoy todo ocurre cuando alguien escribe.
+## Estado al 2026-11-12 (para retomar)
+
+- **En `main` (9a583c1, 11-nov):** Fases A y B completas; Fase C con la evaluación hecha, flash descartado, `--desde-corrida` y la mejora 1; Mini App con coma decimal, subcategoría, bolsillo para `otros`, editar y borrar, e ingresos extra (PRs #13 a #15); docs de la caída del 10-nov (PRs #16 y #17).
+- **Verificado el 11-nov en `main`:** `pytest` 519 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
+- **D1 (PR #7, rama `fase-d-alertas`):** rebaseada sobre `main` el 11-nov, con la alerta calculada sobre el presupuesto que incluye ingresos extra, sin repetir avisos al editar ni al reiniciar. `pytest` 545 pasan en la rama. Falta subirla y mergear.
+- **Evaluación** (`docs/evaluacion.md`): 84 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 75 en categoría; dudó cuando debía en 24 de 26 (falta la devolución contada como gasto).
+- **Renombre (PR #19):** nombre elegido, `personal-finance-bot`. Los enlaces del repo ya están cambiados en la PR; falta renombrar en GitHub y mergearla.
+- **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
 
 ### Operación
 
@@ -34,53 +36,117 @@ Objetivo: que quien llegue al repo vea en dos minutos un sistema que funciona, e
 - [x] Ingresos extra: se suman al fijo y se reparten 30/30/20/20; mismo flujo que los gastos.
 - [ ] En la Mac: respaldo, `--migrar` y `docker compose up -d --build` (ver `docs/mini-app.md`).
 
-## Fase C. Cerrar la evaluación (semana 1)
+## Tareas, en orden
+
+Una rama y una PR por tarea. Lo marcado **DECIDE DEMIAN** no se hace sin su respuesta. Las reglas de trabajo completas están en `CLAUDE.md`.
+
+### 1. Renombrar el repo a `personal-finance-bot`
+
+- [x] Demian eligió el nombre (11-nov).
+- [x] Enlaces al día dentro del repo: título del README, badge de CI, enlace al release, `CLAUDE.md` (Objetivo y Rol) y `description` de `pyproject.toml` (PR #19).
+- [x] El paquete `family_expense_bot` y el comando `family-expense-bot` **no** se renombran: cambio grande sin valor visible. Decisión en `docs/decisiones.md` (PR #19).
+- [ ] Demian renombra en GitHub (Settings → General) y después se mergea la PR #19.
+- [ ] Demian cambia los enlaces de fuera del repo: CV, LinkedIn, README del perfil de GitHub y brief del portafolio.
+
+### 2. Mergear D1 (alertas al 80 % y 100 %)
+
+- [x] Rebase sobre `main`.
+- [x] Test: la alerta y la Mini App usan el mismo presupuesto con ingresos extra.
+- [x] Test: un reinicio no reenvía una alerta ya enviada.
+- [x] Editar un gasto no repite el aviso (el "antes" incluye el gasto reemplazado).
+- [ ] Subir la rama rebaseada (`git push --force-with-lease`, lo corre Demian), PR #7 verde y mergeada.
+
+### 3. Mejora 2 de la Fase C: devoluciones e ingresos no son gasto
+
+- [ ] Decidir dónde se resuelve (DECIDE DEMIAN). Propuesta: solo código, con marcadores de "no es gasto" en el yaml, medido con `--desde-corrida` y 0 llamadas; el prompt solo si eso deja casos sin cubrir.
+- [ ] Medir antes y después contra el banco de 84 casos.
+- [ ] Fila en la tabla "antes → después" de `docs/evaluacion.md`. Si no mejora, no se mergea y se documenta.
+
+### 4. Conciliación de estados de cuenta (Fase G, fases 0 a 2)
+
+Es la **prioridad del repo** después de las tareas 1 a 3. Ver [Fase G](#fase-g-conciliación-de-estados-de-cuenta).
+
+### 5. Después de la conciliación (si hay tiempo, en este orden)
+
+- [ ] D2: resumen semanal automático (JobQueue, sin LLM, idempotente, tests con reloj falso). Puede incluir "movimientos del banco sin registrar".
+- [ ] `/estado`: latencia p50/p90 y tasa de error de 7 días, desde la tabla `extracciones`.
+- [ ] README: sección corta "Qué hace sin que se lo pidas".
+
+## Fase G. Conciliación de estados de cuenta
+
+El bot sabe lo que Demian le escribe; el banco y la tarjeta saben lo que de verdad salió. La conciliación cruza las dos fuentes y responde: qué gasté y no registré, qué pago cada mes sin pensarlo y cuánto me cuesta el banco. Métrica nueva: **cobertura**, el porcentaje del gasto real que capturó el bot.
+
+Principios, además de los de `CLAUDE.md`:
+
+- **El estado de cuenta cuadra o no entra.** Saldo anterior + créditos − débitos = saldo final, al centavo y en enteros. Si no cuadra, se rechaza el estado completo.
+- **La conciliación la deciden reglas en SQL, no el LLM.** En orden y con nombre; cada par guarda qué regla lo unió.
+- **Nada se guarda como gasto sin confirmación**, y nada se borra: anulación con fecha y motivo.
+- **Los estados de cuenta reales nunca entran al repo ni van a un LLM** sin que Demian lo decida. Tests, capturas y el `.pbix` público usan datos sintéticos.
+
+### G0. Fuentes (DECIDE DEMIAN)
+
+- [ ] Banco y tarjeta; si exportan CSV o Excel; si el PDF trae texto.
+- [ ] Desde qué mes hay estados de cuenta y cuánto se paga en efectivo.
+- [ ] Dónde corre Power BI (Desktop no corre en Mac).
+- [ ] Respuestas en `docs/conciliacion.md`.
+
+### G1. Ingesta y modelo
+
+- [ ] Esquema con migración: `estados_cuenta` (con `hash_archivo` único), `movimientos` (centavos con signo, anulación) y `conciliaciones` (qué regla unió cada par).
+- [ ] `conciliacion/`: `ingesta.py` (CSV/Excel → contrato Pydantic), `verificacion.py` (invariante de saldo, fechas en el periodo, duplicados), `reglas.py` y `recurrentes.py`.
+- [ ] `config/bancos.yaml`: un banco nuevo es una entrada en el yaml, no código.
+- [ ] CLI: `--importar-estado`, `--conciliar <AAAA-MM>` y `--exportar-bi`.
+- [ ] `scripts/estado_sintetico.py`: estados sintéticos que cuadran y variantes que no.
+- [ ] `.gitignore` con excepciones acotadas para lo sintético, y `tests/test_privacy.py` ampliado a CSV, xlsx y pbix.
+- [ ] **Cierre:** importar un estado sintético funciona, uno que no cuadra se rechaza con un mensaje exacto y el mismo archivo dos veces no duplica nada.
+
+### G1b. PDF (solo si G0 dice "solo PDF")
+
+- [ ] Texto con una librería de PDF y reglas; el LLM solo si las reglas no alcanzan y con la misma verificación (cada monto aparece literal en la página y el saldo cuadra).
+
+### G2. Conciliación, SQL y Power BI
+
+- [ ] Vistas en `sql/vistas.sql`: `v_cobertura_mensual`, `v_no_registrados`, `v_recurrentes`, `v_costo_banco` y `v_gasto_real_bolsillo`.
+- [ ] Tests de SQL: conteos, totales contra el estado de cuenta y ningún movimiento conciliado dos veces.
+- [ ] Mini App: lista "Sin registrar" con Registrar o Ignorar, por el flujo de confirmación de siempre.
+- [ ] `--exportar-bi` escribe las vistas a CSV; dashboard de 3 páginas (Cobertura, Gasto real, Costo del banco y suscripciones) con datos sintéticos.
+- [ ] Medición: precisión y recall por regla sobre pares etiquetados a mano, con casos difíciles (mismo monto dos veces en la semana, pagos partidos, devoluciones).
+- [ ] **Cierre:** vistas con tests, "Sin registrar" funcionando, dashboard en PDF y capturas, tabla de precisión y recall en `docs/conciliacion.md` y una línea en el README.
+
+## Fase C. Evaluación (cerrada salvo la mejora 2)
 
 - [x] Banco de 84 casos y `--evaluar` con errores silenciosos separados.
-- [x] flash-lite medido.
-- [x] Cerrar flash como "descartado por cuota y latencia" en `docs/evaluacion.md` y en este roadmap.
-- [x] Mejora 1: `otros` nunca con confianza alta (igual que `casa`). Medida antes y después contra el banco.
-- [ ] Mejora 2: devoluciones e ingresos ("me devolvieron 20") se rechazan como "no es gasto". Medida antes y después.
-- [ ] Mejora 3: separar `personal` de `educacion` en el yaml.
-- [ ] Mejora 4: timeout más corto con un reintento.
-- [ ] Tabla "antes → después" en `docs/evaluacion.md` y una línea en el README. Esa tabla es la evidencia de portafolio de esta fase.
+- [x] flash-lite medido; flash descartado por cuota y latencia.
+- [x] Mejora 1: `otros` nunca con confianza alta. Medida antes y después.
+- [ ] Mejora 2: devoluciones e ingresos (tarea 3).
+- Mejoras 3 (separar `personal` de `educacion`) y 4 (timeout más corto con un reintento): si hay tiempo.
 
 Regla: cada mejora es una PR chica; si el número empeora, se descarta y se documenta.
 
-## Fase D. Automatización que actúa sola (semanas 2 y 3)
+## Fase D. Automatización que actúa sola
 
-Se hace en este orden, de lo más determinista a lo más complejo. Ninguna usa el LLM.
+- [ ] D1. Alertas al 80 % y 100 % (tarea 2).
+- [ ] D2. Resumen semanal (tarea 5).
+- D3. Gastos recurrentes: si hay tiempo. La conciliación detecta suscripciones (`v_recurrentes`) y puede reemplazarla; se evalúa al llegar a G2.
+- Requisitos: tests con reloj falso, idempotencia y envío solo a IDs de la allowlist.
 
-- [ ] D1. Alerta cuando un bolsillo llega al 80 %: mensaje de Telegram una sola vez por bolsillo y mes. *(Hecha en `fase-d-alertas`, sin mergear.)*
-- [ ] D2. Resumen semanal automático al chat (JobQueue de python-telegram-bot; sin n8n).
-- [ ] D3. Gastos recurrentes (suscripciones, cuotas): el bot propone el gasto cada mes y se confirma con un toque; nunca se guarda solo.
-- [ ] Requisitos de las tres: tests con reloj falso, **idempotencia** (un reinicio del bot no reenvía lo ya enviado) y envío solo a IDs de la allowlist. D1 la saca del cruce antes/después del mismo gasto, sin estado en la base; D2 y D3 no tienen un gasto que las dispare, así que guardan el último envío en la base.
-- [ ] README: sección corta "Qué hace sin que se lo pidas".
-
-## Fase E. Operación mínima (semana 3 o 4)
+## Fase E. Operación mínima
 
 - [x] Hosting estable: Tailscale Funnel (2026-10-26, ver `docs/decisiones.md`).
 - [x] Demo corta (GIF de la Mini App en el README).
-- [ ] Logs estructurados (una línea por extracción: modelo, latencia, resultado, error).
-- [ ] Comando `/estado`: latencia p50/p90 y tasa de error de los últimos 7 días, desde la tabla `extracciones`. Nada de Grafana ni Prometheus.
+- [ ] `/estado` (tarea 5).
 
-## Fase F. Consultas con herramientas (opcional, solo si C y D están cerradas)
+## Fase F. Consultas con herramientas: fuera de este repo
 
-Un paso de agente pequeño y medible, para mostrar tool use sin abrir otro repo.
-
-- [ ] El LLM recibe una pregunta ("¿cuánto gasté en comida este mes?") y **elige una función de solo lectura** con parámetros tipados (Pydantic): `gasto_por_categoria`, `saldo_bolsillo`, `puedo_gastar`, `ultimos_gastos`.
-- [ ] El código ejecuta la función y **arma la respuesta con los números que devolvió**; el LLM no escribe cifras. Mismo principio, un nivel más arriba.
-- [ ] Verificación: si el LLM pide una función que no existe o parámetros inválidos, se rechaza. Sin herramientas de escritura.
-- [ ] Evaluación aparte: 30 preguntas etiquetadas; se mide función correcta, parámetros correctos y cifras que no vienen de la herramienta (meta: 0).
-- [ ] Límite honesto en el README: un solo usuario, datos chicos, cuota gratuita. OJO: la cuota diaria de flash-lite no está documentada aquí; verificarla antes de planificar la evaluación.
-
-Si la Fase D no sale primero, no se empieza esta.
+Decidido el 10-nov: tool use, RAG y agentes van al proyecto del asistente académico, para que cada repo muestre algo distinto. Aquí no se hace.
 
 ## Fuera de alcance
 
-- OCR de recibos, fine-tuning, importar Excel, multi-moneda, multiusuario, WhatsApp.
+- Fase F (ver arriba).
+- Conexión directa con el banco (APIs, open banking) y scraping de la banca web.
+- Categorización de movimientos con LLM: primero reglas; el LLM solo si la medición muestra que hace falta y con OK de Demian.
+- OCR de fotos, fine-tuning, importar Excel de gastos, multi-moneda, multiusuario, WhatsApp.
 - Más trabajo en la versión n8n (queda congelada como segunda implementación).
-- Dashboards o frameworks sin una pregunta que respondan.
 - Hosting en la nube: Funnel basta para una persona.
 
 ## Criterio de "terminado"
@@ -89,7 +155,10 @@ Si la Fase D no sale primero, no se empieza esta.
 - [x] CI verde con badge.
 - [x] Tabla de evaluación con números reales.
 - [x] Historial sin datos personales.
-- [ ] Tabla "antes → después" de las mejoras de la Fase C.
-- [ ] Al menos una automatización que actúa sin que se pida (Fase D).
-- [ ] `/estado` con latencia y errores (Fase E).
+- [ ] Repo renombrado y enlaces al día.
+- [ ] Tabla "antes → después" de las mejoras de la Fase C, con la mejora 2.
+- [ ] Al menos una automatización que actúa sin que se pida (D1).
+- [ ] Conciliación con invariante de saldo probado y precisión/recall medidos.
+- [ ] Dashboard Power BI con datos sintéticos en el repo (PDF + capturas).
+- [ ] `/estado` con latencia y errores.
 - [ ] README de una pantalla y limitaciones honestas, al día con lo anterior.

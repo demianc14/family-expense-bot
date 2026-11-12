@@ -146,6 +146,67 @@ Pedidas por Demian; detalle en docs/mini-app.md y docs/decisiones.md:
   "sueldo" (duplicaría el fijo). Mismo flujo que los gastos: revisar, sí, editar,
   borrar. `resumen_presupuesto(..., extra=0)` da lo de siempre: n8n no los ve.
 
+## Decisión de rumbo (resuelta 2026-11-10)
+
+El repo es la herramienta real de finanzas personales de Demian y una pieza
+central de su portafolio. Cuenta una sola historia de producto: **captura
+verificada → conciliación en SQL → análisis en Power BI**. Lo que no se debe
+deshacer:
+
+- **El repo se renombra a `personal-finance-bot`** (elegido el 2026-11-11). El
+  paquete `family_expense_bot` y el comando `family-expense-bot` no se
+  renombran: ver `docs/decisiones.md`.
+- **Entra la conciliación de estados de cuenta** (Fase G de `ROADMAP.md`), con
+  SQL y un dashboard de Power BI. Es la prioridad del repo después de las
+  tareas 1 a 3 del roadmap.
+- **La Fase F (tool use, consultas con LLM) sale de este repo.** RAG y agentes
+  van al proyecto del asistente académico, para que cada repo muestre algo
+  distinto.
+
+### Principios de la conciliación (no negociables)
+
+- **El estado de cuenta cuadra o no entra.** Saldo anterior + créditos −
+  débitos = saldo final, al centavo y en enteros (como `storage/dinero.py`). Si
+  no cuadra se rechaza **el estado completo**; nunca se importa a medias. El
+  mismo archivo no se importa dos veces (`hash_archivo` único).
+- **La conciliación la deciden reglas, no el LLM.** Reglas deterministas en
+  SQL, en orden y con nombre: monto exacto y misma fecha, monto exacto a ±3
+  días, y monto exacto con descripción parecida. Cada par guarda qué regla lo
+  unió, y ningún movimiento queda conciliado dos veces.
+- **Nada se guarda como gasto sin confirmación.** Un movimiento no registrado
+  se **propone** (Telegram o Mini App) y pasa por el flujo de siempre.
+- **Sin borrado:** anulación con fecha y motivo, igual que los gastos.
+- **Los estados de cuenta reales nunca entran al repo.** Tests, capturas y el
+  `.pbix` público usan datos sintéticos. `.gitignore` sigue ignorando `*.csv`,
+  `*.xlsx`, `*.pbix` y `data/raw/`; lo sintético entra con excepciones
+  explícitas y acotadas, y `tests/test_privacy.py` falla si algo se cuela.
+- **No se manda un estado de cuenta real a un LLM** sin que Demian lo decida
+  explícitamente. Tampoco se categorizan movimientos con LLM: primero reglas.
+- **Un banco nuevo es una entrada en `config/bancos.yaml`**, no código nuevo
+  (como `categories.yaml`).
+- **CSV o Excel primero; el PDF solo si no hay export**, como subfase aparte y
+  con la misma verificación (cada monto aparece literal en la página y el
+  saldo cuadra).
+- **No se commitea un `.pbix`** sin que Demian confirme que es sintético. Las
+  cifras de cobertura con datos reales se calculan solo en local y van al
+  README solo si Demian lo aprueba.
+
+## Reglas de trabajo (vigentes desde 2026-11-10)
+
+- **Una rama y una PR por tarea.** Antes de cada commit: `pytest`,
+  `ruff check .`, `ruff format --check .` y `mypy`.
+- **No llamar a Gemini sin avisar:** decir cuántas llamadas hará una corrida y
+  esperar el OK.
+- **Toda cifra del README o de `docs/` sale de un comando** o de una corrida
+  guardada.
+- **Si hay dos diseños razonables, proponer en 5 líneas y esperar.** Lo marcado
+  **DECIDE DEMIAN** en `ROADMAP.md` no se hace sin su respuesta.
+- **Sin dependencias nuevas** salvo que la tarea lo justifique por escrito en
+  la PR.
+- **Si una mejora medida no mejora, no se mergea** y se documenta.
+- **Al terminar cada sesión, reportar:** qué quedó hecho (con PRs), las cifras
+  con su comando y qué decide Demian.
+
 ## Arquitectura
 
 ```
@@ -172,13 +233,22 @@ src/family_expense_bot/
   dashboard/
     report.py            # agregaciones mensuales y reporte de calidad
     presupuesto.py       # bolsillos 30/30/20/20, "¿puedo?", alertas
+  conciliacion/          # Fase G, por construir
+    ingesta.py           # CSV/Excel del banco → contrato Pydantic
+    verificacion.py      # invariante de saldo, fechas en el periodo, duplicados
+    reglas.py            # reglas de cruce movimiento ↔ gasto, con nombre
+    recurrentes.py       # suscripciones y cargos que se repiten
   evaluacion.py          # banco etiquetado contra el LLM real (--evaluar)
   config.py
   cli.py
 config/categories.yaml   # taxonomía, fuente de verdad
+config/bancos.yaml       # (Fase G) formato de cada banco: columnas, fecha, decimal, signo
+sql/vistas.sql           # (Fase G) cobertura, no registrados, recurrentes, costo del banco
+powerbi/                 # (Fase G) .pbix y CSV, solo con datos sintéticos
 evals/                   # mensajes.yaml (sintético) y corridas/ guardadas
 n8n/                     # segunda implementación, congelada
 scripts/capturas.py      # capturas del README con datos sintéticos
+scripts/estado_sintetico.py  # (Fase G) estados de cuenta sintéticos que cuadran, y que no
 data/processed/          # NUNCA se sube al repo — solo local, .gitignore
 tests/                   # fixtures de mensajes; el LLM siempre mockeado
 ```
@@ -248,3 +318,8 @@ pendiente, y no avanzar sin tests pasando — mismo criterio que
 - No mezclar el I/O del bot con la lógica de extracción/categorización.
 - No asumir WhatsApp ni Telegram sin haberlo confirmado con Demian primero.
 - No avanzar de fase sin que la fase anterior tenga tests pasando.
+- No importar a medias un estado de cuenta que no cuadra.
+- No dejar que el LLM decida una conciliación ni mandarle un estado de cuenta real.
+- No versionar estados de cuenta reales ni un `.pbix` sin confirmar que es sintético.
+- No hacer en este repo tool use, RAG ni agentes: van al asistente académico.
+- No conectarse al banco (APIs, open banking, scraping con credenciales).
