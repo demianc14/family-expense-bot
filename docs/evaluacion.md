@@ -10,8 +10,10 @@ gracias al código que verifica.
 Los tests del parser usan respuestas del LLM **simuladas**: prueban la
 verificación, no el modelo. El reporte de calidad mide en producción, pero con
 una persona registrando no hay volumen para comparar modelos ni prompts. Esto
-llena ese hueco: 84 mensajes etiquetados a mano (`evals/mensajes.yaml`) que se
-pasan por el mismo `extraer()` que usa el bot, contra Gemini real.
+llena ese hueco: 104 mensajes etiquetados a mano (`evals/mensajes.yaml`) que se
+pasan por el mismo `extraer()` que usa el bot, contra Gemini real. Las corridas
+guardadas cubren los 84 primeros; los 20 de devoluciones e ingresos se agregaron
+con la mejora 2 y todavía no tienen corrida.
 
 ## Qué se mide
 
@@ -167,6 +169,12 @@ papá me pagó el semestre, 900"), que es un gasto bien leído: categoría pasab
 duda por el LLM. Se quitaron y el número volvió a 66 / 7. Los ingresos por
 "me pagaron" siguen dependiendo de que el LLM dude.
 
+**Lo que falta medir.** Los 20 mensajes nuevos también están en el banco
+(`evals/mensajes.yaml`, etiquetas `no_gasto` y `parece_no_gasto`), pero la
+corrida guardada no tiene respuesta de Gemini para ellos y `--desde-corrida` no
+los puntúa: la tabla de arriba sigue siendo sobre 84 casos. Medirlos contra el
+modelo real son 20 llamadas.
+
 ## Correrlo
 
 ```bash
@@ -189,7 +197,7 @@ el modelo, que no es determinista, mueva los números.
 - **El banco es sintético y lo escribió quien escribió el prompt.** Puede tener
   los mismos puntos ciegos. No hay mensajes reales anonimizados, porque
   `extracciones` no guarda el texto, a propósito ([calidad](calidad.md)).
-- **84 casos son pocos.** Un caso es más de un punto porcentual: las diferencias
+- **84 casos medidos son pocos.** Un caso es más de un punto porcentual: las diferencias
   chicas entre modelos no significan nada.
 - **Un solo modelo medido entero.** Flash quedó en 15 casos (ver arriba).
 - **Una sola corrida.** Gemini no es determinista, así que repetir la

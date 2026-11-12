@@ -120,6 +120,7 @@ Principios, además de los de `CLAUDE.md`:
 - [x] Mejora 1: `otros` nunca con confianza alta. Medida antes y después.
 - [x] Mejora 2: devoluciones no son gasto (tarea 3). Los ingresos por "me pagaron" quedaron fuera: chocan con "mi papá me pagó el semestre".
 - Mejoras 3 (separar `personal` de `educacion`) y 4 (timeout más corto con un reintento): si hay tiempo.
+- Pendiente de la mejora 2: correr contra Gemini los 20 casos nuevos del banco (`no_gasto` y `parece_no_gasto`). Son 20 llamadas y piden el OK de Demian.
 - Mejora 5, para después: ingresos por "me pagaron" resueltos en el prompt. Por marcadores chocan con la atribución (`docs/evaluacion.md`). Cambia el prompt, así que pide una corrida nueva contra Gemini y el OK de Demian.
 
 Regla: cada mejora es una PR chica; si el número empeora, se descarta y se documenta.
