@@ -1,0 +1,68 @@
+# Formato del export de cada banco. Fuente de verdad de la ingesta.
+#
+# Un banco nuevo es una entrada acá, no código. Ver docs/conciliacion.md.
+# Las claves (banco_sintetico) son las que se guardan en la base: no renombrar
+# un banco que ya tiene estados importados.
+#
+# Por banco:
+#   nombre          cómo se muestra.
+#   codificacion    utf-8 (con o sin BOM), latin-1 o cp1252. Por defecto utf-8.
+#   delimitador     un carácter. Por defecto ",".
+#   filas_a_saltar  líneas antes del encabezado. Por defecto 0.
+#   columnas        nombre exacto de cada columna en el encabezado: fecha,
+#                   descripcion, y el monto como `monto` (una columna con signo)
+#                   o como `debito` y `credito` (dos columnas sin signo).
+#                   `saldo` es opcional: el saldo después de cada movimiento.
+#   formato_fecha   formato de strptime, con %d, %m y %Y.
+#   decimal         punto o coma. Nunca se adivina, y no hay separador de miles.
+#   signo           negativo_sale (por defecto) o positivo_sale (una tarjeta).
+#   tipos           reglas en orden que asignan movimientos.tipo; gana la primera.
+#                   `contiene` son frases completas, sin distinguir tildes ni
+#                   mayúsculas; `signo` (sale o entra) es opcional. Si ninguna
+#                   coincide: lo que sale es debito y lo que entra, credito.
+#
+# Los dos bancos de abajo son inventados: los usan los tests y
+# scripts/estado_sintetico.py. El banco real entra cuando Demian responda G0.
+
+tope_bytes: 1048576 # 1 MiB; un estado mensual en CSV pesa unos pocos KB
+
+bancos:
+  # Con columna de saldo: se verifica fila por fila.
+  banco_sintetico:
+    nombre: Banco Sintético
+    columnas:
+      fecha: Fecha
+      descripcion: Descripción
+      monto: Monto
+      saldo: Saldo
+    formato_fecha: "%d/%m/%Y"
+    decimal: punto
+    tipos:
+      - tipo: comision
+        contiene: [comision, mantenimiento de cuenta, costo de chequera]
+        signo: sale
+      - tipo: interes
+        contiene: [interes, intereses]
+      - tipo: pago
+        contiene: [pago tarjeta, pago de tarjeta]
+        signo: sale
+
+  # Sin columna de saldo, con coma decimal, punto y coma, débito y crédito
+  # aparte y dos líneas de título antes del encabezado.
+  banco_sintetico_coma:
+    nombre: Banco Sintético (coma decimal)
+    delimitador: ";"
+    filas_a_saltar: 2
+    columnas:
+      fecha: Fecha
+      descripcion: Detalle
+      debito: Débito
+      credito: Crédito
+    formato_fecha: "%Y-%m-%d"
+    decimal: coma
+    tipos:
+      - tipo: comision
+        contiene: [comision, mantenimiento de cuenta]
+        signo: sale
+      - tipo: interes
+        contiene: [interes, intereses]
