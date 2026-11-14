@@ -233,22 +233,25 @@ src/family_expense_bot/
   dashboard/
     report.py            # agregaciones mensuales y reporte de calidad
     presupuesto.py       # bolsillos 30/30/20/20, "¿puedo?", alertas
-  conciliacion/          # Fase G, por construir
-    ingesta.py           # CSV/Excel del banco → contrato Pydantic
-    verificacion.py      # invariante de saldo, fechas en el periodo, duplicados
-    reglas.py            # reglas de cruce movimiento ↔ gasto, con nombre
-    recurrentes.py       # suscripciones y cargos que se repiten
+  conciliacion/          # Fase G: la ingesta está hecha; el cruce, por construir
+    contrato.py          # EstadoLeido, MovimientoLeido, Problema, EstadoRechazado
+    bancos.py            # carga de config/bancos.yaml y reglas de movimientos.tipo
+    ingesta.py           # CSV del banco → contrato Pydantic (Excel espera a G0)
+    verificacion.py      # invariante de saldo, saldo corrido, fechas, duplicados, continuidad
+    importar.py          # leer + verificar + guardar todo o nada
+    reglas.py            # (por construir) reglas de cruce movimiento ↔ gasto, con nombre
+    recurrentes.py       # (por construir) suscripciones y cargos que se repiten
   evaluacion.py          # banco etiquetado contra el LLM real (--evaluar)
   config.py
   cli.py
 config/categories.yaml   # taxonomía, fuente de verdad
-config/bancos.yaml       # (Fase G) formato de cada banco: columnas, fecha, decimal, signo
+config/bancos.yaml       # formato de cada banco: columnas, fecha, decimal, signo, reglas de tipo
 sql/vistas.sql           # (Fase G) cobertura, no registrados, recurrentes, costo del banco
 powerbi/                 # (Fase G) .pbix y CSV, solo con datos sintéticos
 evals/                   # mensajes.yaml (sintético) y corridas/ guardadas
 n8n/                     # segunda implementación, congelada
 scripts/capturas.py      # capturas del README con datos sintéticos
-scripts/estado_sintetico.py  # (Fase G) estados de cuenta sintéticos que cuadran, y que no
+scripts/estado_sintetico.py  # estados de cuenta sintéticos que cuadran, y que no; base sintética
 data/processed/          # NUNCA se sube al repo — solo local, .gitignore
 tests/                   # fixtures de mensajes; el LLM siempre mockeado
 ```
