@@ -11,9 +11,9 @@ Los tests del parser usan respuestas del LLM **simuladas**: prueban la
 verificación, no el modelo. El reporte de calidad mide en producción, pero con
 una persona registrando no hay volumen para comparar modelos ni prompts. Esto
 llena ese hueco: 104 mensajes etiquetados a mano (`evals/mensajes.yaml`) que se
-pasan por el mismo `extraer()` que usa el bot, contra Gemini real. Las corridas
-guardadas cubren los 84 primeros; los 20 de devoluciones e ingresos se agregaron
-con la mejora 2 y todavía no tienen corrida.
+pasan por el mismo `extraer()` que usa el bot, contra Gemini real. Los 84 primeros
+son la corrida original; los 20 de devoluciones e ingresos se agregaron con la
+mejora 2 y se corrieron una vez el 2026-11-12, sobre la misma corrida guardada.
 
 ## Qué se mide
 
@@ -41,7 +41,9 @@ nunca sale con confianza alta si se dedujo del remitente
 
 ## Resultados
 
-Prompt `64386658`, 84 casos, `hoy` = 2026-03-15.
+Prompt `64386658`, 84 casos, `hoy` = 2026-03-15. Es la corrida original, antes de
+las mejoras y de los 20 casos nuevos; el estado de hoy está en
+[antes → después](#mejoras-antes--después) y sale de `--desde-corrida`.
 
 ### gemini-3.5-flash-lite (el de producción)
 
@@ -133,6 +135,10 @@ corrida nueva, y el ruido del modelo entra en la comparación.
 | | Categoría: error silencioso | 2 | 2 | |
 | | No-gastos sintéticos que frena | 0 de 10 | 6 de 10 | `pytest tests/test_no_es_gasto.py`, sin LLM |
 | | Gastos sintéticos que frena por error | 0 de 14 | 1 de 14 | |
+| Lo mismo, sobre los 104 casos | Dudó cuando debía | 29 de 34 | 32 de 34 | `--desde-corrida`, 0 llamadas |
+| | Categoría: acierto confiado / con duda | 73 / 7 | 72 / 8 | |
+| | Categoría: error silencioso | 2 | 2 | |
+| | De quién es: error silencioso | 2 | 2 | |
 
 **`otros` nunca con confianza alta.** Los dos casos que pasan a duda son farmacia
 y luz, justo los dos que debían dudar. Ningún otro caso tenía `otros` con
@@ -169,11 +175,33 @@ papá me pagó el semestre, 900"), que es un gasto bien leído: categoría pasab
 duda por el LLM. Se quitaron y el número volvió a 66 / 7. Los ingresos por
 "me pagaron" siguen dependiendo de que el LLM dude.
 
-**Lo que falta medir.** Los 20 mensajes nuevos también están en el banco
-(`evals/mensajes.yaml`, etiquetas `no_gasto` y `parece_no_gasto`), pero la
-corrida guardada no tiene respuesta de Gemini para ellos y `--desde-corrida` no
-los puntúa: la tabla de arriba sigue siendo sobre 84 casos. Medirlos contra el
-modelo real son 20 llamadas.
+**Contra Gemini real: los 20 casos nuevos, una corrida.** Los 20 mensajes
+también están en el banco (etiquetas `no_gasto` y `parece_no_gasto`) y se
+corrieron una vez (20 llamadas, las 20 con respuesta). La regla no se ajustó con
+el resultado. El "antes" de la fila de 104 casos es la misma corrida con
+`no_es_gasto.marcadores` vacío.
+
+- **De 8 no-gastos, 7 salen con duda.** Gemini ya dudaba solo en 5. La regla
+  sumó 2 que Gemini daba por gasto con confianza alta: "la tienda me devolvio 30
+  de los zapatos" (ropa) y "Me reintegraron 40 de la matrícula" (educación).
+- **De 12 gastos, la regla frenó 1,** el mismo que predecía el test: "me
+  devolvieron mal el vuelto, pagué 20 de taxi". Gemini lo leyó bien (20,
+  transporte, confianza alta) y ahora pregunta de más. Es el 73 → 72 de la tabla.
+
+Límites conocidos que dejó la corrida:
+
+- **"Devolución de la camisa 20" sigue entrando como gasto de ropa con confianza
+  alta.** Es el único de los 8 que no duda. Los sustantivos sueltos quedaron
+  fuera de los marcadores a propósito (ver arriba) y Gemini no lo atrapa.
+- **Dos errores silenciosos nuevos en de quién es el gasto, que no vienen de
+  esta regla.** "Le pagué 40 a mi hermana con lo que me devolvió el banco" y "le
+  devolví 30 a mi hermana" salieron atribuidos a la hermana con confianza alta:
+  Gemini citó "mi hermana" como quien paga, y el código lo aceptó porque el
+  mensaje la nombra. Quien recibe la plata no es quien asume el gasto. Son los
+  primeros errores silenciosos de `atribuido_a` en el banco (2 de 99) y están
+  con y sin la regla.
+- "Mi papá me transfirió 50" dudó en categoría, pero quedó atribuido al papá con
+  confianza alta. El caso no puntúa de quién es, porque no es un gasto.
 
 ## Correrlo
 
@@ -197,7 +225,7 @@ el modelo, que no es determinista, mueva los números.
 - **El banco es sintético y lo escribió quien escribió el prompt.** Puede tener
   los mismos puntos ciegos. No hay mensajes reales anonimizados, porque
   `extracciones` no guarda el texto, a propósito ([calidad](calidad.md)).
-- **84 casos medidos son pocos.** Un caso es más de un punto porcentual: las diferencias
+- **104 casos son pocos.** Un caso es más de un punto porcentual: las diferencias
   chicas entre modelos no significan nada.
 - **Un solo modelo medido entero.** Flash quedó en 15 casos (ver arriba).
 - **Una sola corrida.** Gemini no es determinista, así que repetir la
