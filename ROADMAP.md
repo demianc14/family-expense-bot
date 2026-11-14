@@ -12,10 +12,12 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **Verificado el 12-nov sobre `main` más la corrida de los 20 casos:** `pytest` 573 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
 - **Mejora 2 (PR #20, mergeada el 12-nov):** "me devolvieron 20 de una camisa" ya no entra como gasto sin preguntar. Solo código: marcadores `no_es_gasto` en el yaml, con paridad en n8n. El prompt no cambió.
 - **Evaluación** (`docs/evaluacion.md`): 104 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 82 en categoría y 2 de 99 en de quién es; dudó cuando debía en 32 de 34.
+- **G1, esquema (PR #22, rama `fase-g1-esquema`, rebaseada sobre `main` el 13-nov):** tablas `estados_cuenta`, `movimientos` y `conciliaciones` con sus restricciones, llaves foráneas activas en cada conexión y verificación al arrancar. `pytest` 616 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Falta que Demian la mergee.
 
 ### Qué sigue
 
 - Tarea 4: conciliación de estados de cuenta (Fase G, fases 0 a 2). Las tareas 1 a 3 están cerradas, salvo los enlaces de fuera del repo (tarea 1).
+- Dentro de la tarea 4, después del esquema: la ingesta (`conciliacion/ingesta.py`, `verificacion.py` y `config/bancos.yaml`, con las reglas que asignan `movimientos.tipo`), en una sesión aparte.
 
 ### Qué decide Demian
 
@@ -23,6 +25,7 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **Quien recibe la plata sale como quien asume el gasto.** "Le devolví 30 a mi hermana" queda atribuido a la hermana con confianza alta (2 errores silenciosos de 99, `docs/evaluacion.md`). No viene de la mejora 2. ¿Se ataca antes de la conciliación o después?
 - **"Devolución de la camisa 20"** sigue entrando como gasto de ropa con confianza alta. Sumar sustantivos a los marcadores frena también "pagué 5 por la devolución del paquete". ¿Se deja como límite?
 - **Mejora 5** ("me pagaron" por prompt): cambia el prompt y pide una corrida nueva de 104 llamadas.
+- **G0 (fuentes de la conciliación):** falta `docs/conciliacion.md` con las respuestas; lo escribe Demian. La ingesta depende de eso.
 - **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
 
 ### Operación
@@ -93,6 +96,8 @@ Principios, además de los de `CLAUDE.md`:
 - **Nada se guarda como gasto sin confirmación**, y nada se borra: anulación con fecha y motivo.
 - **Los estados de cuenta reales nunca entran al repo ni van a un LLM** sin que Demian lo decida. Tests, capturas y el `.pbix` público usan datos sintéticos.
 
+Limitación conocida (decidida el 12-nov): la conciliación es **uno a uno y solo contra gastos**. Un movimiento se une a un solo gasto y un gasto a un solo movimiento, así que no entran los pagos partidos (un cargo del banco que son varios gastos, o un gasto pagado en dos cargos) ni los créditos del banco contra la tabla `ingresos`. Esos movimientos quedan como "sin registrar".
+
 ### G0. Fuentes (DECIDE DEMIAN)
 
 - [ ] Banco y tarjeta; si exportan CSV o Excel; si el PDF trae texto.
@@ -102,7 +107,12 @@ Principios, además de los de `CLAUDE.md`:
 
 ### G1. Ingesta y modelo
 
-- [ ] Esquema con migración: `estados_cuenta` (con `hash_archivo` único), `movimientos` (centavos con signo, anulación) y `conciliaciones` (qué regla unió cada par).
+- [x] Esquema con migración (rama `fase-g1-esquema`, tests en `tests/test_esquema_conciliacion.py`):
+  - `estados_cuenta`: `hash_archivo` único entre los vigentes (índice parcial), así un estado anulado se puede reimportar; saldos en centavos enteros con signo.
+  - `movimientos`: centavos enteros con signo y distintos de cero, `tipo` (`debito`, `credito`, `comision`, `interes`, `pago`), línea única por estado y anulación.
+  - `conciliaciones`: qué regla unió cada par; un movimiento y un gasto solo pueden estar en un par vigente.
+  - `--migrar` crea las tres tablas sin tocar las demás; el arranque falla si les falta una columna o un índice único. `PRAGMA foreign_keys=ON` en cada conexión.
+- [ ] Reglas por banco en `config/bancos.yaml` que asignan `movimientos.tipo` al importar, sin LLM (sesión de ingesta).
 - [ ] `conciliacion/`: `ingesta.py` (CSV/Excel → contrato Pydantic), `verificacion.py` (invariante de saldo, fechas en el periodo, duplicados), `reglas.py` y `recurrentes.py`.
 - [ ] `config/bancos.yaml`: un banco nuevo es una entrada en el yaml, no código.
 - [ ] CLI: `--importar-estado`, `--conciliar <AAAA-MM>` y `--exportar-bi`.

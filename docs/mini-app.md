@@ -100,12 +100,18 @@ síntoma es siempre el mismo: el botón del bot lleva a una página que no carga
 
 **Al actualizar a una versión con columnas nuevas** (la última: `subcategoria`,
 10-nov-2026), el bot y la app no arrancan y piden `--migrar`. Primero un
-respaldo, después la migración, y recién ahí se levanta todo:
+respaldo, después la migración, y recién ahí se levanta todo.
+
+`--migrar` también cubre **tablas nuevas** (las últimas: `estados_cuenta`,
+`movimientos` y `conciliaciones`, 12-nov-2026): las crea vacías, sin tocar las
+que ya hay, e imprime sus nombres. Para una tabla nueva no es obligatoria,
+porque el bot y la app la crean solos al arrancar; por eso una versión que solo
+trae tablas arranca sin pedir nada. El respaldo conviene igual.
 
 ```bash
 docker compose down
 cp data/processed/gastos.db data/processed/gastos.respaldo-$(date +%Y%m%d-%H%M%S).db
-docker compose run --rm bot --migrar          # agrega solo lo que falta; dos veces no hace nada
+docker compose run --rm bot --migrar          # agrega solo lo que falta (tablas y columnas); dos veces no hace nada
 docker compose up -d --build
 ```
 

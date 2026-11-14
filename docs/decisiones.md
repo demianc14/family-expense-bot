@@ -15,6 +15,7 @@ Cómo cambió el proyecto, cómo se decide si un gasto es confiable, cómo se gu
 | 16-oct | ¿Puedo gastar esto? | La consulta antes de gastar, con la regla del ritmo del mes calculada por código. |
 | 20-oct | Hallazgo de adopción | Mis papás no usan Telegram, y para ellos registrar gastos así es más tedioso que lo que ya hacen: llevan sus finanzas en Excel, con plantillas propias de presupuesto y gastos. El bot no les sirve. |
 | 20-oct → | App personal | El usuario real soy yo. El núcleo (verificación, presupuesto, "¿puedo?") sigue igual, con una interfaz para el celular encima. |
+| 12-nov | Esquema de la conciliación | Tres tablas nuevas (`estados_cuenta`, `movimientos`, `conciliaciones`) con las reglas dentro de la base. Detalle en [Almacenamiento](#almacenamiento). |
 | 11-nov | Nombre nuevo | El repo pasa de `family-expense-bot` a `personal-finance-bot`, y entra la conciliación de estados de cuenta: captura verificada, conciliación en SQL y análisis en Power BI. |
 
 **Por qué cambió el nombre, y qué no cambió.** "Family" quedó de la primera
@@ -187,6 +188,44 @@ esquema (`src/family_expense_bot/storage/`):
   Reemplazarlo era más fiel, pero el mes arrancaría en $0 hasta registrar el
   sueldo, y "¿puedo?" diría que no a todo. Van en su propia tabla, no en
   `gastos`: un ingreso no tiene bolsillo, atribución ni confianza del LLM.
+
+### Esquema de la conciliación (12-nov-2026)
+
+Tres tablas: `estados_cuenta` (un archivo importado), `movimientos` (sus
+líneas) y `conciliaciones` (un movimiento unido a un gasto). Guardan lo que
+dice el banco, no gastos: un movimiento solo se vuelve gasto por el flujo de
+confirmación de siempre.
+
+- **El mismo archivo no entra dos veces, salvo que el anterior esté anulado.**
+  `hash_archivo` (SHA-256) es único con un índice parcial
+  (`WHERE anulado_en IS NULL`). Un único estricto era más simple, pero un
+  estado importado con el banco mal configurado no se podría corregir nunca:
+  como nada se borra, el archivo quedaría bloqueado para siempre.
+- **Cada movimiento tiene un `tipo`**: `debito`, `credito`, `comision`,
+  `interes` o `pago`, con un `CHECK` sobre los valores. Lo asigna la ingesta
+  con reglas por banco en `config/bancos.yaml`, nunca el LLM. Separa el costo
+  del banco (comisiones e intereses) y el pago de la tarjeta de lo que sí es
+  gasto, sin tener que adivinarlo después por la descripción.
+- **La conciliación es uno a uno y solo contra gastos.** Dos índices únicos
+  parciales: un movimiento y un gasto solo pueden estar en un par vigente, y
+  anular el par libera a los dos. Queda fuera lo que no es uno a uno: los pagos
+  partidos (un cargo que son varios gastos, o un gasto pagado en dos cargos) y
+  los créditos del banco contra la tabla `ingresos`. Esos movimientos quedan
+  como "sin registrar". Es una limitación elegida: así "ningún movimiento
+  conciliado dos veces" lo garantiza la base y no el código que la usa.
+- **Los centavos son enteros de verdad.** SQLite guarda `12.5` en una columna
+  `INTEGER` sin quejarse, así que los montos llevan
+  `CHECK (typeof(...) = 'integer')`. Los movimientos van con signo (negativo si
+  sale plata) y no pueden ser cero.
+- **Las llaves foráneas se activan en cada conexión.** SQLite las ignora salvo
+  que cada conexión mande `PRAGMA foreign_keys=ON`; un listener lo hace al
+  conectar, también en los tests de la API.
+- **Las tablas nuevas se crean solas al arrancar** (`create_all`), igual que
+  pasó con `ingresos`; `--migrar` también las crea. La verificación de esquema
+  ahora exige, además de las columnas, los índices únicos: sin ellos la base
+  aceptaría el mismo archivo o el mismo par dos veces sin avisar.
+- **El invariante de saldo no vive en el esquema.** Saldo anterior + créditos
+  − débitos = saldo final lo verifica la ingesta antes de guardar nada.
 
 ## Privacidad
 

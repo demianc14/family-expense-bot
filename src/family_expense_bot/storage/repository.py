@@ -8,9 +8,10 @@ gasto sin monto, y nada se borra de verdad.
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Engine, create_engine, inspect, select, text
+from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
 from family_expense_bot.extraction.schema import GastoExtraido
@@ -80,18 +81,46 @@ MIGRACIONES = {
 
 Cada una tiene un default, así que las filas existentes quedan bien sin tocarlas
 (todo lo anterior a la Mini App entró por el chat; nada tenía subcategoría).
+
+Las tablas nuevas (ingresos, y las tres de la conciliación) no necesitan entrada:
+`create_all` las crea enteras, con sus restricciones e índices.
 """
 
 
-def migrar(url: str) -> list[str]:
-    """Agrega a una base existente las columnas de `MIGRACIONES` que le falten.
+def activar_llaves_foraneas(engine: Engine) -> Engine:
+    """Activa las llaves foráneas en cada conexión que abra el engine.
 
-    Idempotente: correrla dos veces no hace nada la segunda. Devuelve lo que agregó.
+    SQLite las ignora salvo que cada conexión lo pida con un PRAGMA; sin esto,
+    una conciliación podría apuntar a un gasto o a un movimiento que no existe.
+    Hay que llamarla antes de la primera conexión.
     """
-    engine = create_engine(url)
+    if engine.dialect.name == "sqlite":
+
+        @event.listens_for(engine, "connect")
+        def _al_conectar(conexion: Any, _registro: Any) -> None:
+            cursor = conexion.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
+
+
+def _engine(url: str) -> Engine:
+    return activar_llaves_foraneas(create_engine(url))
+
+
+def migrar(url: str) -> list[str]:
+    """Lleva una base existente al esquema actual, sin tocar lo que ya tiene.
+
+    Crea las tablas que falten y agrega las columnas de `MIGRACIONES`.
+    Idempotente: correrla dos veces no hace nada la segunda. Devuelve lo que
+    agregó: tablas por su nombre y columnas como `tabla.columna`.
+    """
+    engine = _engine(url)
+    antes = set(inspect(engine).get_table_names())
     Base.metadata.create_all(engine)
+    agregadas = [t.name for t in Base.metadata.sorted_tables if t.name not in antes]
     inspector = inspect(engine)
-    agregadas: list[str] = []
     with engine.begin() as conexion:
         for columna, sentencia in MIGRACIONES.items():
             tabla, _, nombre = columna.partition(".")
@@ -103,24 +132,32 @@ def migrar(url: str) -> list[str]:
 
 
 def crear_engine(url: str) -> Engine:
-    engine = create_engine(url)
+    engine = _engine(url)
     Base.metadata.create_all(engine)
     verificar_esquema(engine)
     return engine
 
 
 def verificar_esquema(engine: Engine) -> None:
-    """Falla al arrancar si a la base le faltan columnas del modelo.
+    """Falla al arrancar si a la base le faltan columnas o índices únicos del modelo.
 
     `create_all` crea las tablas que faltan, pero no toca las que ya existen.
     Sin esta verificación, una base vieja no avisa nada al arrancar y el bot
     se cae en el primer insert, en medio de una conversación con alguien.
+
+    Los índices únicos cuentan porque son invariantes (un archivo no se importa
+    dos veces, un movimiento no se concilia dos veces): una tabla sin ellos
+    aceptaría en silencio lo que el modelo prohíbe.
     """
     inspector = inspect(engine)
     faltantes: list[str] = []
     for tabla in Base.metadata.sorted_tables:
         existentes = {c["name"] for c in inspector.get_columns(tabla.name)}
         faltantes += [f"{tabla.name}.{c.name}" for c in tabla.columns if c.name not in existentes]
+        indices = {i["name"] for i in inspector.get_indexes(tabla.name)}
+        faltantes += [
+            f"{tabla.name}.{i.name}" for i in tabla.indexes if i.unique and i.name not in indices
+        ]
     if faltantes:
         raise EsquemaDesactualizado(
             f"La base en {engine.url} tiene un esquema viejo; le faltan: {', '.join(faltantes)}. "
