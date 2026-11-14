@@ -16,6 +16,7 @@ Cómo cambió el proyecto, cómo se decide si un gasto es confiable, cómo se gu
 | 20-oct | Hallazgo de adopción | Mis papás no usan Telegram, y para ellos registrar gastos así es más tedioso que lo que ya hacen: llevan sus finanzas en Excel, con plantillas propias de presupuesto y gastos. El bot no les sirve. |
 | 20-oct → | App personal | El usuario real soy yo. El núcleo (verificación, presupuesto, "¿puedo?") sigue igual, con una interfaz para el celular encima. |
 | 12-nov | Esquema de la conciliación | Tres tablas nuevas (`estados_cuenta`, `movimientos`, `conciliaciones`) con las reglas dentro de la base. Detalle en [Almacenamiento](#almacenamiento). |
+| 14-nov | Ingesta de estados de cuenta | Un CSV del banco entra completo y verificado al centavo, o no entra. El formato de cada banco y las reglas de `tipo` son config. Detalle, límites y mensajes en [Conciliación](conciliacion.md). |
 | 11-nov | Nombre nuevo | El repo pasa de `family-expense-bot` a `personal-finance-bot`, y entra la conciliación de estados de cuenta: captura verificada, conciliación en SQL y análisis en Power BI. |
 
 **Por qué cambió el nombre, y qué no cambió.** "Family" quedó de la primera

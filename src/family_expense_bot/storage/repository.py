@@ -14,9 +14,17 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
+from family_expense_bot.conciliacion.contrato import EstadoLeido, EstadoVigente
 from family_expense_bot.extraction.schema import GastoExtraido
 from family_expense_bot.storage.dinero import a_centavos, a_decimal
-from family_expense_bot.storage.models import Base, Extraccion, Gasto, Ingreso
+from family_expense_bot.storage.models import (
+    Base,
+    EstadoCuenta,
+    Extraccion,
+    Gasto,
+    Ingreso,
+    Movimiento,
+)
 
 
 def _como_utc(momento: datetime) -> datetime:
@@ -464,4 +472,65 @@ class RepositorioIngresos:
             fecha=ingreso.fecha,
             descripcion=ingreso.descripcion,
             registrado_por=registrado_por,
+        )
+
+
+class RepositorioEstados:
+    """Estados de cuenta ya verificados. Que cuadren lo decide `conciliacion`, no este módulo."""
+
+    def __init__(self, engine: Engine) -> None:
+        self._sesion = sessionmaker(engine, expire_on_commit=False)
+
+    def vigentes(self) -> list[EstadoVigente]:
+        """Los estados sin anular, sin sus movimientos, del más viejo al más nuevo."""
+        consulta = (
+            select(EstadoCuenta)
+            .where(EstadoCuenta.anulado_en.is_(None))
+            .order_by(EstadoCuenta.periodo_desde, EstadoCuenta.id)
+        )
+        with self._sesion() as sesion:
+            return [self._vigente(fila) for fila in sesion.scalars(consulta)]
+
+    def guardar(self, estado: EstadoLeido) -> EstadoVigente:
+        """Guarda un estado **ya verificado** con todos sus movimientos, o nada.
+
+        Una sola transacción: si la base rechaza un movimiento, o el archivo ya
+        estaba importado (índice único del hash), no queda ni el estado.
+        """
+        fila = EstadoCuenta(
+            banco=estado.banco,
+            cuenta=estado.cuenta,
+            periodo_desde=estado.periodo_desde,
+            periodo_hasta=estado.periodo_hasta,
+            saldo_anterior_centavos=estado.saldo_anterior_centavos,
+            saldo_final_centavos=estado.saldo_final_centavos,
+            hash_archivo=estado.hash_archivo,
+        )
+        with self._sesion.begin() as sesion:
+            sesion.add(fila)
+            sesion.flush()  # para conocer el id del estado antes de colgarle los movimientos
+            sesion.add_all(
+                Movimiento(
+                    estado_id=fila.id,
+                    linea=m.linea,
+                    fecha=m.fecha,
+                    descripcion=m.descripcion,
+                    monto_centavos=m.monto_centavos,
+                    tipo=m.tipo,
+                )
+                for m in estado.movimientos
+            )
+        return self._vigente(fila)
+
+    @staticmethod
+    def _vigente(fila: EstadoCuenta) -> EstadoVigente:
+        return EstadoVigente(
+            id=fila.id,
+            banco=fila.banco,
+            cuenta=fila.cuenta,
+            periodo_desde=fila.periodo_desde,
+            periodo_hasta=fila.periodo_hasta,
+            saldo_anterior_centavos=fila.saldo_anterior_centavos,
+            saldo_final_centavos=fila.saldo_final_centavos,
+            hash_archivo=fila.hash_archivo,
         )

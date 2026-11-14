@@ -12,6 +12,10 @@ import uvicorn
 from family_expense_bot.app.api import ServiciosApp, crear_app
 from family_expense_bot.bot.envio import enviar
 from family_expense_bot.bot.handlers import Servicios, build_application, obtener_identidad
+from family_expense_bot.conciliacion.bancos import cargar_bancos
+from family_expense_bot.conciliacion.contrato import EstadoRechazado, plata
+from family_expense_bot.conciliacion.importar import importar_estado
+from family_expense_bot.conciliacion.ingesta import centavos_declarados
 from family_expense_bot.config import Settings
 from family_expense_bot.dashboard.report import exportar_csv
 from family_expense_bot.evaluacion import (
@@ -30,6 +34,7 @@ from family_expense_bot.extraction.gemini import GeminiCliente
 from family_expense_bot.extraction.parser import extraer
 from family_expense_bot.storage.repository import (
     EsquemaDesactualizado,
+    RepositorioEstados,
     RepositorioExtracciones,
     RepositorioGastos,
     RepositorioIngresos,
@@ -114,6 +119,39 @@ def _parser() -> argparse.ArgumentParser:
         help="Agrega a una base existente las tablas y columnas nuevas del esquema. "
         "Respáldala antes.",
     )
+    parser.add_argument(
+        "--importar-estado",
+        metavar="CSV",
+        help="Importa un estado de cuenta en CSV. Entra completo o no entra: si no cuadra, "
+        "dice por qué y no guarda nada. Requiere --banco, --cuenta, --desde y --hasta.",
+    )
+    parser.add_argument(
+        "--banco", help="Con --importar-estado: clave del banco en config/bancos.yaml."
+    )
+    parser.add_argument(
+        "--cuenta",
+        help='Con --importar-estado: etiqueta de la cuenta ("ahorros", "visa"). Nunca el número.',
+    )
+    parser.add_argument(
+        "--desde",
+        type=date.fromisoformat,
+        metavar="AAAA-MM-DD",
+        help="Con --importar-estado: primer día del periodo del estado.",
+    )
+    parser.add_argument(
+        "--hasta",
+        type=date.fromisoformat,
+        metavar="AAAA-MM-DD",
+        help="Con --importar-estado: último día del periodo del estado.",
+    )
+    for saldo in ("anterior", "final"):
+        parser.add_argument(
+            f"--saldo-{saldo}",
+            type=_saldo,
+            metavar="MONTO",
+            help=f"Con --importar-estado: saldo {saldo} como lo muestra el banco, con punto "
+            "decimal (1234.05). Obligatorio.",
+        )
     return parser
 
 
@@ -142,6 +180,10 @@ def main() -> None:
     if args.migrar:
         agregadas = migrar(settings.database_url)
         print(f"Agregadas: {', '.join(agregadas)}" if agregadas else "La base ya estaba al día")
+        return
+
+    if args.importar_estado:
+        _importar_estado(parser, args, settings)
         return
 
     if args.evaluar:
@@ -206,6 +248,62 @@ def _exportar(ruta: Path, settings: Settings) -> None:
     gastos = repositorio.listar()
     exportar_csv(gastos, ruta)
     print(f"{len(gastos)} gasto(s) exportados a {ruta}")
+
+
+def _saldo(texto: str) -> int:
+    try:
+        return centavos_declarados(texto)
+    except ValueError as e:
+        # argparse solo muestra el mensaje si el error es suyo.
+        raise argparse.ArgumentTypeError(str(e)) from e
+
+
+def _importar_estado(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: Settings
+) -> None:
+    obligatorios = (args.banco, args.cuenta, args.desde, args.hasta)
+    if None in (*obligatorios, args.saldo_anterior, args.saldo_final):
+        parser.error(
+            "--importar-estado necesita --banco, --cuenta, --desde, --hasta, "
+            "--saldo-anterior y --saldo-final"
+        )
+    bancos = cargar_bancos()
+    if args.banco not in bancos.bancos:
+        parser.error(
+            f"No existe el banco {args.banco!r} en config/bancos.yaml; hay: "
+            f"{', '.join(sorted(bancos.bancos))}"
+        )
+    try:
+        repositorio = RepositorioEstados(crear_engine(settings.database_url))
+    except EsquemaDesactualizado as e:
+        raise SystemExit(f"No importo: {e}") from e
+    try:
+        resultado = importar_estado(
+            Path(args.importar_estado),
+            bancos.bancos[args.banco],
+            repositorio,
+            cuenta=args.cuenta,
+            desde=args.desde,
+            hasta=args.hasta,
+            tope_bytes=bancos.tope_bytes,
+            saldo_anterior_centavos=args.saldo_anterior,
+            saldo_final_centavos=args.saldo_final,
+        )
+    except EstadoRechazado as e:
+        problemas = "\n".join(f"  - {p.mensaje}" for p in e.problemas)
+        raise SystemExit(f"Estado rechazado; no se guardó nada:\n{problemas}") from e
+    estado = resultado.estado
+    tipos = ", ".join(f"{cuantos} {tipo}" for tipo, cuantos in resultado.por_tipo.items())
+    print(
+        f"Estado importado (#{estado.id}): {estado.banco}/{estado.cuenta}, "
+        f"{estado.periodo_desde} a {estado.periodo_hasta}."
+    )
+    print(
+        f"  Saldo {plata(estado.saldo_anterior_centavos)} → {plata(estado.saldo_final_centavos)} "
+        f"con {resultado.movimientos} movimientos{': ' + tipos if tipos else ''}."
+    )
+    for aviso in resultado.avisos:
+        print(f"  Aviso: {aviso}")
 
 
 def _cliente_gemini(settings: Settings, modelo: str | None = None) -> GeminiCliente:

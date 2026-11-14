@@ -6,18 +6,19 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 
 > Los plazos son estimaciones, no compromisos. El tiempo es poco (Movmo, universidad, cursos): una tarea a la vez, y cada una termina con una PR y una evidencia (tabla, test o captura).
 
-## Estado al 2026-11-12 (para retomar)
+## Estado al 2026-11-14 (para retomar)
 
 - **En `main` (9189681, 12-nov):** Fases A y B completas; Fase C con la evaluación, flash descartado, `--desde-corrida` y las mejoras 1 y 2; Mini App con coma decimal, subcategoría, bolsillo para `otros`, editar y borrar, e ingresos extra (PRs #13 a #15); alertas de bolsillo D1 (PR #7); renombre a `personal-finance-bot` (PR #19).
 - **Verificado el 12-nov sobre `main` más la corrida de los 20 casos:** `pytest` 573 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
 - **Mejora 2 (PR #20, mergeada el 12-nov):** "me devolvieron 20 de una camisa" ya no entra como gasto sin preguntar. Solo código: marcadores `no_es_gasto` en el yaml, con paridad en n8n. El prompt no cambió.
 - **Evaluación** (`docs/evaluacion.md`): 104 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 82 en categoría y 2 de 99 en de quién es; dudó cuando debía en 32 de 34.
-- **G1, esquema (PR #22, rama `fase-g1-esquema`, rebaseada sobre `main` el 13-nov):** tablas `estados_cuenta`, `movimientos` y `conciliaciones` con sus restricciones, llaves foráneas activas en cada conexión y verificación al arrancar. `pytest` 616 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Falta que Demian la mergee.
+- **G1, esquema (PR #22, rama `fase-g1-esquema`, rebaseada sobre `main` el 13-nov):** tablas `estados_cuenta`, `movimientos` y `conciliaciones` con sus restricciones, llaves foráneas activas en cada conexión y verificación al arrancar. `pytest` 616 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Mergeada el 13-nov (3ad2863).
+- **G1, ingesta (PR #23, rama `fase-g1-ingesta`, 14-nov, sin mergear):** `config/bancos.yaml`, `conciliacion/` (`contrato.py`, `bancos.py`, `ingesta.py`, `verificacion.py`, `importar.py`), `--importar-estado` y `scripts/estado_sintetico.py` con 29 casos (8 entran, uno con aviso; 21 se rechazan). Solo CSV. `pytest` 814 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Los saldos declarados son obligatorios siempre. Detalle, límites y la tabla de mensajes en `docs/conciliacion.md`.
 
 ### Qué sigue
 
 - Tarea 4: conciliación de estados de cuenta (Fase G, fases 0 a 2). Las tareas 1 a 3 están cerradas, salvo los enlaces de fuera del repo (tarea 1).
-- Dentro de la tarea 4, después del esquema: la ingesta (`conciliacion/ingesta.py`, `verificacion.py` y `config/bancos.yaml`, con las reglas que asignan `movimientos.tipo`), en una sesión aparte.
+- Dentro de la tarea 4, después de la ingesta: las reglas de cruce (`conciliacion/reglas.py`), `--conciliar` y las vistas SQL (G2). La entrada del banco real en `config/bancos.yaml` espera a G0.
 
 ### Qué decide Demian
 
@@ -25,7 +26,7 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **Quien recibe la plata sale como quien asume el gasto.** "Le devolví 30 a mi hermana" queda atribuido a la hermana con confianza alta (2 errores silenciosos de 99, `docs/evaluacion.md`). No viene de la mejora 2. ¿Se ataca antes de la conciliación o después?
 - **"Devolución de la camisa 20"** sigue entrando como gasto de ropa con confianza alta. Sumar sustantivos a los marcadores frena también "pagué 5 por la devolución del paquete". ¿Se deja como límite?
 - **Mejora 5** ("me pagaron" por prompt): cambia el prompt y pide una corrida nueva de 104 llamadas.
-- **G0 (fuentes de la conciliación):** falta `docs/conciliacion.md` con las respuestas; lo escribe Demian. La ingesta depende de eso.
+- **G0 (fuentes de la conciliación):** faltan las respuestas en `docs/conciliacion.md` (la sección está vacía). Sin eso no hay banco real en `config/bancos.yaml` ni se sabe si hace falta Excel.
 - **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
 
 ### Operación
@@ -112,13 +113,17 @@ Limitación conocida (decidida el 12-nov): la conciliación es **uno a uno y sol
   - `movimientos`: centavos enteros con signo y distintos de cero, `tipo` (`debito`, `credito`, `comision`, `interes`, `pago`), línea única por estado y anulación.
   - `conciliaciones`: qué regla unió cada par; un movimiento y un gasto solo pueden estar en un par vigente.
   - `--migrar` crea las tres tablas sin tocar las demás; el arranque falla si les falta una columna o un índice único. `PRAGMA foreign_keys=ON` en cada conexión.
-- [ ] Reglas por banco en `config/bancos.yaml` que asignan `movimientos.tipo` al importar, sin LLM (sesión de ingesta).
-- [ ] `conciliacion/`: `ingesta.py` (CSV/Excel → contrato Pydantic), `verificacion.py` (invariante de saldo, fechas en el periodo, duplicados), `reglas.py` y `recurrentes.py`.
-- [ ] `config/bancos.yaml`: un banco nuevo es una entrada en el yaml, no código.
-- [ ] CLI: `--importar-estado`, `--conciliar <AAAA-MM>` y `--exportar-bi`.
-- [ ] `scripts/estado_sintetico.py`: estados sintéticos que cuadran y variantes que no.
-- [ ] `.gitignore` con excepciones acotadas para lo sintético, y `tests/test_privacy.py` ampliado a CSV, xlsx y pbix.
-- [ ] **Cierre:** importar un estado sintético funciona, uno que no cuadra se rechaza con un mensaje exacto y el mismo archivo dos veces no duplica nada.
+- [x] Reglas por banco en `config/bancos.yaml` que asignan `movimientos.tipo` al importar, sin LLM.
+- [x] `conciliacion/ingesta.py` (CSV → contrato Pydantic) y `verificacion.py` (invariante de saldo, saldo corrido, fechas en el periodo, duplicados, continuidad como aviso).
+- [x] `config/bancos.yaml`: un banco nuevo es una entrada en el yaml, no código. Hoy solo trae dos bancos inventados.
+- [x] CLI: `--importar-estado`.
+- [x] `scripts/estado_sintetico.py`: estados sintéticos que cuadran y variantes que no, y una base sintética del bot (`--base`).
+- [x] `.gitignore` con una sola excepción (`tests/fixtures/estados/*.csv`), y `tests/test_privacy.py` ampliado a CSV, xlsx y pbix.
+- [x] **Cierre:** importar un estado sintético funciona, uno que no cuadra se rechaza con un mensaje exacto y el mismo archivo dos veces no duplica nada (`docs/conciliacion.md`).
+- [ ] Excel (`openpyxl`): solo si G0 dice que el banco lo exporta.
+- [ ] Entrada del banco real en `config/bancos.yaml` (depende de G0).
+- [ ] `conciliacion/reglas.py` y `recurrentes.py`.
+- [ ] CLI: `--conciliar <AAAA-MM>` y `--exportar-bi`.
 
 ### G1b. PDF (solo si G0 dice "solo PDF")
 
@@ -129,6 +134,7 @@ Limitación conocida (decidida el 12-nov): la conciliación es **uno a uno y sol
 - [ ] Vistas en `sql/vistas.sql`: `v_cobertura_mensual`, `v_no_registrados`, `v_recurrentes`, `v_costo_banco` y `v_gasto_real_bolsillo`.
 - [ ] Tests de SQL: conteos, totales contra el estado de cuenta y ningún movimiento conciliado dos veces.
 - [ ] Mini App: lista "Sin registrar" con Registrar o Ignorar, por el flujo de confirmación de siempre.
+- [ ] `--exportar` (gastos) y `--exportar-bi` neutralizan las celdas de texto que empiezan con `=`, `+`, `-` o `@`, en una PR aparte de la ingesta (decisión en `docs/conciliacion.md`).
 - [ ] `--exportar-bi` escribe las vistas a CSV; dashboard de 3 páginas (Cobertura, Gasto real, Costo del banco y suscripciones) con datos sintéticos.
 - [ ] Medición: precisión y recall por regla sobre pares etiquetados a mano, con casos difíciles (mismo monto dos veces en la semana, pagos partidos, devoluciones).
 - [ ] **Cierre:** vistas con tests, "Sin registrar" funcionando, dashboard en PDF y capturas, tabla de precisión y recall en `docs/conciliacion.md` y una línea en el README.
