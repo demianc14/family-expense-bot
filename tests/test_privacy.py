@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.sintetico import cargar
+
 ROOT = Path(__file__).resolve().parents[1]
 
 DEBEN_IGNORARSE = [
@@ -19,6 +21,20 @@ DEBEN_IGNORARSE = [
     "n8n/credenciales.json",
     "n8n/.datos/database.sqlite",
     "n8n/e2e/.datos/database.sqlite",
+    # Estados de cuenta y lo que sale de ellos: en ninguna carpeta, con ningún formato.
+    "estado-marzo.csv",
+    "estado-marzo.xlsx",
+    "estado-marzo.xls",
+    "data/raw/estado-marzo.csv",
+    "data/raw/estado-marzo.pdf",
+    "config/estado-marzo.csv",
+    "tests/fixtures/estado-marzo.csv",
+    "tests/fixtures/estados/marzo.xlsx",
+    "tests/fixtures/estados/marzo.pbix",
+    "tests/fixtures/estados/real/marzo.csv",
+    "powerbi/conciliacion.pbix",
+    "powerbi/cobertura.csv",
+    "exports/vistas.csv",
 ]
 
 
@@ -134,3 +150,61 @@ def test_ningun_commit_del_historial_versiono_un_archivo_ignorado() -> None:
         text=True,
     ).stdout.splitlines()
     assert not ignoradas, f"El historial de git versionó archivos ignorados: {ignoradas}"
+
+
+# --- Estados de cuenta: lo único tabular que se versiona es sintético ---
+
+ESTADOS_SINTETICOS = "tests/fixtures/estados"
+DATOS = (".csv", ".tsv", ".xlsx", ".xls", ".pbix", ".parquet", ".db", ".sqlite", ".sqlite3")
+"""Formatos en los que podría colarse un estado de cuenta o un export con montos reales."""
+
+
+def test_los_estados_sinteticos_si_se_versionan() -> None:
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "-q", f"{ESTADOS_SINTETICOS}/marzo.csv"],
+        cwd=ROOT,
+        check=False,
+    )
+    assert result.returncode == 1
+
+
+def test_lo_unico_tabular_versionado_son_los_estados_sinteticos() -> None:
+    """Un CSV, un Excel o un .pbix en cualquier otra parte del repo hace fallar esto."""
+    archivos = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True, text=True
+    ).stdout.split("\0")
+    sinteticos = {f"{ESTADOS_SINTETICOS}/{nombre}" for nombre in cargar().archivos()}
+    colados = [
+        nombre
+        for nombre in filter(None, archivos)
+        if nombre.lower().endswith(DATOS) and nombre not in sinteticos
+    ]
+    assert not colados, f"Archivos de datos versionados que no son sintéticos: {colados}"
+
+
+def test_cada_estado_de_la_carpeta_es_byte_a_byte_el_que_genera_el_script() -> None:
+    """Mira el disco, no solo git: un estado real copiado a la carpeta falla antes del commit.
+
+    Si esto falla por un cambio en el generador: `python scripts/estado_sintetico.py`.
+    """
+    esperados = cargar().archivos()
+    en_disco = {ruta.name: ruta.read_bytes() for ruta in (ROOT / ESTADOS_SINTETICOS).iterdir()}
+    assert en_disco.keys() == esperados.keys(), "sobran o faltan archivos en la carpeta"
+    distintos = [nombre for nombre in esperados if en_disco[nombre] != esperados[nombre]]
+    assert not distintos, f"No son lo que genera el script: {distintos}"
+
+
+def test_los_estados_sinteticos_solo_nombran_bancos_y_comercios_inventados() -> None:
+    """Toda descripción lleva la marca de sintética o es un movimiento genérico del banco."""
+    modulo = cargar()
+    genericas = {
+        "TRANSFERENCIA RECIBIDA NOMINA",
+        "BUS URBANO",
+        "PAGO TARJETA VISA",
+        "COMISION RETIRO CAJERO",
+        "RETIRO CAJERO",
+        "INTERES GANADO",
+        "MANTENIMIENTO DE CUENTA",
+    }
+    for _, descripcion, _ in [*modulo.MARZO, *modulo.ABRIL]:
+        assert "SINTETIC" in descripcion or descripcion in genericas, descripcion

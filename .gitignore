@@ -8,8 +8,14 @@ data/raw/
 exports/
 *.csv
 *.xlsx
+*.xls
 *.parquet
 *.pbix
+
+# Única excepción: estados de cuenta sintéticos. Los genera
+# scripts/estado_sintetico.py y tests/test_privacy.py exige que cada uno sea,
+# byte a byte, lo que sale del script. Solo CSV y solo en esta carpeta.
+!tests/fixtures/estados/*.csv
 
 # Secretos (token del bot, API keys del LLM)
 .env
