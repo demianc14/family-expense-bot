@@ -12,10 +12,12 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **Verificado el 12-nov sobre `main` más la corrida de los 20 casos:** `pytest` 573 pasan; `ruff check .`, `ruff format --check .` y `mypy` sin errores.
 - **Mejora 2 (PR #20, mergeada el 12-nov):** "me devolvieron 20 de una camisa" ya no entra como gasto sin preguntar. Solo código: marcadores `no_es_gasto` en el yaml, con paridad en n8n. El prompt no cambió.
 - **Evaluación** (`docs/evaluacion.md`): 104 casos con flash-lite → 0 errores silenciosos en monto y fecha, 2 de 82 en categoría y 2 de 99 en de quién es; dudó cuando debía en 32 de 34.
+- **G1, esquema (PR #22, rama `fase-g1-esquema`, rebaseada sobre `main` el 13-nov):** tablas `estados_cuenta`, `movimientos` y `conciliaciones` con sus restricciones, llaves foráneas activas en cada conexión y verificación al arrancar. `pytest` 616 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Falta que Demian la mergee.
 
 ### Qué sigue
 
 - Tarea 4: conciliación de estados de cuenta (Fase G, fases 0 a 2). Las tareas 1 a 3 están cerradas, salvo los enlaces de fuera del repo (tarea 1).
+- Dentro de la tarea 4, después del esquema: la ingesta (`conciliacion/ingesta.py`, `verificacion.py` y `config/bancos.yaml`, con las reglas que asignan `movimientos.tipo`), en una sesión aparte.
 
 ### Qué decide Demian
 
@@ -23,8 +25,8 @@ El repo cuenta una sola historia de producto: **captura verificada → conciliac
 - **Quien recibe la plata sale como quien asume el gasto.** "Le devolví 30 a mi hermana" queda atribuido a la hermana con confianza alta (2 errores silenciosos de 99, `docs/evaluacion.md`). No viene de la mejora 2. ¿Se ataca antes de la conciliación o después?
 - **"Devolución de la camisa 20"** sigue entrando como gasto de ropa con confianza alta. Sumar sustantivos a los marcadores frena también "pagué 5 por la devolución del paquete". ¿Se deja como límite?
 - **Mejora 5** ("me pagaron" por prompt): cambia el prompt y pide una corrida nueva de 104 llamadas.
+- **G0 (fuentes de la conciliación):** falta `docs/conciliacion.md` con las respuestas; lo escribe Demian. La ingesta depende de eso.
 - **Decisión de rumbo del 10-nov:** el repo se renombra, entra la conciliación de estados de cuenta (Fase G) y la Fase F sale de este repo.
-- **G1, esquema (rama `fase-g1-esquema`, 12-nov):** tablas `estados_cuenta`, `movimientos` y `conciliaciones` con sus restricciones, llaves foráneas activas en cada conexión y verificación al arrancar. `pytest` 615 pasan en la rama; `ruff check .`, `ruff format --check .` y `mypy` sin errores. Falta la PR. Sigue la ingesta (sesión aparte); G0 sigue pendiente de `docs/conciliacion.md`.
 
 ### Operación
 

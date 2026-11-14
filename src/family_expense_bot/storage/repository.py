@@ -87,22 +87,26 @@ Las tablas nuevas (ingresos, y las tres de la conciliación) no necesitan entrad
 """
 
 
-def _engine(url: str) -> Engine:
-    """Engine con las llaves foráneas activas en cada conexión.
+def activar_llaves_foraneas(engine: Engine) -> Engine:
+    """Activa las llaves foráneas en cada conexión que abra el engine.
 
     SQLite las ignora salvo que cada conexión lo pida con un PRAGMA; sin esto,
     una conciliación podría apuntar a un gasto o a un movimiento que no existe.
+    Hay que llamarla antes de la primera conexión.
     """
-    engine = create_engine(url)
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine, "connect")
-        def _activar_llaves_foraneas(conexion: Any, _registro: Any) -> None:
+        def _al_conectar(conexion: Any, _registro: Any) -> None:
             cursor = conexion.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
     return engine
+
+
+def _engine(url: str) -> Engine:
+    return activar_llaves_foraneas(create_engine(url))
 
 
 def migrar(url: str) -> list[str]:
